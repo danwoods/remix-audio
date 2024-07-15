@@ -21,7 +21,6 @@
     "mp3tag.js": "^3.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-dropzone-esm": "^15.0.1",
     "sort-by": "^1.2.0",
     "tiny-invariant": "^1.3.1"
   },

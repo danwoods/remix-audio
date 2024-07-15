@@ -1,9 +1,8 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
-import { Form, useLoaderData } from "@remix-run/react";
+import type { ActionFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import invariant from "tiny-invariant";
 
-import { getContact, updateContact, deleteContact } from "../data";
+import { deleteContact } from "../data";
 
 // export const loader = async ({
 //   params,

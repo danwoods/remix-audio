@@ -46,7 +46,7 @@ export const s3UploadHandler: UploadHandler = async ({
   filename,
   data,
 }) => {
-  if (name !== "img") {
+  if (name !== "files") {
     return undefined;
   }
   const uploadedFileLocation = await uploadStreamToS3(data, filename!);
