@@ -1,8 +1,9 @@
-import { PassThrough } from "stream";
-
 import type { UploadHandler } from "@remix-run/node";
-import { writeAsyncIterableToWritable } from "@remix-run/node";
+
 import AWS from "aws-sdk";
+import { PassThrough } from "stream";
+import { getID3Tags } from "./id3";
+import { writeAsyncIterableToWritable } from "@remix-run/node";
 
 const { STORAGE_ACCESS_KEY, STORAGE_SECRET, STORAGE_REGION, STORAGE_BUCKET } =
   process.env;
@@ -43,12 +44,26 @@ export async function uploadStreamToS3(
 
 export const s3UploadHandler: UploadHandler = async ({
   name,
-  filename,
+  contentType,
   data,
 }) => {
+  const dataArray = [];
+
   if (name !== "files") {
     return undefined;
   }
-  const uploadedFileLocation = await uploadStreamToS3(data, filename!);
+
+  for await (const x of data) {
+    dataArray.push(x);
+  }
+
+  const file = new File(dataArray, "temp", { type: contentType });
+  const id3Tags = await getID3Tags(file);
+  const partitiionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
+  const uploadedFileLocation = await uploadStreamToS3(
+    data,
+    partitiionedFilename,
+  );
+
   return uploadedFileLocation;
 };

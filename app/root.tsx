@@ -26,17 +26,16 @@ import {
 } from "@remix-run/node";
 import { createEmptyContact, getContacts } from "./data";
 import { useEffect } from "react";
-// import { openFileOrFiles } from "./util/file";
 import FilePicker from "./components/FilePicker";
 import { s3UploadHandler } from "./util/s3.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
+    console.log(request.body);
     const uploadHandler: UploadHandler = composeUploadHandlers(
       s3UploadHandler,
       createMemoryUploadHandler(),
     );
-    console.log({ request });
     const formData = await parseMultipartFormData(request, uploadHandler);
     console.log({ formData });
     return redirect("/");
