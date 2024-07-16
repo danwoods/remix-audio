@@ -148,13 +148,18 @@ export default function App() {
                       <li key={album}>
                         {album}
                         <ul>
-                          {tracks.map((track) => (
-                            <li key={track.title}>
-                              <button onClick={() => playToggle(track)}>
-                                {track.title}
-                              </button>
-                            </li>
-                          ))}
+                          {tracks
+                            .sort((a, b) => a.trackNum - b.trackNum)
+                            .map((track) => (
+                              <li key={track.title}>
+                                <button
+                                  onClick={() => playToggle(track)}
+                                  className="inline"
+                                >
+                                  {track.title}
+                                </button>
+                              </li>
+                            ))}
                         </ul>
                       </li>
                     ))}
