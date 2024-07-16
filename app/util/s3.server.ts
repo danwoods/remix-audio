@@ -5,6 +5,8 @@ import AWS from "aws-sdk";
 import { PassThrough } from "stream";
 import { getID3Tags } from "./id3";
 import { writeAsyncIterableToWritable } from "@remix-run/node";
+import { fromEnv } from "@aws-sdk/credential-providers";
+import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { createAsyncIteratorFromArrayBuffer } from "./file";
 
 const {
@@ -82,4 +84,68 @@ export const s3UploadHandler: UploadHandler = async ({
   );
 
   return uploadedFileLocation;
+};
+
+// Reading ////////////////////////////////////////////////////////////////////
+
+const client = new S3Client({
+  region: STORAGE_REGION,
+  credentials: fromEnv(),
+});
+
+export type Track = { url: string; title: string; trackNum: number };
+
+type Files = {
+  [artist: string]: {
+    [album: string]: Array<Track>;
+  };
+};
+
+/**
+ * Get an Object of all of the files in the bucket organized by artist > album > track
+ * @returns An Object of audio file references
+ */
+export const getUploadedFiles = async (): Promise<Files> => {
+  const command = new ListObjectsV2Command({
+    Bucket: STORAGE_BUCKET,
+  });
+
+  try {
+    let isTruncated = true;
+    let files: Files = {};
+
+    while (isTruncated) {
+      const { Contents, IsTruncated, NextContinuationToken } =
+        await client.send(command);
+
+      if (!Contents) {
+        return files;
+      }
+
+      files = Contents?.reduce((acc, cur) => {
+        if (cur.Key) {
+          const [artist, album, trackWNum] = cur.Key.split("/");
+
+          acc[artist] = acc[artist] || {};
+          acc[artist][album] = acc[artist][album] || [];
+          const [trackNum, title] = trackWNum.split("__");
+          acc[artist][album].push({
+            title,
+            trackNum: Number(trackNum),
+            url:
+              `https://${STORAGE_BUCKET}.s3.${STORAGE_REGION}.amazonaws.com/` +
+              cur.Key,
+          });
+        }
+        return acc;
+      }, files);
+
+      isTruncated = Boolean(IsTruncated);
+      command.input.ContinuationToken = NextContinuationToken;
+    }
+    return files;
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
 };

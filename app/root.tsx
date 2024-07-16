@@ -52,14 +52,16 @@ export const links: LinksFunction = () => [
 ];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const files = await getUploadedFiles();
   const url = new URL(request.url);
   const q = url.searchParams.get("q");
   const contacts = await getContacts(q);
-  return json({ contacts, q });
+
+  return json({ contacts, q, files });
 };
 
 export default function App() {
-  const { contacts, q } = useLoaderData<typeof loader>();
+  const { contacts, q, files } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const submit = useSubmit();
   const searching =
@@ -115,6 +117,28 @@ export default function App() {
             </Form>
           </div>
           <nav>
+            {files &&
+              Object.entries(files).map(([artist, albumsObj]) => (
+                <li key={artist}>
+                  {artist}
+                  <ul>
+                    {Object.entries(albumsObj).map(([album, tracks]) => (
+                      <li key={album}>
+                        {album}
+                        <ul>
+                          {tracks.map((track) => (
+                            <li key={track.title}>
+                              <button onClick={() => playToggle(track)}>
+                                {track.title}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
             {contacts.length ? (
               <ul>
                 {contacts.map((contact) => (
