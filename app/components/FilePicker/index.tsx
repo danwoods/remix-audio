@@ -32,7 +32,6 @@ const FilePicker = () => {
             <fetcher.Form method="post" encType="multipart/form-data">
               <div>
                 {Array.from(files.values()).map((e) => {
-                  console.log({ e });
                   return (
                     <div key={e.id3 && e.id3.title}>{e.id3 && e.id3.title}</div>
                   );
