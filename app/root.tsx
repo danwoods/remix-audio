@@ -5,6 +5,7 @@ import type {
   LoaderFunctionArgs,
   UploadHandler,
 } from "@remix-run/node";
+import type { Track } from "./util/s3.server";
 import {
   Form,
   Links,
@@ -25,13 +26,12 @@ import {
   unstable_parseMultipartFormData as parseMultipartFormData,
 } from "@remix-run/node";
 import { createEmptyContact, getContacts } from "./data";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import FilePicker from "./components/FilePicker";
-import { s3UploadHandler } from "./util/s3.server";
+import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
-    console.log(request.body);
     const uploadHandler: UploadHandler = composeUploadHandlers(
       s3UploadHandler,
       createMemoryUploadHandler(),
@@ -63,7 +63,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { contacts, q, files } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
+  const audioElmRef = useRef<HTMLAudioElement>(null);
   const submit = useSubmit();
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const searching =
     navigation.location &&
     new URLSearchParams(navigation.location.search).has("q");
@@ -74,6 +77,25 @@ export default function App() {
       searchField.value = q || "";
     }
   }, [q]);
+
+  useEffect(() => {
+    if (audioElmRef.current) {
+      if (isPlaying) {
+        audioElmRef.current.play();
+      } else {
+        audioElmRef.current.pause();
+      }
+    }
+  }, [isPlaying]);
+
+  const playToggle = (track: Track) => {
+    if (!isPlaying || track.url !== currentTrack) {
+      setCurrentTrack(track.url);
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
+    }
+  };
 
   return (
     <html lang="en">
@@ -178,6 +200,8 @@ export default function App() {
         </div>
         <ScrollRestoration />
         <Scripts />
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        {currentTrack && <audio src={currentTrack} ref={audioElmRef}></audio>}
       </body>
     </html>
   );
