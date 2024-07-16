@@ -1,24 +1,39 @@
+/** @File Utilities for working with AWS S3 */
 import type { UploadHandler } from "@remix-run/node";
 
 import AWS from "aws-sdk";
 import { PassThrough } from "stream";
 import { getID3Tags } from "./id3";
 import { writeAsyncIterableToWritable } from "@remix-run/node";
+import { createAsyncIteratorFromArrayBuffer } from "./file";
 
-const { STORAGE_ACCESS_KEY, STORAGE_SECRET, STORAGE_REGION, STORAGE_BUCKET } =
-  process.env;
+const {
+  AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY,
+  STORAGE_REGION,
+  STORAGE_BUCKET,
+} = process.env;
 
+// Check for presence of env vars
 if (
-  !(STORAGE_ACCESS_KEY && STORAGE_SECRET && STORAGE_REGION && STORAGE_BUCKET)
+  !(
+    AWS_ACCESS_KEY_ID &&
+    AWS_SECRET_ACCESS_KEY &&
+    STORAGE_REGION &&
+    STORAGE_BUCKET
+  )
 ) {
   throw new Error(`Storage is missing required configuration.`);
 }
 
+// Uploading //////////////////////////////////////////////////////////////////
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/example_s3_Scenario_UsingLargeFiles_section.html
+
 const uploadStream = ({ Key }: Pick<AWS.S3.Types.PutObjectRequest, "Key">) => {
   const s3 = new AWS.S3({
     credentials: {
-      accessKeyId: STORAGE_ACCESS_KEY,
-      secretAccessKey: STORAGE_SECRET,
+      accessKeyId: AWS_ACCESS_KEY_ID,
+      secretAccessKey: AWS_SECRET_ACCESS_KEY,
     },
     region: STORAGE_REGION,
   });
@@ -58,10 +73,11 @@ export const s3UploadHandler: UploadHandler = async ({
   }
 
   const file = new File(dataArray, "temp", { type: contentType });
+  const fileArrayBuffer = await file.arrayBuffer();
   const id3Tags = await getID3Tags(file);
   const partitiionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
   const uploadedFileLocation = await uploadStreamToS3(
-    data,
+    createAsyncIteratorFromArrayBuffer(fileArrayBuffer),
     partitiionedFilename,
   );
 
