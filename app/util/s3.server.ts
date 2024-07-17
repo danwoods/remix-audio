@@ -98,7 +98,10 @@ export type Track = { url: string; title: string; trackNum: number };
 
 export type Files = {
   [artist: string]: {
-    [album: string]: Array<Track>;
+    [album: string]: {
+      coverArt: string;
+      tracks: Array<Track>;
+    };
   };
 };
 
@@ -128,9 +131,12 @@ export const getUploadedFiles = async (): Promise<Files> => {
           const [artist, album, trackWNum] = cur.Key.split("/");
 
           acc[artist] = acc[artist] || {};
-          acc[artist][album] = acc[artist][album] || [];
+          acc[artist][album] = acc[artist][album] || {
+            coverArt: null,
+            tracks: [],
+          };
           const [trackNum, title] = trackWNum.split("__");
-          acc[artist][album].push({
+          acc[artist][album].tracks.push({
             title,
             trackNum: Number(trackNum),
             url:

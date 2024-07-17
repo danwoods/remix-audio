@@ -42,7 +42,7 @@ const Album = () => {
   const { artistId, albumId } = useLoaderData<typeof loader>();
 
   if (artistId && albumId) {
-    const tracks = files[artistId][albumId];
+    const tracks = files[artistId][albumId].tracks;
 
     return (
       <nav className="album">

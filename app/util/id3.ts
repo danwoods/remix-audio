@@ -1,6 +1,7 @@
 /** @file ID3 (audio metadata) related functionality */
 import type { MP3TagAPICFrame } from "mp3tag.js/types/id3v2/frames.d.ts";
 import id3 from "mp3tag.js";
+import { fromUrl } from "id3js";
 
 /** Normalized ID3 tags */
 export type ID3Tags = {
@@ -30,3 +31,5 @@ export const getID3Tags = async (file: File): Promise<ID3Tags> => {
     image: mp3tag.tags.v2?.APIC && mp3tag.tags.v2?.APIC[0],
   };
 };
+
+export const getID3TagsFromURL = (url: string) => fromUrl(url);
