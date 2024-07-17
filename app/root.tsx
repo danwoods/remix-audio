@@ -5,12 +5,12 @@ import type {
   LoaderFunctionArgs,
   UploadHandler,
 } from "@remix-run/node";
-import type { Track } from "./util/s3.server";
+import type { Files, Track } from "./util/s3.server";
 import {
   Form,
   Links,
   Meta,
-  NavLink,
+  // NavLink,
   Outlet,
   Scripts,
   ScrollRestoration,
@@ -29,6 +29,8 @@ import { createEmptyContact, getContacts } from "./data";
 import { useEffect, useRef, useState } from "react";
 import AppBar from "./components/Layout/AppBar";
 import FilePicker from "./components/FilePicker";
+// import Drawer from "./components/Layout/Drawer";
+// import ArtistAlbumTrackNavList from "./components/ArtistAlbumTrackNavList";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -48,6 +50,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 import appStylesHref from "./app.css?url";
 
+export type Context = {
+  files: Files;
+  playToggle: (track: Track) => void;
+};
+
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStylesHref },
 ];
@@ -62,7 +69,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function App() {
-  const { contacts, q, files } = useLoaderData<typeof loader>();
+  const { /*contacts,*/ q, files }: { q: string | null; files: Files } =
+    useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const audioElmRef = useRef<HTMLAudioElement>(null);
   const submit = useSubmit();
@@ -87,7 +95,7 @@ export default function App() {
         audioElmRef.current.pause();
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, currentTrack]);
 
   const playToggle = (track: Track) => {
     if (!isPlaying || track.url !== currentTrack) {
@@ -110,6 +118,9 @@ export default function App() {
       </head>
       <body>
         <AppBar />
+        {/* <Drawer>
+          <ArtistAlbumTrackNavList files={files} />
+        </Drawer> */}
         <div id="sidebar">
           <section id="upload-button-container">
             <FilePicker />
@@ -140,62 +151,6 @@ export default function App() {
               <button type="submit">New</button>
             </Form>
           </div>
-          <nav>
-            {files &&
-              Object.entries(files).map(([artist, albumsObj]) => (
-                <li key={artist}>
-                  {artist}
-                  <ul>
-                    {Object.entries(albumsObj).map(([album, tracks]) => (
-                      <li key={album}>
-                        {album}
-                        <ul>
-                          {tracks
-                            .sort((a, b) => a.trackNum - b.trackNum)
-                            .map((track) => (
-                              <li key={track.title}>
-                                <button
-                                  onClick={() => playToggle(track)}
-                                  className="inline"
-                                >
-                                  {track.title}
-                                </button>
-                              </li>
-                            ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            {contacts.length ? (
-              <ul>
-                {contacts.map((contact) => (
-                  <li key={contact.id}>
-                    <NavLink
-                      className={({ isActive, isPending }) =>
-                        isActive ? "active" : isPending ? "pending" : ""
-                      }
-                      to={`contacts/${contact.id}`}
-                    >
-                      {contact.first || contact.last ? (
-                        <>
-                          {contact.first} {contact.last}
-                        </>
-                      ) : (
-                        <i>No Name</i>
-                      )}{" "}
-                      {contact.favorite ? <span>★</span> : null}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>
-                <i>No contacts</i>
-              </p>
-            )}
-          </nav>
         </div>
         <div
           className={
@@ -203,7 +158,9 @@ export default function App() {
           }
           id="detail"
         >
-          <Outlet />
+          <main className="container mx-auto">
+            <Outlet context={{ files, playToggle }} />
+          </main>
         </div>
         <ScrollRestoration />
         <Scripts />

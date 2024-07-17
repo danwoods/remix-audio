@@ -96,7 +96,7 @@ const client = new S3Client({
 
 export type Track = { url: string; title: string; trackNum: number };
 
-type Files = {
+export type Files = {
   [artist: string]: {
     [album: string]: Array<Track>;
   };
