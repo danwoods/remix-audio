@@ -27,6 +27,7 @@ import {
 } from "@remix-run/node";
 import { createEmptyContact, getContacts } from "./data";
 import { useEffect, useRef, useState } from "react";
+import AppBar from "./components/Layout/AppBar";
 import FilePicker from "./components/FilePicker";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 
@@ -108,6 +109,7 @@ export default function App() {
         <Links />
       </head>
       <body>
+        <AppBar />
         <div id="sidebar">
           <section id="upload-button-container">
             <FilePicker />
