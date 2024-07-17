@@ -27,19 +27,28 @@ export const getAlbum = (
   return albumIdsObj[albumId];
 };
 
+/** Album art cache to avoid repetitve fetches */
+const albumArtCache = new Map<string, Promise<string | null>>();
+
 /** Fetch album art */
 export const getAlbumArt = (files: Files, albumId: string) => {
-  const album = getAlbum(files, albumId);
-  return fromUrl(album.tracks[0].url).then((tags) => {
-    if (Array.isArray(tags?.images)) {
-      const arrayBuffer = tags.images[0].data;
-      const blob = new Blob([arrayBuffer]);
-      const srcBlob = URL.createObjectURL(blob);
-      return srcBlob;
-    } else {
-      return null;
-    }
-  });
+  if (!albumArtCache.has(albumId)) {
+    const album = getAlbum(files, albumId);
+    const artFetch = fromUrl(album.tracks[0].url).then((tags) => {
+      if (Array.isArray(tags?.images)) {
+        const arrayBuffer = tags.images[0].data;
+        const blob = new Blob([arrayBuffer]);
+        const srcBlob = URL.createObjectURL(blob);
+        return srcBlob;
+      } else {
+        return null;
+      }
+    });
+
+    albumArtCache.set(albumId, artFetch);
+  }
+
+  return albumArtCache.get(albumId)!;
 };
 
 export const getArtist = (files: Files, artistId: string) => {
