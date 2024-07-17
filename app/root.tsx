@@ -10,7 +10,6 @@ import {
   Form,
   Links,
   Meta,
-  // NavLink,
   Outlet,
   Scripts,
   ScrollRestoration,
@@ -29,8 +28,6 @@ import { createEmptyContact, getContacts } from "./data";
 import { useEffect, useRef, useState } from "react";
 import AppBar from "./components/Layout/AppBar";
 import FilePicker from "./components/FilePicker";
-// import Drawer from "./components/Layout/Drawer";
-// import ArtistAlbumTrackNavList from "./components/ArtistAlbumTrackNavList";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -53,6 +50,8 @@ import appStylesHref from "./app.css?url";
 export type Context = {
   files: Files;
   playToggle: (track: Track) => void;
+  currentTrack: string | null;
+  isPlaying: boolean;
 };
 
 export const links: LinksFunction = () => [
@@ -69,7 +68,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function App() {
-  const { /*contacts,*/ q, files }: { q: string | null; files: Files } =
+  const { q, files }: { q: string | null; files: Files } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const audioElmRef = useRef<HTMLAudioElement>(null);
@@ -153,13 +152,10 @@ export default function App() {
           </div>
         </div>
         <div
-          className={
-            navigation.state === "loading" && !searching ? "loading" : ""
-          }
-          id="detail"
+          className={`${navigation.state === "loading" && !searching ? "loading" : ""} flex w-full p-6`}
         >
           <main className="container mx-auto">
-            <Outlet context={{ files, playToggle }} />
+            <Outlet context={{ files, isPlaying, playToggle, currentTrack }} />
           </main>
         </div>
         <ScrollRestoration />
