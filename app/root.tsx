@@ -7,7 +7,7 @@ import type {
 } from "@remix-run/node";
 import type { Files, Track } from "./util/s3.server";
 import {
-  Form,
+  // Form,
   Links,
   Meta,
   Outlet,
@@ -15,7 +15,7 @@ import {
   ScrollRestoration,
   useLoaderData,
   useNavigation,
-  useSubmit,
+  // useSubmit,
 } from "@remix-run/react";
 import {
   json,
@@ -27,7 +27,8 @@ import {
 import { createEmptyContact, getContacts } from "./data";
 import { useEffect, useRef, useState } from "react";
 import AppBar from "./components/Layout/AppBar";
-import FilePicker from "./components/FilePicker";
+import PlayerControls from "./components/Layout/PlayerControls";
+// import FilePicker from "./components/FilePicker";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -72,9 +73,10 @@ export default function App() {
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const audioElmRef = useRef<HTMLAudioElement>(null);
-  const submit = useSubmit();
+  // const submit = useSubmit();
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
+  // const currentPlaylist = useRef<string[]>([]);
   const searching =
     navigation.location &&
     new URLSearchParams(navigation.location.search).has("q");
@@ -105,6 +107,17 @@ export default function App() {
     }
   };
 
+  // const onPlayerControlsClick = (tracks: Track[]) => {
+
+  // }
+
+  // const addToPlaylist = (tracks: Track[]) => {
+  //   currentPlaylist.current = [
+  //     ...currentPlaylist.current,
+  //     ...tracks.map((t) => t.url),
+  //   ];
+  // };
+
   return (
     <html lang="en">
       <head>
@@ -120,7 +133,7 @@ export default function App() {
         {/* <Drawer>
           <ArtistAlbumTrackNavList files={files} />
         </Drawer> */}
-        <div id="sidebar">
+        {/* <div id="sidebar">
           <section id="upload-button-container">
             <FilePicker />
           </section>
@@ -150,14 +163,15 @@ export default function App() {
               <button type="submit">New</button>
             </Form>
           </div>
-        </div>
+        </div> */}
         <div
-          className={`${navigation.state === "loading" && !searching ? "loading" : ""} flex w-full p-6`}
+          className={`${navigation.state === "loading" && !searching ? "loading" : ""} flex w-full`}
         >
           <main className="md:container md:mx-auto max-sm:px-6">
             <Outlet context={{ files, isPlaying, playToggle, currentTrack }} />
           </main>
         </div>
+        <PlayerControls files={files} />
         <ScrollRestoration />
         <Scripts />
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}

@@ -79,7 +79,7 @@ const Album = () => {
             <AlbumCover
               files={files}
               albumId={`${artistId}/${albumId}`}
-              className="rounded w-2/3 fadeIn"
+              className="rounded w-2/3"
             />
             <div className="ml-3 pt-4 text-black">
               <p className="text-lg font-bold">{albumId}</p>
