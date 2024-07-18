@@ -51,6 +51,7 @@ export const getAlbumArt = (files: Files, albumId: string) => {
   return albumArtCache.get(albumId)!;
 };
 
+/** Get artist data from files object */
 export const getArtist = (files: Files, artistId: string) => {
   return files[artistId];
 };
