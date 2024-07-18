@@ -10,7 +10,7 @@ const AppBar = () => (
       </a>
     </div>
     <div className="navbar-end">
-      <button className="btn btn-ghost btn-circle">
+      <button className="btn btn-ghost btn-circle max-sm:hidden">
         <MagnifyingGlassIcon className="size-6" />
       </button>
       <button className="btn btn-ghost btn-circle">
