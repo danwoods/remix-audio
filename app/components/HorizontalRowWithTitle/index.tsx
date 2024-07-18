@@ -12,11 +12,9 @@ const HorizontalRowWithTitle = ({
     <section className="py-4">
       <p className="text-lg font-bold mb-2">{title}</p>
       <div
+        className="grid gap-x-4 md:gap-x-6 overflow-x-auto"
         style={{
-          display: "grid",
-          gridGap: "10px",
-          gridTemplateColumns: "repeat(5, calc(38% - 40px))",
-          overflowX: "auto",
+          gridTemplateColumns: `repeat(5, calc(40% - 40px))`,
         }}
       >
         {children}

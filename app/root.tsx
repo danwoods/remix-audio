@@ -154,7 +154,7 @@ export default function App() {
         <div
           className={`${navigation.state === "loading" && !searching ? "loading" : ""} flex w-full p-6`}
         >
-          <main className="container mx-auto">
+          <main className="md:container md:mx-auto max-sm:px-6">
             <Outlet context={{ files, isPlaying, playToggle, currentTrack }} />
           </main>
         </div>

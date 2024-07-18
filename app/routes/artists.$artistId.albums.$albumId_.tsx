@@ -70,19 +70,21 @@ const Album = () => {
     return (
       <section>
         <div
-          className={`flex p-4`}
+          className={`p-4 lg:p-6 rounded`}
           style={{
             background: bgGradient || "",
           }}
         >
-          <AlbumCover
-            files={files}
-            albumId={`${artistId}/${albumId}`}
-            className="rounded w-2/3 fadeIn"
-          />
-          <div className="ml-3 pt-4 text-black">
-            <p className="text-lg font-bold">{albumId}</p>
-            <p className="text-base line-clamp-3">{artistId}</p>
+          <div className="flex md:w-1/2 lg:w-2/3">
+            <AlbumCover
+              files={files}
+              albumId={`${artistId}/${albumId}`}
+              className="rounded w-2/3 fadeIn"
+            />
+            <div className="ml-3 pt-4 text-black">
+              <p className="text-lg font-bold">{albumId}</p>
+              <p className="text-base line-clamp-3">{artistId}</p>
+            </div>
           </div>
         </div>
         <nav className="album p-6 pt-0">
