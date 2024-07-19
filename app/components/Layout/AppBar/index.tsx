@@ -1,5 +1,6 @@
+import FilePicker from "~/components/FilePicker";
 import { Link } from "@remix-run/react";
-import { MagnifyingGlassIcon, PlusCircleIcon } from "@heroicons/react/24/solid";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
 
 /** Main Header for application. Contains logo and search and add buttons */
 const AppBar = () => (
@@ -15,7 +16,7 @@ const AppBar = () => (
         <MagnifyingGlassIcon className="size-6" />
       </button>
       <button className="btn btn-ghost btn-circle max-md:hidden">
-        <PlusCircleIcon className="size-6" />
+        <FilePicker />
       </button>
     </div>
   </div>
