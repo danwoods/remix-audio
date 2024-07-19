@@ -65,13 +65,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const q = url.searchParams.get("q");
   const contacts = await getContacts(q);
+  const headLinks = [
+    {
+      rel: "preconnect",
+      href: `https://${process.env.STORAGE_BUCKET}.s3.${process.env.STORAGE_REGION}.amazonaws.com`,
+    },
+  ];
 
-  return json({ contacts, q, files });
+  return json({ contacts, q, files, headLinks });
 };
 
 export default function App() {
-  const { q, files }: { q: string | null; files: Files } =
-    useLoaderData<typeof loader>();
+  const {
+    q,
+    files,
+    headLinks,
+  }: {
+    q: string | null;
+    files: Files;
+    headLinks: { rel: string; href: string }[];
+  } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const audioElmRef = useRef<HTMLAudioElement>(null);
   // const submit = useSubmit();
@@ -181,6 +194,9 @@ export default function App() {
         <meta name="description" content="Your audio where you want it."></meta>
         <Meta />
         <Links />
+        {headLinks.map((l) => (
+          <link key={l.rel + l.href} rel={l.rel} href={l.href} />
+        ))}
       </head>
       <body>
         <AppBar />
