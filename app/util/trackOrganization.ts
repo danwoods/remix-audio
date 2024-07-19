@@ -34,6 +34,9 @@ const albumArtCache = new Map<string, Promise<string | null>>();
 export const getAlbumArt = (files: Files, albumId: string) => {
   if (!albumArtCache.has(albumId)) {
     const album = getAlbum(files, albumId);
+    if (!album) {
+      return Promise.resolve(null);
+    }
     const artFetch = fromUrl(album.tracks[0].url).then((tags) => {
       if (Array.isArray(tags?.images)) {
         const arrayBuffer = tags.images[0].data;

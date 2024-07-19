@@ -30,6 +30,7 @@ import AppBar from "./components/Layout/AppBar";
 import PlayerControls from "./components/Layout/PlayerControls";
 // import FilePicker from "./components/FilePicker";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
+import { getRemainingAlbumTracks } from "./util/trackOrganization";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
@@ -75,8 +76,8 @@ export default function App() {
   const audioElmRef = useRef<HTMLAudioElement>(null);
   // const submit = useSubmit();
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [currentTrack, setCurrentTrack] = useState<string | null>(null);
-  // const currentPlaylist = useRef<string[]>([]);
+  const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
+  const [nextTrackLoaded, setNextTrackLoaded] = useState<boolean>(false);
   const searching =
     navigation.location &&
     new URLSearchParams(navigation.location.search).has("q");
@@ -88,35 +89,88 @@ export default function App() {
     }
   }, [q]);
 
-  useEffect(() => {
-    if (audioElmRef.current) {
-      if (isPlaying) {
-        audioElmRef.current.play();
-      } else {
-        audioElmRef.current.pause();
-      }
-    }
-  }, [isPlaying, currentTrack]);
+  // Player functionality /////////////////////////////////////////////////////
 
-  const playToggle = (track: Track) => {
-    if (!isPlaying || track.url !== currentTrack) {
-      setCurrentTrack(track.url);
-      setIsPlaying(true);
-    } else {
-      setIsPlaying(false);
+  /** Listen to progress changes for current track so we can start loading the
+   * next track when it's close to finishing and move to the next track once
+   * it's done
+   **/
+  const onTimeUpdate = (evt: Event) => {
+    const t = evt.target as HTMLAudioElement;
+    if (
+      !nextTrackLoaded &&
+      !Number.isNaN(t.duration) &&
+      // If we're within 20s of the end of the track
+      t.duration - 20 < t.currentTime &&
+      currentTrackUrl
+    ) {
+      setNextTrackLoaded(true);
+      const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
+      if (nextTrack) {
+        new Audio(nextTrack.url);
+      }
+      t.removeEventListener("timeupdate", onTimeUpdate);
     }
   };
 
-  // const onPlayerControlsClick = (tracks: Track[]) => {
+  // Call play/pause on the audio element to respond to `isPlaying`
+  useEffect(() => {
+    const audioElm = audioElmRef.current;
+    if (audioElm) {
+      if (isPlaying) {
+        audioElm.play();
+        setNextTrackLoaded(false);
+        audioElm.addEventListener("ended", playNext);
+        audioElm.addEventListener("timeupdate", onTimeUpdate);
+        return () => {
+          audioElm.removeEventListener("ended", playNext);
+          audioElm.removeEventListener("timeupdate", onTimeUpdate);
+        };
+      } else {
+        audioElm.pause();
+      }
+    }
+  }, [isPlaying, currentTrackUrl]);
 
-  // }
+  /** Pause track */
+  const pause = () => {
+    setIsPlaying(false);
+  };
 
-  // const addToPlaylist = (tracks: Track[]) => {
-  //   currentPlaylist.current = [
-  //     ...currentPlaylist.current,
-  //     ...tracks.map((t) => t.url),
-  //   ];
-  // };
+  /** Play next track */
+  const playNext = () => {
+    if (currentTrackUrl) {
+      const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
+      playToggle(nextTrack);
+    }
+  };
+
+  // XXX: Just pass URL
+  /**
+   * @summary Play/Pause/Resume/Stop
+   * @desc There are 4 different scenarios this supports
+   *       1. If a track is passed in that is not currently being played, it will start playing that track
+   *       2. If a track is passed in that is currently being played, it will pause
+   *       2. If a track is passed in that is the current track, but it's not currently playing, it will resume
+   *       3. If no track is passed in, it will stop playback
+   **/
+  const playToggle = (track?: { url: string }) => {
+    if (track) {
+      if (track.url !== currentTrackUrl) {
+        setCurrentTrackUrl(track.url);
+        setIsPlaying(true);
+      } else if (isPlaying) {
+        pause();
+      } else {
+        setIsPlaying(true);
+      }
+    } else {
+      setCurrentTrackUrl(null);
+      pause();
+    }
+  };
+
+  // Main component ///////////////////////////////////////////////////////////
 
   return (
     <html lang="en">
@@ -167,15 +221,29 @@ export default function App() {
         <div
           className={`${navigation.state === "loading" && !searching ? "loading" : ""} flex w-full`}
         >
-          <main className="md:container md:mx-auto max-sm:px-6">
-            <Outlet context={{ files, isPlaying, playToggle, currentTrack }} />
+          <main className="md:mx-auto md:px-6">
+            <Outlet
+              context={{
+                files,
+                isPlaying,
+                playToggle,
+                currentTrack: currentTrackUrl,
+              }}
+            />
           </main>
         </div>
-        <PlayerControls files={files} />
+        <PlayerControls
+          currentTrack={currentTrackUrl}
+          files={files}
+          isPlaying={isPlaying}
+          playNext={playNext}
+          playToggle={playToggle}
+        />
         <ScrollRestoration />
         <Scripts />
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        {currentTrack && <audio src={currentTrack} ref={audioElmRef}></audio>}
+        {currentTrackUrl && (
+          <audio src={currentTrackUrl} ref={audioElmRef}></audio> // eslint-disable-line jsx-a11y/media-has-caption
+        )}
       </body>
     </html>
   );

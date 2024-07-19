@@ -18,7 +18,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-code {
+/* code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
 }
@@ -101,15 +101,16 @@ form[action$="destroy"] button {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
-}
+} */
 
 body {
   display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
 }
 
-#sidebar {
+/* #sidebar {
   width: 22rem;
   background-color: #f7f7f7;
   border-right: solid 1px #e3e3e3;
@@ -260,12 +261,6 @@ i {
   }
 }
 
-#detail {
-  flex: 1;
-  padding: 2rem 4rem;
-  width: 100%;
-}
-
 #detail.loading {
   opacity: 0.25;
   transition: opacity 200ms;
@@ -405,11 +400,11 @@ i {
 
 /* Animations */
 .marquee {
-  animation: marquee 5s linear infinite;
+  animation: marquee 7s linear infinite;
 }
 
 .marquee2 {
-  animation: marquee2 5s linear infinite;
+  animation: marquee2 7s linear infinite;
   position: absolute;
 }
 
