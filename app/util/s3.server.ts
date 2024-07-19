@@ -94,14 +94,22 @@ const client = new S3Client({
   credentials: fromEnv(),
 });
 
-export type Track = { url: string; title: string; trackNum: number };
+export type Track = {
+  url: string;
+  title: string;
+  trackNum: number;
+  lastModified: number | null;
+};
+
+export type Album = {
+  id: string;
+  coverArt: string;
+  tracks: Array<Track>;
+};
 
 export type Files = {
   [artist: string]: {
-    [album: string]: {
-      coverArt: string;
-      tracks: Array<Track>;
-    };
+    [album: string]: Album;
   };
 };
 
@@ -132,6 +140,7 @@ export const getUploadedFiles = async (): Promise<Files> => {
 
           acc[artist] = acc[artist] || {};
           acc[artist][album] = acc[artist][album] || {
+            id: `${artist}/${album}`,
             coverArt: null,
             tracks: [],
           };
@@ -139,6 +148,7 @@ export const getUploadedFiles = async (): Promise<Files> => {
           acc[artist][album].tracks.push({
             title,
             trackNum: Number(trackNum),
+            lastModified: cur.LastModified?.valueOf() || null,
             url:
               `https://${STORAGE_BUCKET}.s3.${STORAGE_REGION}.amazonaws.com/` +
               cur.Key,

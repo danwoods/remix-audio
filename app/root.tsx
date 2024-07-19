@@ -24,7 +24,6 @@ import {
   unstable_createMemoryUploadHandler as createMemoryUploadHandler,
   unstable_parseMultipartFormData as parseMultipartFormData,
 } from "@remix-run/node";
-import { createEmptyContact, getContacts } from "./data";
 import { useEffect, useRef, useState } from "react";
 import AppBar from "./components/Layout/AppBar";
 import PlayerControls from "./components/Layout/PlayerControls";
@@ -42,8 +41,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log({ formData });
     return redirect("/");
   } else {
-    const contact = await createEmptyContact();
-    return redirect(`/contacts/${contact.id}/edit`);
+    // const contact = await createEmptyContact();
+    return redirect("/"); //redirect(`/contacts/${contact.id}/edit`);
   }
 };
 
@@ -64,7 +63,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const files = await getUploadedFiles();
   const url = new URL(request.url);
   const q = url.searchParams.get("q");
-  const contacts = await getContacts(q);
   const headLinks = [
     {
       rel: "preconnect",
@@ -72,7 +70,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   ];
 
-  return json({ contacts, q, files, headLinks });
+  return json({ q, files, headLinks });
 };
 
 export default function App() {

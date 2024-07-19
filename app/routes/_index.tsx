@@ -9,22 +9,20 @@ import HorizontalRowWithTitle from "~/components/HorizontalRowWithTitle";
 const ContinueListeningRow = ({ files }: { files: Files }) => (
   <HorizontalRowWithTitle title="Continue Listening">
     <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
   </HorizontalRowWithTitle>
 );
 
-const LatestRow = ({ files }: { files: Files }) => (
-  <HorizontalRowWithTitle title="Latest">
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-  </HorizontalRowWithTitle>
-);
+const LatestRow = ({ files }: { files: Files }) => {
+  const albumIds = getAlbumIdsByRecent(files).slice(0, 5);
+
+  return (
+    <HorizontalRowWithTitle title="Latest">
+      {albumIds.map((a) => (
+        <AlbumTile key={a.id} files={files} albumId={a.id} />
+      ))}
+    </HorizontalRowWithTitle>
+  );
+};
 
 const FavoritesRow = ({ files }: { files: Files }) => (
   <HorizontalRowWithTitle title="Favorites">

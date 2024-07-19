@@ -1,6 +1,6 @@
 /** @file Utility methods for working with the Files object */
 
-import type { Files, Track } from "./s3.server";
+import type { Album, Files, Track } from "./s3.server";
 import { fromUrl } from "id3js";
 
 /**
@@ -9,12 +9,9 @@ import { fromUrl } from "id3js";
  * @param albumId Album ID in the format "artistID/albumID"
  * @returns Value of album (array of tracks)
  */
-export const getAlbum = (
-  files: Files,
-  albumId: string,
-): { coverArt: string | null; tracks: Track[] } => {
+export const getAlbum = (files: Files, albumId: string): Album => {
   const albumIdsObj: {
-    [albumId: string]: { coverArt: string | null; tracks: Track[] };
+    [albumId: string]: Album;
   } = Object.keys(files)
     .map((artist) => {
       return Object.entries(files[artist]).reduce(
@@ -35,6 +32,7 @@ const albumArtCache = new Map<string, Promise<string | null>>();
 export const getAlbumArt = (files: Files, albumId: string) => {
   if (!albumArtCache.has(albumId)) {
     const album = getAlbum(files, albumId);
+
     if (!album) {
       return Promise.resolve(null);
     }
@@ -92,4 +90,47 @@ export const getRemainingAlbumTracks = (files: Files, trackUrl: string) => {
   }
 
   return [];
+};
+
+/** Get all Album IDs */
+const getAlbumIds = (files: Files) =>
+  Object.values(files).flatMap((albums) =>
+    Object.values(albums).map((album) => album.id),
+  );
+
+/** Get most recently uploaded albums */
+export const getAlbumIdsByRecent = (files: Files): Album[] => {
+  const albums = getAlbumIds(files).map((albumId) => ({
+    albumId,
+    ...getAlbum(files, albumId),
+  }));
+
+  const sortTracksByMostRecentlyModified = (a: Track, b: Track) => {
+    if (a.lastModified && b.lastModified) {
+      return (
+        new Date(b.lastModified).valueOf() - new Date(a.lastModified).valueOf()
+      );
+    }
+    return 0;
+  };
+
+  const sortAlbumsByMostRecentlyModifiedTracks = (a: Album, b: Album) => {
+    const firstSortedATrack = a.tracks.sort(
+      sortTracksByMostRecentlyModified,
+    )[0];
+    const firstSortedBTrack = b.tracks.sort(
+      sortTracksByMostRecentlyModified,
+    )[0];
+
+    if (firstSortedATrack.lastModified && firstSortedBTrack.lastModified) {
+      return (
+        new Date(firstSortedBTrack.lastModified).valueOf() -
+        new Date(firstSortedATrack.lastModified).valueOf()
+      );
+    }
+
+    return 0;
+  };
+
+  return albums.sort(sortAlbumsByMostRecentlyModifiedTracks);
 };

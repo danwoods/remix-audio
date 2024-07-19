@@ -53,7 +53,7 @@ const Album = () => {
         if (url) {
           return extractColors(url).then((colors) => [
             colors[0].hex,
-            colors[11].hex,
+            colors[colors.length - 1].hex,
           ]);
         } else {
           return ["oklch(var(--su))", "oklch(var(--b1))"];
