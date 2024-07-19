@@ -1,6 +1,6 @@
 /** @file Handle all file/directory uploading functionality */
 import { Form, useFetcher } from "@remix-run/react";
-import { PlusCircleIcon } from "@heroicons/react/24/solid";
+import { PlusCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
@@ -19,12 +19,16 @@ const FilePicker = () => {
     if (fetcher.state === "submitting") {
       setIsSubmitting(true);
     } else if (fetcher.state === "idle" && isSubmitting) {
-      // Hide modal and cleanup
-      setShowUploadUI(false);
-      setHasDroppedFiles(false);
-      setIsSubmitting(false);
+      close();
     }
   }, [fetcher.state, isSubmitting]);
+
+  /** Hide modal and cleanup */
+  const close = () => {
+    setShowUploadUI(false);
+    setHasDroppedFiles(false);
+    setIsSubmitting(false);
+  };
 
   return (
     <>
@@ -38,6 +42,11 @@ const FilePicker = () => {
           <dialog open={showUploadUI} className="modal p8">
             <fetcher.Form method="post" encType="multipart/form-data">
               <div className="modal-box bg-base-300 flex flex-col justify-center rounded">
+                <div className="flex justify-end">
+                  <button className="btn" type="button" onClick={close}>
+                    <XMarkIcon className="size-4" />
+                  </button>
+                </div>
                 <div>
                   <input
                     id="files"
