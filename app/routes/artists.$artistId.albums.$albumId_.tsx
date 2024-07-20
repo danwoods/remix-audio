@@ -9,6 +9,7 @@ import { extractColors } from "extract-colors";
 import { getAlbumArt } from "~/util/trackOrganization";
 import { useEffect, useState } from "react";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
+import { useInView } from "react-intersection-observer";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   if (!params.artistId || !params.albumId)
@@ -22,10 +23,12 @@ const Header = ({
   artistId,
   albumId,
   files,
+  forceSmallSticky,
 }: {
   artistId: string;
   albumId: string;
   files: Files;
+  forceSmallSticky: boolean;
 }) => {
   const [bgGradient, setBgGradient] = useState<string | null>(null);
 
@@ -48,23 +51,31 @@ const Header = ({
 
   return (
     <div
-      className={`p-4 lg:p-6 rounded sm:h-48 md:h-60 lg:h-72 flex ites-start sticky top-0 z-50`}
+      className={`p-4 rounded flex z-50 transition-all ${!forceSmallSticky ? "lg:p-6 sm:h-48 md:h-60 lg:h-72" : "sticky top-0"}`}
       style={{
         background: bgGradient || "",
       }}
     >
-      <div className="size-20 sm:size-40 md:size-48 lg:size-60">
+      <div
+        className={`size-20 ${!forceSmallSticky ? "sm:size-40 md:size-48 lg:size-60" : ""}`}
+      >
         <AlbumCover
           files={files}
           albumId={`${artistId}/${albumId}`}
           className="rounded shadow-2xl"
         />
       </div>
-      <div className="ml-3 pt-2 md:pt-4 text-black">
-        <p className="text-lg sm:text-2xl md:text-4xl lg:text-6xl font-bold">
+      <div
+        className={`ml-3 pt-2 text-black ${!forceSmallSticky ? "md:pt-4" : ""}`}
+      >
+        <p
+          className={`text-lg font-bold ${!forceSmallSticky ? "sm:text-2xl md:text-4xl lg:text-6xl" : ""}`}
+        >
           {albumId}
         </p>
-        <p className="text-base sm:text-lg md:text-xl lg:text-2xl line-clamp-3">
+        <p
+          className={`text-base line-clamp-1 ${!forceSmallSticky ? "sm:text-lg md:text-xl lg:text-2xl line-clamp-3" : ""}`}
+        >
           {artistId}
         </p>
       </div>
@@ -132,13 +143,32 @@ const Album = () => {
   const { currentTrack, isPlaying, files, playToggle } =
     useOutletContext<Context>();
   const { artistId, albumId } = useLoaderData<typeof loader>();
+  const [forceSmallSticky, setForceSmallSticky] = useState(false);
+  const { ref, inView } = useInView({
+    initialInView: true,
+    rootMargin: "-150px",
+  });
+
+  useEffect(() => {
+    if (!inView) {
+      setForceSmallSticky(true);
+    } else {
+      setForceSmallSticky(false);
+    }
+  }, [inView]);
 
   if (artistId && albumId) {
     const tracks = files[artistId][albumId].tracks;
 
     return (
       <section>
-        <Header artistId={artistId} albumId={albumId} files={files} />
+        <Header
+          artistId={artistId}
+          albumId={albumId}
+          files={files}
+          forceSmallSticky={forceSmallSticky}
+        />
+        <div ref={ref} className="" />
         <div className="pb-20">
           <Tracklist
             tracks={tracks}
