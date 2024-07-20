@@ -9,7 +9,7 @@ const AlbumTitle = ({ albumId, files }: { albumId: string; files: Files }) => {
 
   return (
     <Link to={`/artists/${artistName}/albums/${albumName}`}>
-      <AlbumCover files={files} albumId={albumId} className="rounded" />
+      <AlbumCover files={files} albumId={albumId} className="rounded w-full" />
       <div className="pt-1 md:pt-2">
         <p className="text-base">{albumName}</p>
         <p className="text-sm line-clamp-1">{`by ${artistName}`}</p>

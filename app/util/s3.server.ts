@@ -114,11 +114,11 @@ export type Files = {
   };
 };
 
-/**
- * Get an Object of all of the files in the bucket organized by artist > album > track
- * @returns An Object of audio file references
- */
-export const getUploadedFiles = async (): Promise<Files> => {
+/** File fetch cache to avoid repetitve fetches */
+let filesFetchCache: Promise<Files> | null = null;
+
+/** Get file list from S3 and organize it into a `Files` object */
+const fileFetch = async (): Promise<Files> => {
   const command = new ListObjectsV2Command({
     Bucket: STORAGE_BUCKET,
   });
@@ -167,4 +167,12 @@ export const getUploadedFiles = async (): Promise<Files> => {
     console.error(err);
     throw err;
   }
+};
+
+/** Get Files object */
+export const getUploadedFiles = async (force?: boolean): Promise<Files> => {
+  if (!filesFetchCache || force) {
+    filesFetchCache = fileFetch();
+  }
+  return filesFetchCache;
 };

@@ -1,8 +1,6 @@
-// XXX: https://github.com/GoogleChrome/lighthouse?tab=readme-ov-file#cli-options
 import type {
   ActionFunctionArgs,
   LinksFunction,
-  LoaderFunctionArgs,
   UploadHandler,
 } from "@remix-run/node";
 import type { Files } from "./util/s3.server";
@@ -14,7 +12,7 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
-  useNavigation,
+  // useNavigation,
   // useSubmit,
 } from "@remix-run/react";
 import {
@@ -27,7 +25,6 @@ import {
 import { useEffect, useRef, useState } from "react";
 import AppBar from "./components/Layout/AppBar";
 import PlayerControls from "./components/Layout/PlayerControls";
-// import FilePicker from "./components/FilePicker";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 import { getRemainingAlbumTracks } from "./util/trackOrganization";
 
@@ -39,10 +36,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
     const formData = await parseMultipartFormData(request, uploadHandler);
     console.log({ formData });
+    getUploadedFiles(true);
     return redirect("/");
   } else {
-    // const contact = await createEmptyContact();
-    return redirect("/"); //redirect(`/contacts/${contact.id}/edit`);
+    return redirect("/");
   }
 };
 
@@ -59,10 +56,9 @@ export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStylesHref },
 ];
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+export const loader = async (/*{ request }: LoaderFunctionArgs*/) => {
   const files = await getUploadedFiles();
-  const url = new URL(request.url);
-  const q = url.searchParams.get("q");
+
   const headLinks = [
     {
       rel: "preconnect",
@@ -70,35 +66,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   ];
 
-  return json({ q, files, headLinks });
+  return json({ files, headLinks });
 };
 
 export default function App() {
   const {
-    q,
     files,
     headLinks,
   }: {
-    q: string | null;
     files: Files;
     headLinks: { rel: string; href: string }[];
   } = useLoaderData<typeof loader>();
-  const navigation = useNavigation();
+  // const navigation = useNavigation();
   const audioElmRef = useRef<HTMLAudioElement>(null);
-  // const submit = useSubmit();
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
   const [nextTrackLoaded, setNextTrackLoaded] = useState<boolean>(false);
-  const searching =
-    navigation.location &&
-    new URLSearchParams(navigation.location.search).has("q");
+  // const searching =
+  //   navigation.location &&
+  //   new URLSearchParams(navigation.location.search).has("q");
 
-  useEffect(() => {
-    const searchField = document.getElementById("q");
-    if (searchField instanceof HTMLInputElement) {
-      searchField.value = q || "";
-    }
-  }, [q]);
+  // useEffect(() => {
+  //   const searchField = document.getElementById("q");
+  //   if (searchField instanceof HTMLInputElement) {
+  //     searchField.value = q || "";
+  //   }
+  // }, [q]);
 
   // Player functionality /////////////////////////////////////////////////////
 
@@ -199,7 +192,8 @@ export default function App() {
       <body>
         <AppBar files={files} playToggle={playToggle} />
         <div
-          className={`${navigation.state === "loading" && !searching ? "" : ""} flex w-full`}
+          // className={`${navigation.state === "loading" && !searching ? "" : ""} flex w-full`}
+          className={`flex w-full`}
         >
           <main className="md:mx-auto md:px-6 grow">
             <Outlet
