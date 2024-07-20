@@ -5,7 +5,7 @@ import type {
   LoaderFunctionArgs,
   UploadHandler,
 } from "@remix-run/node";
-import type { Files, Track } from "./util/s3.server";
+import type { Files } from "./util/s3.server";
 import {
   // Form,
   Links,
@@ -50,7 +50,7 @@ import appStylesHref from "./app.css?url";
 
 export type Context = {
   files: Files;
-  playToggle: (track: Track) => void;
+  playToggle: (track?: { url: string }) => void;
   currentTrack: string | null;
   isPlaying: boolean;
 };
@@ -198,44 +198,10 @@ export default function App() {
       </head>
       <body>
         <AppBar files={files} playToggle={playToggle} />
-        {/* <Drawer>
-          <ArtistAlbumTrackNavList files={files} />
-        </Drawer> */}
-        {/* <div id="sidebar">
-          <section id="upload-button-container">
-            <FilePicker />
-          </section>
-          <div>
-            <Form
-              id="search-form"
-              role="search"
-              onChange={(event) => {
-                const isFirstSearch = q === null;
-                submit(event.currentTarget, {
-                  replace: !isFirstSearch,
-                });
-              }}
-            >
-              <input
-                id="q"
-                aria-label="Search contacts"
-                className={searching ? "loading" : ""}
-                defaultValue={q || ""}
-                placeholder="Search"
-                type="search"
-                name="q"
-              />
-              <div id="search-spinner" aria-hidden hidden={!searching} />
-            </Form>
-            <Form method="post">
-              <button type="submit">New</button>
-            </Form>
-          </div>
-        </div> */}
         <div
-          className={`${navigation.state === "loading" && !searching ? "loading" : ""} flex w-full`}
+          className={`${navigation.state === "loading" && !searching ? "" : ""} flex w-full`}
         >
-          <main className="md:mx-auto md:px-6">
+          <main className="md:mx-auto md:px-6 grow">
             <Outlet
               context={{
                 files,

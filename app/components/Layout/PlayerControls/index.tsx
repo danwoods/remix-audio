@@ -55,7 +55,7 @@ const CurrentlyPlaying = ({
       <AlbumCover
         files={files}
         albumId={`${artistName}/${albumName}`}
-        className="rounded w-1/2 max-sm:w-1/3 z-10 max-w-36"
+        className="rounded z-10 size-20"
       />
       <div className="ml-3 pt-2">
         <p className="text-base font-bold">{trackName}</p>

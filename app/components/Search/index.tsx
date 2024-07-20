@@ -23,7 +23,7 @@ const SearchResultsContainer = ({
       right-0
       mr-14
       p-3
-      ${isShowingResults ? "w-2/3" : "w-6"}
+      ${isShowingResults ? "w-1/2" : "w-6"}
       rounded-l
       rounded-b
       bg-secondary
