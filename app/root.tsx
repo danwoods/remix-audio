@@ -197,7 +197,7 @@ export default function App() {
         ))}
       </head>
       <body>
-        <AppBar />
+        <AppBar files={files} playToggle={playToggle} />
         {/* <Drawer>
           <ArtistAlbumTrackNavList files={files} />
         </Drawer> */}

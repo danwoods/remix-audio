@@ -134,3 +134,57 @@ export const getAlbumIdsByRecent = (files: Files): Album[] => {
 
   return albums.sort(sortAlbumsByMostRecentlyModifiedTracks);
 };
+
+type SearchResult = { id: string; title: string; localUrl: string };
+
+interface TrackSearchResult extends SearchResult {
+  url: string;
+}
+
+export type SearchResults = {
+  artists: SearchResult[];
+  albums: SearchResult[];
+  tracks: TrackSearchResult[];
+};
+
+/** Files artists, albums, and songs that match `searchStr` */
+export const search = (files: Files, searchStr: string): SearchResults => {
+  const results: SearchResults = {
+    artists: [],
+    albums: [],
+    tracks: [],
+  };
+
+  Object.entries(files).forEach(([artist, albumsObj]) => {
+    if (artist.toLocaleLowerCase().includes(searchStr)) {
+      results.artists.push({
+        id: artist,
+        title: artist,
+        localUrl: `/artists/${artist}`,
+      });
+    }
+
+    Object.entries(albumsObj).forEach(([album, albumObj]) => {
+      if (album.toLocaleLowerCase().includes(searchStr)) {
+        results.albums.push({
+          id: albumObj.id,
+          title: album,
+          localUrl: `/artists/${artist}/albums/${album}`,
+        });
+      }
+
+      albumObj.tracks.forEach((t) => {
+        if (t.title.toLocaleLowerCase().includes(searchStr)) {
+          results.tracks.push({
+            id: t.url,
+            title: t.title,
+            localUrl: `/artists/${artist}/albums/${album}`,
+            url: t.url,
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+};

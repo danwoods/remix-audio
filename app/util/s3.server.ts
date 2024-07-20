@@ -103,6 +103,7 @@ export type Track = {
 
 export type Album = {
   id: string;
+  title: string;
   coverArt: string;
   tracks: Array<Track>;
 };
@@ -141,6 +142,7 @@ export const getUploadedFiles = async (): Promise<Files> => {
           acc[artist] = acc[artist] || {};
           acc[artist][album] = acc[artist][album] || {
             id: `${artist}/${album}`,
+            title: album,
             coverArt: null,
             tracks: [],
           };
