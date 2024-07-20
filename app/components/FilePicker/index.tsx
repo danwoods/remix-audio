@@ -2,7 +2,7 @@
 import { Form, useFetcher } from "@remix-run/react";
 import { PlusCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * UI to process file uploads
@@ -12,7 +12,6 @@ const FilePicker = () => {
   const [showUploadUI, setShowUploadUI] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDroppedFiles, setHasDroppedFiles] = useState(false);
-  const inputRef = useRef(null);
   const fetcher = useFetcher();
 
   useEffect(() => {
@@ -39,7 +38,7 @@ const FilePicker = () => {
       </Form>
       {showUploadUI &&
         createPortal(
-          <dialog open={showUploadUI} className="modal p8">
+          <dialog open={showUploadUI} className="modal">
             <fetcher.Form method="post" encType="multipart/form-data">
               <div className="modal-box bg-base-300 flex flex-col justify-center rounded">
                 <div className="flex justify-end">
@@ -47,14 +46,14 @@ const FilePicker = () => {
                     <XMarkIcon className="size-4" />
                   </button>
                 </div>
-                <div>
+                <div className="p-4">
                   <input
                     id="files"
                     type="file"
                     name="files"
                     multiple
+                    className="file-input w-full"
                     disabled={isSubmitting}
-                    ref={inputRef}
                     onChange={(evt) => {
                       const target = evt.target as HTMLInputElement;
                       if (target?.files && target.files.length > 0) {
