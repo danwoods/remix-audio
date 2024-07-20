@@ -16,6 +16,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.614.0",
     "@aws-sdk/credential-providers": "^3.614.0",
+    "@aws-sdk/lib-storage": "^3.616.0",
     "@heroicons/react": "^2.1.5",
     "@remix-run/node": "^2.10.2",
     "@remix-run/react": "^2.10.2",
