@@ -80,13 +80,13 @@ const CurrentlyPlaying = ({
 const Controls = ({
   currentTrack,
   isPlaying,
-  playToggle,
   playNext,
+  playToggle,
 }: {
-  isPlaying: boolean;
-  playToggle: (t: { url: string }) => void;
   currentTrack: string | null;
+  isPlaying: boolean;
   playNext: () => void;
+  playToggle: (t: { url: string }) => void;
 }) => {
   return (
     <div className="flex justify-evenly w-full cursor-default">
@@ -147,17 +147,17 @@ const Playlist = ({
 
 /** Main player controls */
 const PlayerControls = ({
+  currentTrack,
   files,
   isPlaying,
-  playToggle,
-  currentTrack,
   playNext,
+  playToggle,
 }: {
+  currentTrack: string | null;
   files: Files;
   isPlaying: boolean;
-  playToggle: (t: { url: string }) => void;
-  currentTrack: string | null;
   playNext: () => void;
+  playToggle: (t: { url: string }) => void;
 }) => {
   return (
     <div
@@ -168,16 +168,16 @@ const PlayerControls = ({
       </div>
       <div className="basis-2/5">
         <Controls
-          isPlaying={isPlaying}
-          playToggle={playToggle}
           currentTrack={currentTrack}
+          isPlaying={isPlaying}
           playNext={playNext}
+          playToggle={playToggle}
         />
       </div>
       <div className="max-sm:basis-1/5 max-sm:hidden lg:basis-5/12 items-end">
         <Playlist
-          files={files}
           currentTrack={currentTrack}
+          files={files}
           playToggle={playToggle}
         />
       </div>

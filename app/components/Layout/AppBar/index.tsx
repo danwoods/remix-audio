@@ -1,7 +1,7 @@
 import type { Files } from "../../../util/s3.server";
 
 import FilePicker from "~/components/FilePicker";
-import Search from "~/components/Search";
+import Search from "./Search";
 import { Link } from "@remix-run/react";
 
 /** Main Header for application. Contains logo and search and add buttons */
@@ -22,9 +22,7 @@ const AppBar = ({
       </div>
       <div className="navbar-end">
         <Search files={files} playToggle={playToggle} />
-        <button className="btn btn-ghost btn-circle max-md:hidden">
-          <FilePicker />
-        </button>
+        <FilePicker btnClassName="max-md:hidden" />
       </div>
     </div>
   );

@@ -3,6 +3,10 @@ import type { Files } from "~/util/s3.server";
 import { getAlbumArt } from "~/util/trackOrganization";
 import { useEffect, useState } from "react";
 
+/**
+ * Album cover image
+ * @returns `<img />` element
+ **/
 const AlbumCover = ({
   albumId,
   className,
@@ -13,9 +17,10 @@ const AlbumCover = ({
   files: Files;
 }) => {
   const [albumArt, setAlbumArt] = useState<string>(
-    "https://placehold.co/600x400?text=.",
+    "https://placehold.co/100x100?text=.",
   );
 
+  // Get album art
   useEffect(() => {
     getAlbumArt(files, albumId).then((url) => {
       if (url) {

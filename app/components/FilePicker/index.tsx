@@ -1,5 +1,5 @@
 /** @file Handle all file/directory uploading functionality */
-import { Form, useFetcher } from "@remix-run/react";
+import { useFetcher } from "@remix-run/react";
 import { PlusCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
  * UI to process file uploads
  * @returns Button that opens a modal allowing file uploads
  */
-const FilePicker = () => {
+const FilePicker = ({ btnClassName }: { btnClassName?: string }) => {
   const [showUploadUI, setShowUploadUI] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDroppedFiles, setHasDroppedFiles] = useState(false);
@@ -31,11 +31,12 @@ const FilePicker = () => {
 
   return (
     <>
-      <Form id="add-files">
-        <button type="button" onClick={() => setShowUploadUI(true)}>
-          <PlusCircleIcon className="size-6" />
-        </button>
-      </Form>
+      <button
+        className={`btn btn-ghost btn-circle ${btnClassName ? btnClassName : ""}`}
+        onClick={() => setShowUploadUI(true)}
+      >
+        <PlusCircleIcon className="size-6" />
+      </button>
       {showUploadUI &&
         createPortal(
           <dialog open={showUploadUI} className="modal">
