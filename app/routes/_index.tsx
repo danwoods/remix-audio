@@ -7,6 +7,12 @@ import AlbumTile from "~/components/AlbumTile";
 import HorizontalRowWithTitle from "~/components/HorizontalRowWithTitle";
 import { getAlbumIdsByRecent } from "~/util/trackOrganization";
 
+import { json } from "@remix-run/node"; // or cloudflare/deno
+
+export const loader = async () => {
+  return json({ ok: true });
+};
+
 const ContinueListeningRow = ({ files }: { files: Files }) => (
   <HorizontalRowWithTitle title="Continue Listening">
     <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />

@@ -1,13 +1,14 @@
 /** @File Utilities for working with AWS S3 */
 import type { UploadHandler } from "@remix-run/node";
 
-import AWS from "aws-sdk";
-import { PassThrough } from "stream";
+// import AWS from "aws-sdk";
+// import { PassThrough } from "stream";
 import { getID3Tags } from "./id3";
-import { writeAsyncIterableToWritable } from "@remix-run/node";
+// import { writeAsyncIterableToWritable } from "@remix-run/node";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { createAsyncIteratorFromArrayBuffer } from "./file";
+// import { createAsyncIteratorFromArrayBuffer } from "./file";
+import { Upload } from "@aws-sdk/lib-storage";
 
 const {
   AWS_ACCESS_KEY_ID,
@@ -28,37 +29,66 @@ if (
   throw new Error(`Storage is missing required configuration.`);
 }
 
+const client = new S3Client({
+  region: STORAGE_REGION,
+  credentials: fromEnv(),
+});
+
 // Uploading //////////////////////////////////////////////////////////////////
 // https://docs.aws.amazon.com/AmazonS3/latest/userguide/example_s3_Scenario_UsingLargeFiles_section.html
 
-const uploadStream = ({ Key }: Pick<AWS.S3.Types.PutObjectRequest, "Key">) => {
-  const s3 = new AWS.S3({
-    credentials: {
-      accessKeyId: AWS_ACCESS_KEY_ID,
-      secretAccessKey: AWS_SECRET_ACCESS_KEY,
-    },
-    region: STORAGE_REGION,
-  });
-  const pass = new PassThrough();
-  return {
-    writeStream: pass,
-    promise: s3.upload({ Bucket: STORAGE_BUCKET, Key, Body: pass }).promise(),
-  };
-};
+// const uploadStream = ({ Key }: Pick<AWS.S3.Types.PutObjectRequest, "Key">) => {
+//   const s3 = new AWS.S3({
+//     credentials: {
+//       accessKeyId: AWS_ACCESS_KEY_ID,
+//       secretAccessKey: AWS_SECRET_ACCESS_KEY,
+//     },
+//     region: STORAGE_REGION,
+//   });
+//   const pass = new PassThrough();
+//   return {
+//     writeStream: pass,
+//     promise: s3.upload({ Bucket: STORAGE_BUCKET, Key, Body: pass }).promise(),
+//   };
+// };
 
-export async function uploadStreamToS3(
+export const uploadStreamToS3V2 = async (
   data: AsyncIterable<Uint8Array>,
   filename: string,
-) {
-  const stream = uploadStream({
-    Key: filename,
-  });
+) => {
+  const target = { Bucket: STORAGE_BUCKET, Key: filename, Body: data };
+  try {
+    const parallelUploads3 = new Upload({
+      client: client, //new S3Client({}),
+      // tags: [...], // optional tags
+      queueSize: 4, // optional concurrency configuration
+      leavePartsOnError: false, // optional manually handle dropped parts
+      params: target,
+    });
 
-  await writeAsyncIterableToWritable(data, stream.writeStream);
-  const file = await stream.promise;
-  console.log({ file });
-  return file.Location;
-}
+    parallelUploads3.on("httpUploadProgress", (progress) => {
+      console.log(progress);
+    });
+
+    console.log(await parallelUploads3.done());
+  } catch (e) {
+    console.log(e);
+  }
+};
+
+// export async function uploadStreamToS3(
+//   data: AsyncIterable<Uint8Array>,
+//   filename: string,
+// ) {
+//   const stream = uploadStream({
+//     Key: filename,
+//   });
+
+//   await writeAsyncIterableToWritable(data, stream.writeStream);
+//   const file = await stream.promise;
+//   console.log({ file });
+//   return file.Location;
+// }
 
 export const s3UploadHandler: UploadHandler = async ({
   name,
@@ -76,11 +106,11 @@ export const s3UploadHandler: UploadHandler = async ({
   }
 
   const file = new File(dataArray, "temp", { type: contentType });
-  const fileArrayBuffer = await file.arrayBuffer();
+  // const fileArrayBuffer = await file.arrayBuffer();
   const id3Tags = await getID3Tags(file);
   const partitiionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
-  const uploadedFileLocation = await uploadStreamToS3(
-    createAsyncIteratorFromArrayBuffer(fileArrayBuffer),
+  const uploadedFileLocation = await uploadStreamToS3V2(
+    file,
     partitiionedFilename,
   );
 
@@ -88,11 +118,6 @@ export const s3UploadHandler: UploadHandler = async ({
 };
 
 // Reading ////////////////////////////////////////////////////////////////////
-
-const client = new S3Client({
-  region: STORAGE_REGION,
-  credentials: fromEnv(),
-});
 
 export type Track = {
   url: string;
