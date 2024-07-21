@@ -57,7 +57,7 @@ const Header = ({
       }}
     >
       <div
-        className={`size-20 ${!forceSmallSticky ? "sm:size-40 md:size-48 lg:size-60" : ""}`}
+        className={`size-20 ${!forceSmallSticky ? "sm:size-40 md:min-w-48 lg:min-w-60" : ""}`}
       >
         <AlbumCover
           files={files}

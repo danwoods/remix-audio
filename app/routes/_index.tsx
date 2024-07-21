@@ -11,43 +11,25 @@ import { useLoaderData } from "@remix-run/react";
 export const loader = async () => {
   const files = await getUploadedFiles();
 
-  const recentAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
+  const recentlyUploadedAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
 
-  return json({ files, recentAlbumIds });
+  return json({ files, recentlyUploadedAlbumIds });
 };
 
-const ContinueListeningRow = ({ files }: { files: Files }) => (
-  <HorizontalRowWithTitle title="Continue Listening">
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-  </HorizontalRowWithTitle>
-);
-
-const LatestRow = ({
+/** Single row on homepage */
+const Row = ({
   albumIds,
   files,
+  title,
 }: {
-  albumIds: ReturnType<typeof getAlbumIdsByRecent>;
+  albumIds: { id: string }[];
   files: Files;
-}) => {
-  return (
-    <HorizontalRowWithTitle title="Latest">
-      {albumIds.map((a) => (
-        <AlbumTile key={a.id} files={files} albumId={a.id} />
-      ))}
-    </HorizontalRowWithTitle>
-  );
-};
-
-const FavoritesRow = ({ files }: { files: Files }) => (
-  <HorizontalRowWithTitle title="Favorites">
-    <AlbumTile
-      files={files}
-      albumId="Joe Russo's Almost Dead/2019-08-29 Morrison, CO"
-    />
-    <AlbumTile files={files} albumId="Pearl Jam/Dark Matter" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
-    <AlbumTile files={files} albumId="Dance Party Time Machine/Love Shack" />
+  title: string;
+}) => (
+  <HorizontalRowWithTitle title={title}>
+    {albumIds.map((a) => (
+      <AlbumTile key={a.id} files={files} albumId={a.id} />
+    ))}
   </HorizontalRowWithTitle>
 );
 
@@ -55,18 +37,42 @@ const FavoritesRow = ({ files }: { files: Files }) => (
 const Index = () => {
   const {
     files,
-    recentAlbumIds,
+    recentlyUploadedAlbumIds,
   }: {
     files: Files;
-    recentAlbumIds: ReturnType<typeof getAlbumIdsByRecent>;
+    recentlyUploadedAlbumIds: ReturnType<typeof getAlbumIdsByRecent>;
   } = useLoaderData<typeof loader>();
+
+  const recentlyListenedToAlbumIds = [
+    { id: "Childish Gambino/Poindexter" },
+    { id: "Girl Talk/All Day" },
+    { id: "Pearl Jam/Vitalogy (Expanded Edition)" },
+    { id: "The Rolling Stones/Let It Bleed" },
+    { id: "The Black Keys/Ohio Players" },
+  ];
+
+  const mostListenedToAlbumIds = [
+    { id: "Pearl Jam/Dark Matter" },
+    { id: "Run The Jewels/RTJ4" },
+    { id: "Pink Floyd/Wish You Were Here" },
+    { id: "Wu-Tang Clan/Enter The Wu-Tang: 36 Chambers" },
+    { id: "The Rolling Stones/Exile On Main St." },
+  ];
 
   if (files) {
     return (
       <>
-        <ContinueListeningRow files={files} />
-        <LatestRow files={files} albumIds={recentAlbumIds} />
-        <FavoritesRow files={files} />
+        <Row
+          files={files}
+          albumIds={recentlyListenedToAlbumIds}
+          title="Continue Listening"
+        />
+        <Row files={files} albumIds={recentlyUploadedAlbumIds} title="Latest" />
+        <Row
+          files={files}
+          albumIds={mostListenedToAlbumIds}
+          title="Favorites"
+        />
       </>
     );
   } else {
