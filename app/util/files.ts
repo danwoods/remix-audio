@@ -4,6 +4,7 @@ import { fromUrl } from "id3js";
 
 export type Track = {
   url: string;
+  tagFetch: Promise<Array<{ Key: string; Value: string }> | undefined>;
   title: string;
   trackNum: number;
   lastModified: number | null;
@@ -115,6 +116,12 @@ const getAlbumIds = (files: Files) =>
   Object.values(files).flatMap((albums) =>
     Object.values(albums).map((album) => album.id),
   );
+
+export const getAllTracks = (files: Files) => {
+  return Object.values(files).flatMap((albums) =>
+    Object.values(albums).flatMap((album) => album.tracks),
+  );
+};
 
 /** Get most recently uploaded albums */
 export const getAlbumIdsByRecent = (files: Files): Album[] => {

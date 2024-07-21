@@ -98,6 +98,10 @@ export default function App() {
       if (track.url !== currentTrackUrl) {
         setCurrentTrackUrl(track.url);
         setIsPlaying(true);
+        fetch("/api/track/tags/incrementListenCount", {
+          method: "POST",
+          body: JSON.stringify({ trackUrl: track.url }),
+        });
       } else if (isPlaying) {
         pause();
       } else {
