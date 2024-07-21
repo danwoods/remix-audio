@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { getAlbum } from "./trackOrganization.ts";
+import { getAlbum } from "./files.ts";
 
 describe("track organization methods", () => {
   it("getAlbum", () => {
