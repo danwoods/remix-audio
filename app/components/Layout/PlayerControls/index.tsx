@@ -132,7 +132,7 @@ const Playlist = ({
         {tracks.map((track) => (
           <li key={track.url}>
             <button
-              className="py-1 w-full flex justify-between"
+              className="py-1 w-full flex justify-between px-0"
               onClick={() => playToggle(track)}
             >
               {track.title}

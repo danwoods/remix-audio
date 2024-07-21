@@ -168,7 +168,7 @@ const Album = () => {
           files={files}
           forceSmallSticky={forceSmallSticky}
         />
-        <div ref={ref} className="" />
+        <div ref={ref} />
         <Tracklist
           tracks={tracks}
           isPlaying={isPlaying}
