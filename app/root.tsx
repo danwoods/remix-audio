@@ -4,6 +4,7 @@ import type {
   UploadHandler,
 } from "@remix-run/node";
 import type { Files } from "./util/files";
+import type { SyntheticEvent } from "react";
 
 import {
   Links,
@@ -25,6 +26,7 @@ import PlayerControls from "./components/Layout/PlayerControls";
 import { getRemainingAlbumTracks } from "./util/files";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 import { useEffect, useRef, useState } from "react";
+import appStylesHref from "./app.css?url";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
@@ -43,19 +45,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-import appStylesHref from "./app.css?url";
-
-export type Context = {
-  files: Files;
-  playToggle: (track?: { url: string }) => void;
-  currentTrack: string | null;
-  isPlaying: boolean;
-};
-
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: appStylesHref },
-];
-
 export const loader = async () => {
   const files = await getUploadedFiles();
 
@@ -69,6 +58,17 @@ export const loader = async () => {
   return json({ files, headLinks });
 };
 
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: appStylesHref },
+];
+
+export type Context = {
+  files: Files;
+  playToggle: (track?: { url: string }) => void;
+  currentTrack: string | null;
+  isPlaying: boolean;
+};
+
 export default function App() {
   const {
     files,
@@ -77,69 +77,13 @@ export default function App() {
     files: Files;
     headLinks: { rel: string; href: string }[];
   } = useLoaderData<typeof loader>();
-  // const navigation = useNavigation();
+
   const audioElmRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
   const [nextTrackLoaded, setNextTrackLoaded] = useState<boolean>(false);
 
   // Player functionality /////////////////////////////////////////////////////
-
-  /** Listen to progress changes for current track so we can start loading the
-   * next track when it's close to finishing and move to the next track once
-   * it's done
-   **/
-  const onTimeUpdate = (evt: Event) => {
-    const t = evt.target as HTMLAudioElement;
-    if (
-      !nextTrackLoaded &&
-      !Number.isNaN(t.duration) &&
-      // If we're within 20s of the end of the track
-      t.duration - 20 < t.currentTime &&
-      currentTrackUrl
-    ) {
-      setNextTrackLoaded(true);
-      const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
-
-      if (nextTrack) {
-        new Audio(nextTrack.url);
-      }
-
-      t.removeEventListener("timeupdate", onTimeUpdate);
-    }
-  };
-
-  // Call play/pause on the audio element to respond to `isPlaying`
-  useEffect(() => {
-    const audioElm = audioElmRef.current;
-    if (audioElm) {
-      if (isPlaying) {
-        audioElm.play();
-        setNextTrackLoaded(false);
-        audioElm.addEventListener("ended", playNext);
-        audioElm.addEventListener("timeupdate", onTimeUpdate);
-        return () => {
-          audioElm.removeEventListener("ended", playNext);
-          audioElm.removeEventListener("timeupdate", onTimeUpdate);
-        };
-      } else {
-        audioElm.pause();
-      }
-    }
-  }, [isPlaying, currentTrackUrl]);
-
-  /** Pause track */
-  const pause = () => {
-    setIsPlaying(false);
-  };
-
-  /** Play next track */
-  const playNext = () => {
-    if (currentTrackUrl) {
-      const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
-      playToggle(nextTrack);
-    }
-  };
 
   /**
    * @summary Play/Pause/Resume/Stop
@@ -164,6 +108,54 @@ export default function App() {
       pause();
     }
   };
+
+  /** Pause track */
+  const pause = () => {
+    setIsPlaying(false);
+  };
+
+  /** Play next track */
+  const playNext = () => {
+    if (currentTrackUrl) {
+      const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
+      playToggle(nextTrack);
+    }
+  };
+
+  /** Listen to progress changes for current track so we can start loading the
+   * next track when it's close to finishing and move to the next track once
+   * it's done
+   **/
+  const onTimeUpdate = (evt: SyntheticEvent<HTMLAudioElement, Event>) => {
+    const t = evt.target as HTMLAudioElement;
+    if (
+      !nextTrackLoaded &&
+      !Number.isNaN(t.duration) &&
+      // If we're within 20s of the end of the track
+      t.duration - 20 < t.currentTime &&
+      currentTrackUrl
+    ) {
+      setNextTrackLoaded(true);
+      const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
+
+      if (nextTrack) {
+        new Audio(nextTrack.url);
+      }
+    }
+  };
+
+  // Call play/pause on the audio element to respond to `isPlaying`
+  useEffect(() => {
+    const audioElm = audioElmRef.current;
+    if (audioElm) {
+      if (isPlaying) {
+        audioElm.play();
+        setNextTrackLoaded(false);
+      } else {
+        audioElm.pause();
+      }
+    }
+  }, [isPlaying, currentTrackUrl]);
 
   // Main component ///////////////////////////////////////////////////////////
 
@@ -204,7 +196,12 @@ export default function App() {
         <ScrollRestoration />
         <Scripts />
         {currentTrackUrl && (
-          <audio src={currentTrackUrl} ref={audioElmRef}></audio> // eslint-disable-line jsx-a11y/media-has-caption
+          <audio // eslint-disable-line jsx-a11y/media-has-caption
+            onEnded={playNext}
+            onTimeUpdate={onTimeUpdate}
+            ref={audioElmRef}
+            src={currentTrackUrl}
+          ></audio>
         )}
       </body>
     </html>
