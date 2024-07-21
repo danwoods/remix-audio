@@ -12,8 +12,6 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
-  // useNavigation,
-  // useSubmit,
 } from "@remix-run/react";
 import {
   json,
@@ -34,9 +32,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       s3UploadHandler,
       createMemoryUploadHandler(),
     );
+
     await parseMultipartFormData(request, uploadHandler);
-    // console.log({ formData });
+
     getUploadedFiles(true);
+
     return redirect("/");
   } else {
     return redirect("/");
@@ -56,7 +56,7 @@ export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStylesHref },
 ];
 
-export const loader = async (/*{ request }: LoaderFunctionArgs*/) => {
+export const loader = async () => {
   const files = await getUploadedFiles();
 
   const headLinks = [
@@ -82,16 +82,6 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
   const [nextTrackLoaded, setNextTrackLoaded] = useState<boolean>(false);
-  // const searching =
-  //   navigation.location &&
-  //   new URLSearchParams(navigation.location.search).has("q");
-
-  // useEffect(() => {
-  //   const searchField = document.getElementById("q");
-  //   if (searchField instanceof HTMLInputElement) {
-  //     searchField.value = q || "";
-  //   }
-  // }, [q]);
 
   // Player functionality /////////////////////////////////////////////////////
 
@@ -110,9 +100,11 @@ export default function App() {
     ) {
       setNextTrackLoaded(true);
       const [nextTrack] = getRemainingAlbumTracks(files, currentTrackUrl);
+
       if (nextTrack) {
         new Audio(nextTrack.url);
       }
+
       t.removeEventListener("timeupdate", onTimeUpdate);
     }
   };
@@ -149,7 +141,6 @@ export default function App() {
     }
   };
 
-  // XXX: Just pass URL
   /**
    * @summary Play/Pause/Resume/Stop
    * @desc There are 4 different scenarios this supports
@@ -191,10 +182,7 @@ export default function App() {
       </head>
       <body>
         <AppBar files={files} playToggle={playToggle} />
-        <div
-          // className={`${navigation.state === "loading" && !searching ? "" : ""} flex w-full`}
-          className={`flex w-full`}
-        >
+        <div className={`flex w-full`}>
           <main className="md:mx-auto md:px-6 grow">
             <Outlet
               context={{

@@ -83,6 +83,7 @@ export async function uploadStreamToS3(
 /**
  * Remix compatible handler for streaming files to S3. Extracts ID3 data from
  * files to organize into artist/album bucket structure.
+ * @see https://remix.run/docs/en/main/guides/file-uploads#upload-handler-composition
  **/
 export const s3UploadHandler: UploadHandler = async ({
   name,
