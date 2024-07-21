@@ -169,14 +169,12 @@ const Album = () => {
           forceSmallSticky={forceSmallSticky}
         />
         <div ref={ref} className="" />
-        <div className="pb-20">
-          <Tracklist
-            tracks={tracks}
-            isPlaying={isPlaying}
-            currentTrack={currentTrack}
-            playToggle={playToggle}
-          />
-        </div>
+        <Tracklist
+          tracks={tracks}
+          isPlaying={isPlaying}
+          currentTrack={currentTrack}
+          playToggle={playToggle}
+        />
       </section>
     );
   } else {

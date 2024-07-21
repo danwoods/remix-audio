@@ -175,7 +175,9 @@ export default function App() {
       <body>
         <AppBar files={files} playToggle={playToggle} />
         <div className={`flex w-full`}>
-          <main className="md:mx-auto md:px-6 grow">
+          <main
+            className={`md:mx-auto md:px-6 grow ${isPlaying ? "pb-20" : ""}`}
+          >
             <Outlet
               context={{
                 files,
