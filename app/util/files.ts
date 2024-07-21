@@ -1,7 +1,26 @@
 /** @file Utility methods for working with the Files object */
 
-import type { Album, Files, Track } from "./s3.server";
 import { fromUrl } from "id3js";
+
+export type Track = {
+  url: string;
+  title: string;
+  trackNum: number;
+  lastModified: number | null;
+};
+
+export type Album = {
+  id: string;
+  title: string;
+  coverArt: string;
+  tracks: Array<Track>;
+};
+
+export type Files = {
+  [artist: string]: {
+    [album: string]: Album;
+  };
+};
 
 /**
  * Given an albumID, find it in a files object
@@ -27,7 +46,6 @@ export const getAlbum = (files: Files, albumId: string): Album => {
 /** Album art cache to avoid repetitve fetches */
 const albumArtCache = new Map<string, Promise<string | null>>();
 
-// XXX: Move to ID3 module
 /** Fetch album art */
 export const getAlbumArt = (files: Files, albumId: string) => {
   if (!albumArtCache.has(albumId)) {

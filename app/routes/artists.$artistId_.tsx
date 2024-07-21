@@ -18,7 +18,7 @@ const Albums = () => {
   const albums = Object.keys(files[artistId]);
 
   return (
-    <nav className="artist">
+    <nav>
       {albums.map((name) => (
         <NavLink key={name} to={`/artists/${artistId}/albums/${name}`}>
           {name}

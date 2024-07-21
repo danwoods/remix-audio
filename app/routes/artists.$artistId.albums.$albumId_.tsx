@@ -1,12 +1,12 @@
 /** @file Listing of an album's tracks */
 import type { Context } from "../root";
-import type { Files, Track } from "../util/s3.server";
+import type { Files, Track } from "../util/files";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 
 import AlbumCover from "~/components/AlbumCover";
 import { PauseIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { extractColors } from "extract-colors";
-import { getAlbumArt } from "~/util/trackOrganization";
+import { getAlbumArt } from "~/util/files";
 import { useEffect, useState } from "react";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
 import { useInView } from "react-intersection-observer";

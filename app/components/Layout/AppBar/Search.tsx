@@ -1,9 +1,8 @@
-import type { Files } from "../../../util/s3.server";
-import type { SearchResults } from "../../../util/trackOrganization";
+import type { Files, SearchResults } from "../../../util/files";
 
 import { Link } from "@remix-run/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import { search } from "../../../util/trackOrganization";
+import { search } from "../../../util/files";
 import { useEffect, useState } from "react";
 
 /** Container for search results */

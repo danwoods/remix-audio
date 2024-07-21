@@ -1,6 +1,6 @@
-import type { Files } from "~/util/s3.server";
+import type { Files } from "../../util/files";
 
-import { getAlbumArt } from "~/util/trackOrganization";
+import { getAlbumArt } from "../../util/files";
 import { useEffect, useState } from "react";
 
 /**

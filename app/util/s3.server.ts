@@ -1,5 +1,6 @@
 /** @File Utilities for working with AWS S3 */
 import type { UploadHandler } from "@remix-run/node";
+import type { Files } from "./files";
 
 import AWS from "aws-sdk";
 import { PassThrough } from "stream";
@@ -28,7 +29,6 @@ if (
 }
 
 // Uploading //////////////////////////////////////////////////////////////////
-// https://docs.aws.amazon.com/AmazonS3/latest/userguide/example_s3_Scenario_UsingLargeFiles_section.html
 
 /**
  * Given an array buffer, create an async generator that returns chunks of the buffer
@@ -118,26 +118,6 @@ const client = new S3Client({
   credentials: fromEnv(),
 });
 
-export type Track = {
-  url: string;
-  title: string;
-  trackNum: number;
-  lastModified: number | null;
-};
-
-export type Album = {
-  id: string;
-  title: string;
-  coverArt: string;
-  tracks: Array<Track>;
-};
-
-export type Files = {
-  [artist: string]: {
-    [album: string]: Album;
-  };
-};
-
 /** File fetch cache to avoid repetitve fetches */
 let filesFetchCache: Promise<Files> | null = null;
 
@@ -201,5 +181,6 @@ export const getUploadedFiles = async (force?: boolean): Promise<Files> => {
   if (!filesFetchCache || force) {
     filesFetchCache = fileFetch();
   }
+
   return filesFetchCache;
 };

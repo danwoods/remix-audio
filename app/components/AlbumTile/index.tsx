@@ -1,4 +1,4 @@
-import type { Files } from "~/util/s3.server";
+import type { Files } from "../../util/files";
 
 import { Link } from "@remix-run/react";
 import AlbumCover from "../AlbumCover";

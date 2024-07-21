@@ -1,5 +1,5 @@
 /** @file Player controls seen at the bottom of the screen */
-import type { Files } from "../../../util/s3.server";
+import type { Files } from "../../../util/files";
 
 import {
   BackwardIcon,
@@ -12,7 +12,7 @@ import AlbumCover from "~/components/AlbumCover";
 import {
   getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
-} from "~/util/trackOrganization";
+} from "../../../util/files";
 
 /**
  * Handle whether to display a play or pause button, including indicating if

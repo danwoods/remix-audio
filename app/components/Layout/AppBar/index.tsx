@@ -1,4 +1,4 @@
-import type { Files } from "../../../util/s3.server";
+import type { Files } from "../../../util/files";
 
 import FilePicker from "~/components/FilePicker";
 import Search from "./Search";

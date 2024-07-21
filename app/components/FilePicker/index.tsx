@@ -1,8 +1,8 @@
 /** @file Handle all file/directory uploading functionality */
-import { useFetcher } from "@remix-run/react";
 import { PlusCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
+import { useFetcher } from "@remix-run/react";
 
 /**
  * UI to process file uploads

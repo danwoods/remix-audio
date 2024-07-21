@@ -32,4 +32,5 @@ export const getID3Tags = async (file: File): Promise<ID3Tags> => {
   };
 };
 
+/** Pull ID3 tags from file at `url` */
 export const getID3TagsFromURL = (url: string) => fromUrl(url);

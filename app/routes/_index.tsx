@@ -1,11 +1,11 @@
 /** @file Main content to display when at "/" */
 import type { Context } from "../root";
-import type { Files } from "../util/s3.server";
+import type { Files } from "../util/files";
 
+import AlbumTile from "../components/AlbumTile";
+import HorizontalRowWithTitle from "../components/HorizontalRowWithTitle";
+import { getAlbumIdsByRecent } from "../util/files";
 import { useOutletContext } from "@remix-run/react";
-import AlbumTile from "~/components/AlbumTile";
-import HorizontalRowWithTitle from "~/components/HorizontalRowWithTitle";
-import { getAlbumIdsByRecent } from "~/util/trackOrganization";
 
 const ContinueListeningRow = ({ files }: { files: Files }) => (
   <HorizontalRowWithTitle title="Continue Listening">

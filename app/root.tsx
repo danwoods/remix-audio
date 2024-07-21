@@ -3,9 +3,9 @@ import type {
   LinksFunction,
   UploadHandler,
 } from "@remix-run/node";
-import type { Files } from "./util/s3.server";
+import type { Files } from "./util/files";
+
 import {
-  // Form,
   Links,
   Meta,
   Outlet,
@@ -22,11 +22,11 @@ import {
   unstable_createMemoryUploadHandler as createMemoryUploadHandler,
   unstable_parseMultipartFormData as parseMultipartFormData,
 } from "@remix-run/node";
-import { useEffect, useRef, useState } from "react";
 import AppBar from "./components/Layout/AppBar";
 import PlayerControls from "./components/Layout/PlayerControls";
+import { getRemainingAlbumTracks } from "./util/files";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
-import { getRemainingAlbumTracks } from "./util/trackOrganization";
+import { useEffect, useRef, useState } from "react";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
@@ -34,8 +34,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       s3UploadHandler,
       createMemoryUploadHandler(),
     );
-    const formData = await parseMultipartFormData(request, uploadHandler);
-    console.log({ formData });
+    await parseMultipartFormData(request, uploadHandler);
+    // console.log({ formData });
     getUploadedFiles(true);
     return redirect("/");
   } else {
