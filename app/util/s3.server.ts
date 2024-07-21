@@ -7,7 +7,12 @@ import { PassThrough } from "stream";
 import { getID3Tags } from "./id3";
 import { writeAsyncIterableToWritable } from "@remix-run/node";
 import { fromEnv } from "@aws-sdk/credential-providers";
-import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectTaggingCommand,
+  PutObjectTaggingCommand,
+} from "@aws-sdk/client-s3";
 
 const {
   AWS_ACCESS_KEY_ID,
@@ -27,6 +32,11 @@ if (
 ) {
   throw new Error(`Storage is missing required configuration.`);
 }
+
+const client = new S3Client({
+  region: STORAGE_REGION,
+  credentials: fromEnv(),
+});
 
 // Uploading //////////////////////////////////////////////////////////////////
 
@@ -114,11 +124,6 @@ export const s3UploadHandler: UploadHandler = async ({
 
 // Reading ////////////////////////////////////////////////////////////////////
 
-const client = new S3Client({
-  region: STORAGE_REGION,
-  credentials: fromEnv(),
-});
-
 /** File fetch cache to avoid repetitve fetches */
 let filesFetchCache: Promise<Files> | null = null;
 
@@ -142,7 +147,9 @@ const fileFetch = async (): Promise<Files> => {
 
       files = Contents?.reduce((acc, cur) => {
         if (cur.Key) {
+          console.log({ cur });
           const [artist, album, trackWNum] = cur.Key.split("/");
+          getTags(cur.Key).then(console.log);
 
           acc[artist] = acc[artist] || {};
           acc[artist][album] = acc[artist][album] || {
@@ -156,6 +163,7 @@ const fileFetch = async (): Promise<Files> => {
             title,
             trackNum: Number(trackNum),
             lastModified: cur.LastModified?.valueOf() || null,
+            tagFetch: getTags(cur.Key),
             url:
               `https://${STORAGE_BUCKET}.s3.${STORAGE_REGION}.amazonaws.com/` +
               cur.Key,
@@ -184,4 +192,40 @@ export const getUploadedFiles = async (force?: boolean): Promise<Files> => {
   }
 
   return filesFetchCache;
+};
+
+// Tagging ////////////////////////////////////////////////////////////////////
+
+type TagKey = "lastListen" | "listenCount";
+type Tag = { Key: TagKey; Value: string };
+
+/** Set a track's tag value in S3 */
+export const setTags = async (objectKey: string, tags: Tag[]) => {
+  try {
+    const command = new PutObjectTaggingCommand({
+      Bucket: STORAGE_BUCKET,
+      Key: objectKey,
+      Tagging: { TagSet: tags },
+    });
+    const resp = await client.send(command);
+    return resp;
+  } catch (err) {
+    console.error("Error", err);
+    throw err;
+  }
+};
+
+/** Get a track's Tags from S3 */
+export const getTags = async (objectKey: string): Promise<Tag[]> => {
+  try {
+    const command = new GetObjectTaggingCommand({
+      Bucket: STORAGE_BUCKET,
+      Key: objectKey,
+    });
+    const resp = await client.send(command);
+    return resp.TagSet as Tag[];
+  } catch (err) {
+    console.error("Error", err);
+    throw err;
+  }
 };
