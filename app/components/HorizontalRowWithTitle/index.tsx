@@ -11,12 +11,7 @@ const HorizontalRowWithTitle = ({
   return (
     <section className="py-4 pl-4">
       <p className="text-lg font-bold mb-2">{title}</p>
-      <div
-        className="grid gap-x-4 md:gap-x-6 overflow-x-auto"
-        style={{
-          gridTemplateColumns: `repeat(5, calc(40% - 40px))`,
-        }}
-      >
+      <div className="grid gap-x-4 md:gap-x-6 overflow-x-auto grid-cols-[repeat(5,calc(40%-40px))] md:grid-cols-[repeat(5,calc(25%-40px))]">
         {children}
       </div>
     </section>
