@@ -32,6 +32,7 @@ const FilePicker = ({ btnClassName }: { btnClassName?: string }) => {
   return (
     <>
       <button
+        aria-label="add files"
         className={`btn btn-ghost btn-circle ${btnClassName ? btnClassName : ""}`}
         onClick={() => setShowUploadUI(true)}
       >

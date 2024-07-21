@@ -144,6 +144,7 @@ const Search = ({
         </div>
       ) : (
         <button
+          aria-label="search"
           className="btn btn-ghost btn-circle"
           onClick={() => setIsSearchInputShowing(true)}
         >

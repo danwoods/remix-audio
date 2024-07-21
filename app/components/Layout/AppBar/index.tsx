@@ -1,6 +1,6 @@
 import type { Files } from "../../../util/files";
 
-import FilePicker from "~/components/FilePicker";
+import FilePicker from "./FilePicker";
 import Search from "./Search";
 import { Link, useLocation } from "@remix-run/react";
 
