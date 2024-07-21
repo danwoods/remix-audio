@@ -12,6 +12,7 @@ import AlbumCover from "~/components/AlbumCover";
 import {
   getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
+  sortTracksByTrackNumber,
 } from "../../../util/files";
 
 /**
@@ -129,7 +130,7 @@ const Playlist = ({
         <QueueListIcon />
       </button>
       <ol className="dropdown-content menu bg-primary rounded-box z-[1] w-52 p-2 shadow divide-y divide-solid">
-        {tracks.map((track) => (
+        {tracks.sort(sortTracksByTrackNumber).map((track) => (
           <li key={track.url}>
             <button
               className="py-1 w-full flex justify-between px-0"

@@ -6,7 +6,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import AlbumCover from "~/components/AlbumCover";
 import { PauseIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { extractColors } from "extract-colors";
-import { getAlbumArt } from "~/util/files";
+import { getAlbumArt, sortTracksByTrackNumber } from "~/util/files";
 import { useEffect, useState } from "react";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
 import { useInView } from "react-intersection-observer";
@@ -158,7 +158,9 @@ const Album = () => {
   }, [inView]);
 
   if (artistId && albumId) {
-    const tracks = files[artistId][albumId].tracks;
+    const tracks = files[artistId][albumId].tracks.sort(
+      sortTracksByTrackNumber,
+    );
 
     return (
       <section>

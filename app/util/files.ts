@@ -22,6 +22,49 @@ export type Files = {
   };
 };
 
+// Artists ////////////////////////////////////////////////////////////////////
+
+/** Get artist data from files object */
+export const getArtist = (files: Files, artistId: string) => {
+  return files[artistId];
+};
+
+// Tracks /////////////////////////////////////////////////////////////////////
+
+/** Sort tracks by track number */
+export const sortTracksByTrackNumber = (a: Track, b: Track) => {
+  if (a.trackNum < b.trackNum) {
+    return -1;
+  } else if (a.trackNum > b.trackNum) {
+    return 1;
+  }
+
+  return 0;
+};
+
+/** Given a track's URL, pull data from it to determine the track's artist, album, and number */
+export const getParentDataFromTrackUrl = (trackUrl: string | null) => {
+  const currentTrackPieces = trackUrl ? trackUrl.split("/") : null;
+  const artistName =
+    currentTrackPieces && currentTrackPieces[currentTrackPieces.length - 3];
+  const albumName =
+    currentTrackPieces && currentTrackPieces[currentTrackPieces.length - 2];
+  const trackPieces =
+    currentTrackPieces &&
+    currentTrackPieces[currentTrackPieces.length - 1].split("__");
+  const trackName = trackPieces && trackPieces[1];
+  const trackNumber = trackPieces && trackPieces[0];
+
+  return {
+    artistName,
+    albumName,
+    trackName,
+    trackNumber,
+  };
+};
+
+// Albums /////////////////////////////////////////////////////////////////////
+
 /**
  * Given an albumID, find it in a files object
  * @param files File object
@@ -69,32 +112,6 @@ export const getAlbumArt = (files: Files, albumId: string) => {
   }
 
   return albumArtCache.get(albumId)!;
-};
-
-/** Get artist data from files object */
-export const getArtist = (files: Files, artistId: string) => {
-  return files[artistId];
-};
-
-/** Given a track's URL, pull data from it to determine the track's artist, album, and number */
-export const getParentDataFromTrackUrl = (trackUrl: string | null) => {
-  const currentTrackPieces = trackUrl ? trackUrl.split("/") : null;
-  const artistName =
-    currentTrackPieces && currentTrackPieces[currentTrackPieces.length - 3];
-  const albumName =
-    currentTrackPieces && currentTrackPieces[currentTrackPieces.length - 2];
-  const trackPieces =
-    currentTrackPieces &&
-    currentTrackPieces[currentTrackPieces.length - 1].split("__");
-  const trackName = trackPieces && trackPieces[1];
-  const trackNumber = trackPieces && trackPieces[0];
-
-  return {
-    artistName,
-    albumName,
-    trackName,
-    trackNumber,
-  };
 };
 
 /** Given files and a track URL, get the following tracks on the album */
@@ -152,6 +169,8 @@ export const getAlbumIdsByRecent = (files: Files): Album[] => {
 
   return albums.sort(sortAlbumsByMostRecentlyModifiedTracks);
 };
+
+// Searching //////////////////////////////////////////////////////////////////
 
 type SearchResult = { id: string; title: string; localUrl: string };
 
