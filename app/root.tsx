@@ -28,6 +28,7 @@ import { getRemainingAlbumTracks } from "./util/files";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 import { useEffect, useRef, useState } from "react";
 
+/** Handle Uploads */
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
     const uploadHandler: UploadHandler = composeUploadHandlers(
@@ -35,19 +36,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       createMemoryUploadHandler(),
     );
 
+    // Upload files
     await parseMultipartFormData(request, uploadHandler);
 
+    // Pull new files
     getUploadedFiles(true);
 
-    return redirect("/");
-  } else {
     return redirect("/");
   }
 };
 
+/** Pull files */
 export const loader = async () => {
   const files = await getUploadedFiles();
 
+  // Setup `head` links that are based on env vars
   const headLinks = [
     {
       rel: "preconnect",
@@ -145,7 +148,7 @@ export default function App() {
     }
   };
 
-  // Call play/pause on the audio element to respond to `isPlaying`
+  // Call play/pause on the audio element to respond to `isPlaying` or a track changing
   useEffect(() => {
     const audioElm = audioElmRef.current;
     if (audioElm) {
@@ -177,7 +180,7 @@ export default function App() {
         <AppBar files={files} playToggle={playToggle} />
         <div className={`flex w-full`}>
           <main
-            className={`md:mx-auto md:px-6 grow ${isPlaying ? "pb-24" : ""}`}
+            className={`md:mx-auto md:px-6 grow ${currentTrackUrl ? "pb-24" : ""}`}
           >
             <Outlet
               context={{
