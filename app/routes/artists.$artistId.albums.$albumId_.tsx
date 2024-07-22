@@ -170,6 +170,7 @@ const Album = () => {
           files={files}
           forceSmallSticky={forceSmallSticky}
         />
+        {/* Trigger shifting to/from smaller header */}
         <div ref={ref} />
         <Tracklist
           tracks={tracks}

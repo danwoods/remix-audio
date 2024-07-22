@@ -23,10 +23,10 @@ import {
 } from "@remix-run/node";
 import AppBar from "./components/Layout/AppBar";
 import PlayerControls from "./components/Layout/PlayerControls";
+import appStylesHref from "./app.css?url";
 import { getRemainingAlbumTracks } from "./util/files";
 import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
 import { useEffect, useRef, useState } from "react";
-import appStylesHref from "./app.css?url";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "POST") {
@@ -122,9 +122,10 @@ export default function App() {
     }
   };
 
-  /** Listen to progress changes for current track so we can start loading the
+  /**
+   * Listen to progress changes for current track so we can start loading the
    * next track when it's close to finishing and move to the next track once
-   * it's done
+   * it's done.
    **/
   const onTimeUpdate = (evt: SyntheticEvent<HTMLAudioElement, Event>) => {
     const t = evt.target as HTMLAudioElement;
