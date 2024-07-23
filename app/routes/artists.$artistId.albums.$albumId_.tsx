@@ -7,15 +7,19 @@ import AlbumCover from "~/components/AlbumCover";
 import { PauseIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { extractColors } from "extract-colors";
 import { getAlbumArt, sortTracksByTrackNumber } from "~/util/files";
+import { getUploadedFiles } from "../util/s3.server";
 import { useEffect, useState } from "react";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
 import { useInView } from "react-intersection-observer";
 
 export async function loader({ params }: LoaderFunctionArgs) {
+  const { artistId, albumId } = params;
   if (!params.artistId || !params.albumId)
     throw new Response("Missing an artist or album ID", { status: 400 });
 
-  return params;
+  const files = await getUploadedFiles();
+
+  return { artistId, albumId, files };
 }
 
 /** Header including album art, title, and artis */
@@ -140,9 +144,8 @@ const PlayPauseIcon = ({
 
 /** Main album display page */
 const Album = () => {
-  const { currentTrack, isPlaying, files, playToggle } =
-    useOutletContext<Context>();
-  const { artistId, albumId } = useLoaderData<typeof loader>();
+  const { currentTrack, isPlaying, playToggle } = useOutletContext<Context>();
+  const { artistId, albumId, files } = useLoaderData<typeof loader>();
   const [forceSmallSticky, setForceSmallSticky] = useState(false);
   const { ref, inView } = useInView({
     initialInView: true,

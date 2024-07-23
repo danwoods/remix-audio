@@ -66,7 +66,6 @@ export const links: LinksFunction = () => [
 ];
 
 export type Context = {
-  files: Files;
   playToggle: (track?: { url: string }) => void;
   currentTrack: string | null;
   isPlaying: boolean;
@@ -184,7 +183,6 @@ export default function App() {
           >
             <Outlet
               context={{
-                files,
                 isPlaying,
                 playToggle,
                 currentTrack: currentTrackUrl,
