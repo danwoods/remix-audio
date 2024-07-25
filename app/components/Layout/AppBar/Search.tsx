@@ -1,9 +1,10 @@
 import type { Files, SearchResults } from "../../../util/files";
 
+import useClickOutside from "../../../hooks/useClickOutside";
 import { Link } from "@remix-run/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
 import { search } from "../../../util/files";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Container for search results */
 const SearchResultsContainer = ({
@@ -93,6 +94,7 @@ const Search = ({
   const [searchResults, setSearchResults] = useState<SearchResults | null>(
     null,
   );
+  const ref = useRef(null);
 
   // Handle changing search string
   useEffect(() => {
@@ -118,13 +120,16 @@ const Search = ({
   /** Clear out results and close results pane */
   const clearAndClose = () => {
     setIsSearchInputShowing(false);
+    setIsShowingResults(false);
     setSearchResults(null);
   };
+
+  useClickOutside(ref, clearAndClose);
 
   return (
     <>
       {isSearchInputShowing ? (
-        <div>
+        <div ref={ref}>
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="input input-bordered flex items-center gap-2 z-10 relative">
             <input
