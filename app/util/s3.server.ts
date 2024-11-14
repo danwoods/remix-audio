@@ -8,6 +8,8 @@ import { getID3Tags } from "./id3";
 import { writeAsyncIterableToWritable } from "@remix-run/node";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+// import { parseBuffer } from "music-metadata";
+// import * as musicMetadata from "music-metadata";
 
 const {
   AWS_ACCESS_KEY_ID,
@@ -80,6 +82,37 @@ export async function uploadStreamToS3(
   return file.Location;
 }
 
+// S3 Folder Structure //////////////////////////////////////////////////////////
+// Bucket:
+// - Metadata
+// -- playcounts.csv
+// -- likes.csv
+// -- playlists.csv
+// - App
+// - Music
+// -- [Artist]
+// --- [Album]
+// ---- cover.jpeg
+// ---- [Tracks...]
+
+/*
+Per upload:
+1. Get file metadata
+2. Check if file has cover image data
+  2.1 If file has cover image, do a cache-able HEAD check on album image
+  2.2 If no album image exist, create image file and upload that
+3. Upload file
+*/
+
+// const getAlbumCoverImage = async (albumUrl: string) => {
+//   const response = await fetch(albumUrl);
+//   const arrayBuffer = await response.arrayBuffer();
+//   const uint8Array = new Uint8Array(arrayBuffer);
+//   const id3Tags = await getID3Tags(uint8Array);
+//   const albumCoverImage = id3Tags.image;
+//   return albumCoverImage;
+// };
+
 /**
  * Remix compatible handler for streaming files to S3. Extracts ID3 data from
  * files to organize into artist/album bucket structure.
@@ -102,7 +135,12 @@ export const s3UploadHandler: UploadHandler = async ({
 
   const file = new File(dataArray, "temp", { type: contentType });
   const fileArrayBuffer = await file.arrayBuffer();
-  const id3Tags = await getID3Tags(file);
+
+  // const metadata = await musicMetadata.parseBlob(file);
+  // console.log(metadata);
+  // throw "boom";
+  const uint8Array = new Uint8Array(fileArrayBuffer);
+  const id3Tags = await getID3Tags(uint8Array);
   const partitiionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
   const uploadedFileLocation = await uploadStreamToS3(
     createAsyncIteratorFromArrayBuffer(fileArrayBuffer),
