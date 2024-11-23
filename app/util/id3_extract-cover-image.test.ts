@@ -1,4 +1,4 @@
-import { describe, test, beforeEach } from "node:test";
+import { describe, test, beforeEach } from "vitest";
 import { strict as expect, strict as assert } from "node:assert";
 import { extractCoverImage } from "./id3";
 import { readFileSync } from "fs";

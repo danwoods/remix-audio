@@ -11,24 +11,34 @@ import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 // import { parseBuffer } from "music-metadata";
 // import * as musicMetadata from "music-metadata";
 
-const {
-  AWS_ACCESS_KEY_ID,
-  AWS_SECRET_ACCESS_KEY,
-  STORAGE_REGION,
-  STORAGE_BUCKET,
-} = process.env;
+// Move environment validation into a function that's called during runtime
+// rather than during module initialization
+const validateConfig = () => {
+  const {
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    STORAGE_REGION,
+    STORAGE_BUCKET,
+  } = process.env;
 
-// Check for presence of env vars
-if (
-  !(
-    AWS_ACCESS_KEY_ID &&
-    AWS_SECRET_ACCESS_KEY &&
-    STORAGE_REGION &&
-    STORAGE_BUCKET
-  )
-) {
-  throw new Error(`Storage is missing required configuration.`);
-}
+  if (
+    !(
+      AWS_ACCESS_KEY_ID &&
+      AWS_SECRET_ACCESS_KEY &&
+      STORAGE_REGION &&
+      STORAGE_BUCKET
+    )
+  ) {
+    throw new Error(`Storage is missing required configuration.`);
+  }
+
+  return {
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    STORAGE_REGION,
+    STORAGE_BUCKET,
+  };
+};
 
 // Uploading //////////////////////////////////////////////////////////////////
 
@@ -53,17 +63,20 @@ export async function* createAsyncIteratorFromArrayBuffer(
 
 /** Create upload stream */
 const uploadStream = ({ Key }: Pick<AWS.S3.Types.PutObjectRequest, "Key">) => {
+  const config = validateConfig();
   const s3 = new AWS.S3({
     credentials: {
-      accessKeyId: AWS_ACCESS_KEY_ID,
-      secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      accessKeyId: config.AWS_ACCESS_KEY_ID,
+      secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
     },
-    region: STORAGE_REGION,
+    region: config.STORAGE_REGION,
   });
   const pass = new PassThrough();
   return {
     writeStream: pass,
-    promise: s3.upload({ Bucket: STORAGE_BUCKET, Key, Body: pass }).promise(),
+    promise: s3
+      .upload({ Bucket: config.STORAGE_BUCKET, Key, Body: pass })
+      .promise(),
   };
 };
 
@@ -95,15 +108,6 @@ export async function uploadStreamToS3(
 // ---- cover.jpeg
 // ---- [Tracks...]
 
-/*
-Per upload:
-1. Get file metadata
-2. Check if file has cover image data
-  2.1 If file has cover image, do a cache-able HEAD check on album image
-  2.2 If no album image exist, create image file and upload that
-3. Upload file
-*/
-
 // const getAlbumCoverImage = async (albumUrl: string) => {
 //   const response = await fetch(albumUrl);
 //   const arrayBuffer = await response.arrayBuffer();
@@ -123,24 +127,66 @@ export const s3UploadHandler: UploadHandler = async ({
   contentType,
   data,
 }) => {
-  const dataArray = [];
+  const config = validateConfig();
 
   if (name !== "files") {
     return undefined;
   }
 
+  // Collect file data
+  const dataArray = [];
   for await (const x of data) {
     dataArray.push(x);
   }
-
   const file = new File(dataArray, "temp", { type: contentType });
   const fileArrayBuffer = await file.arrayBuffer();
-
-  // const metadata = await musicMetadata.parseBlob(file);
-  // console.log(metadata);
-  // throw "boom";
   const uint8Array = new Uint8Array(fileArrayBuffer);
+
+  // 1. Get file metadata
   const id3Tags = await getID3Tags(uint8Array);
+
+  // 2. Handle cover image
+  if (id3Tags.image) {
+    const albumPath = `${id3Tags.artist}/${id3Tags.album}/cover.jpeg`;
+    const s3 = new AWS.S3({
+      credentials: {
+        accessKeyId: config.AWS_ACCESS_KEY_ID,
+        secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
+      },
+      region: config.STORAGE_REGION,
+    });
+
+    try {
+      // 2.1 Check if cover image exists
+      await s3
+        .headObject({
+          Bucket: config.STORAGE_BUCKET,
+          Key: albumPath,
+        })
+        .promise();
+    } catch (error) {
+      // 2.2 If cover doesn't exist, upload it
+      if ((error as AWS.AWSError).code === "NotFound") {
+        // Convert base64 image to buffer
+        const base64Data = id3Tags.image.replace(
+          /^data:image\/jpeg;base64,/,
+          "",
+        );
+        const imageBuffer = Buffer.from(base64Data, "base64");
+
+        await s3
+          .putObject({
+            Bucket: config.STORAGE_BUCKET,
+            Key: albumPath,
+            Body: imageBuffer,
+            ContentType: "image/jpeg",
+          })
+          .promise();
+      }
+    }
+  }
+
+  // 3. Upload audio file
   const partitiionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
   const uploadedFileLocation = await uploadStreamToS3(
     createAsyncIteratorFromArrayBuffer(fileArrayBuffer),
@@ -153,7 +199,7 @@ export const s3UploadHandler: UploadHandler = async ({
 // Reading ////////////////////////////////////////////////////////////////////
 
 const client = new S3Client({
-  region: STORAGE_REGION,
+  region: process.env.STORAGE_REGION,
   credentials: fromEnv(),
 });
 
@@ -162,8 +208,9 @@ let filesFetchCache: Promise<Files> | null = null;
 
 /** Get file list from S3 and organize it into a `Files` object */
 const fileFetch = async (): Promise<Files> => {
+  const config = validateConfig();
   const command = new ListObjectsV2Command({
-    Bucket: STORAGE_BUCKET,
+    Bucket: config.STORAGE_BUCKET,
   });
 
   try {
@@ -195,7 +242,7 @@ const fileFetch = async (): Promise<Files> => {
             trackNum: Number(trackNum),
             lastModified: cur.LastModified?.valueOf() || null,
             url:
-              `https://${STORAGE_BUCKET}.s3.${STORAGE_REGION}.amazonaws.com/` +
+              `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/` +
               cur.Key,
           });
         }

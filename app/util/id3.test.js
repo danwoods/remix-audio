@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import { getID3Tags } from "./id3.ts";
 import { readFileSync } from "node:fs";
 
