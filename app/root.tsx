@@ -40,7 +40,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await parseMultipartFormData(request, uploadHandler);
 
     // Pull new files
-    getUploadedFiles(true);
+    await getUploadedFiles(true);
 
     return redirect("/");
   }

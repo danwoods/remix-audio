@@ -2,14 +2,17 @@
 import type { UploadHandler } from "@remix-run/node";
 import type { Files } from "./files";
 
-import AWS from "aws-sdk";
 import { PassThrough } from "stream";
 import { getID3Tags } from "./id3";
 import { writeAsyncIterableToWritable } from "@remix-run/node";
 import { fromEnv } from "@aws-sdk/credential-providers";
-import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
-// import { parseBuffer } from "music-metadata";
-// import * as musicMetadata from "music-metadata";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  HeadObjectCommand,
+  NoSuchKey,
+} from "@aws-sdk/client-s3";
 
 // Move environment validation into a function that's called during runtime
 // rather than during module initialization
@@ -62,21 +65,29 @@ export async function* createAsyncIteratorFromArrayBuffer(
 }
 
 /** Create upload stream */
-const uploadStream = ({ Key }: Pick<AWS.S3.Types.PutObjectRequest, "Key">) => {
+const uploadStream = ({ Key }: { Key: string }) => {
   const config = validateConfig();
-  const s3 = new AWS.S3({
+  const client = new S3Client({
+    region: config.STORAGE_REGION,
     credentials: {
       accessKeyId: config.AWS_ACCESS_KEY_ID,
       secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
     },
-    region: config.STORAGE_REGION,
   });
   const pass = new PassThrough();
   return {
     writeStream: pass,
-    promise: s3
-      .upload({ Bucket: config.STORAGE_BUCKET, Key, Body: pass })
-      .promise(),
+    promise: (async () => {
+      const command = new PutObjectCommand({
+        Bucket: config.STORAGE_BUCKET,
+        Key,
+        Body: pass,
+      });
+      await client.send(command);
+      return {
+        Location: `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/${Key}`,
+      };
+    })(),
   };
 };
 
@@ -108,15 +119,6 @@ export async function uploadStreamToS3(
 // ---- cover.jpeg
 // ---- [Tracks...]
 
-// const getAlbumCoverImage = async (albumUrl: string) => {
-//   const response = await fetch(albumUrl);
-//   const arrayBuffer = await response.arrayBuffer();
-//   const uint8Array = new Uint8Array(arrayBuffer);
-//   const id3Tags = await getID3Tags(uint8Array);
-//   const albumCoverImage = id3Tags.image;
-//   return albumCoverImage;
-// };
-
 /**
  * Remix compatible handler for streaming files to S3. Extracts ID3 data from
  * files to organize into artist/album bucket structure.
@@ -143,54 +145,88 @@ export const s3UploadHandler: UploadHandler = async ({
   const uint8Array = new Uint8Array(fileArrayBuffer);
 
   // 1. Get file metadata
-  const id3Tags = await getID3Tags(uint8Array);
+  let id3Tags;
+  try {
+    id3Tags = await getID3Tags(uint8Array);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error(`Failed to extract ID3 tags from file: ${errorMessage}`);
+    throw new Error(
+      `Failed to extract metadata from audio file: ${errorMessage}`,
+    );
+  }
 
   // 2. Handle cover image
   if (id3Tags.image) {
     const albumPath = `${id3Tags.artist}/${id3Tags.album}/cover.jpeg`;
-    const s3 = new AWS.S3({
+    const client = new S3Client({
+      region: config.STORAGE_REGION,
       credentials: {
         accessKeyId: config.AWS_ACCESS_KEY_ID,
         secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
       },
-      region: config.STORAGE_REGION,
     });
 
     try {
       // 2.1 Check if cover image exists
-      await s3
-        .headObject({
-          Bucket: config.STORAGE_BUCKET,
-          Key: albumPath,
-        })
-        .promise();
+      const headCommand = new HeadObjectCommand({
+        Bucket: config.STORAGE_BUCKET,
+        Key: albumPath,
+      });
+      await client.send(headCommand);
     } catch (error) {
       // 2.2 If cover doesn't exist, upload it
-      if ((error as AWS.AWSError).code === "NotFound") {
-        // Convert base64 image to buffer
-        const base64Data = id3Tags.image.replace(
-          /^data:image\/jpeg;base64,/,
-          "",
-        );
-        const imageBuffer = Buffer.from(base64Data, "base64");
+      if (
+        error instanceof NoSuchKey ||
+        (error as { name?: string }).name === "NotFound"
+      ) {
+        try {
+          // Convert base64 image to buffer
+          const base64Data = id3Tags.image.replace(
+            /^data:image\/jpeg;base64,/,
+            "",
+          );
+          const imageBuffer = Buffer.from(base64Data, "base64");
 
-        await s3
-          .putObject({
+          const putCommand = new PutObjectCommand({
             Bucket: config.STORAGE_BUCKET,
             Key: albumPath,
             Body: imageBuffer,
             ContentType: "image/jpeg",
-          })
-          .promise();
+          });
+          await client.send(putCommand);
+        } catch (uploadError) {
+          // Log but don't fail the entire upload if cover image upload fails
+          const errorMessage =
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Unknown error";
+          const errorName =
+            (uploadError as { name?: string }).name || "Unknown";
+          console.error(
+            `Failed to upload cover image for ${albumPath}: ${errorName} - ${errorMessage}`,
+          );
+          // Continue with audio file upload even if cover image fails
+        }
+      } else {
+        // Log other errors (permissions, network, etc.) but continue with upload
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        const errorName = (error as { name?: string }).name || "Unknown";
+        console.error(
+          `Error checking cover image for ${albumPath}: ${errorName} - ${errorMessage}`,
+        );
+        // Continue with audio file upload even if cover check fails
       }
     }
   }
 
   // 3. Upload audio file
-  const partitiionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
+  const partitionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
   const uploadedFileLocation = await uploadStreamToS3(
     createAsyncIteratorFromArrayBuffer(fileArrayBuffer),
-    partitiionedFilename,
+    partitionedFilename,
   );
 
   return uploadedFileLocation;
@@ -198,17 +234,16 @@ export const s3UploadHandler: UploadHandler = async ({
 
 // Reading ////////////////////////////////////////////////////////////////////
 
-const client = new S3Client({
-  region: process.env.STORAGE_REGION,
-  credentials: fromEnv(),
-});
-
 /** File fetch cache to avoid repetitve fetches */
 let filesFetchCache: Promise<Files> | null = null;
 
 /** Get file list from S3 and organize it into a `Files` object */
 const fileFetch = async (): Promise<Files> => {
   const config = validateConfig();
+  const client = new S3Client({
+    region: config.STORAGE_REGION,
+    credentials: fromEnv(),
+  });
   const command = new ListObjectsV2Command({
     Bucket: config.STORAGE_BUCKET,
   });
@@ -227,8 +262,43 @@ const fileFetch = async (): Promise<Files> => {
 
       files = Contents?.reduce((acc, cur) => {
         if (cur.Key) {
-          const [artist, album, trackWNum] = cur.Key.split("/");
+          const keyParts = cur.Key.split("/");
 
+          // Validate: must have exactly 3 parts (artist/album/track)
+          if (keyParts.length !== 3) {
+            console.warn(
+              `Skipping invalid file structure: ${cur.Key} (expected artist/album/track)`,
+            );
+            return acc;
+          }
+
+          const [artist, album, trackWNum] = keyParts;
+
+          // Validate: artist and album must exist
+          if (!artist || !album || !trackWNum) {
+            console.warn(`Skipping file with missing parts: ${cur.Key}`);
+            return acc;
+          }
+
+          // Validate: track filename must have __ separator
+          const trackParts = trackWNum.split("__");
+          if (trackParts.length !== 2) {
+            console.warn(
+              `Skipping invalid track filename format: ${cur.Key} (expected number__title)`,
+            );
+            return acc;
+          }
+
+          const [trackNumStr, title] = trackParts;
+          const trackNum = Number(trackNumStr);
+
+          // Validate: track number must be a valid number
+          if (Number.isNaN(trackNum) || trackNum <= 0) {
+            console.warn(`Skipping file with invalid track number: ${cur.Key}`);
+            return acc;
+          }
+
+          // All validations passed, proceed with adding to files
           acc[artist] = acc[artist] || {};
           acc[artist][album] = acc[artist][album] || {
             id: `${artist}/${album}`,
@@ -236,10 +306,9 @@ const fileFetch = async (): Promise<Files> => {
             coverArt: null,
             tracks: [],
           };
-          const [trackNum, title] = trackWNum.split("__");
           acc[artist][album].tracks.push({
-            title,
-            trackNum: Number(trackNum),
+            title: title || "Unknown",
+            trackNum,
             lastModified: cur.LastModified?.valueOf() || null,
             url:
               `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/` +

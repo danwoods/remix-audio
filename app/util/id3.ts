@@ -75,7 +75,6 @@ export const extractCoverImage = async (
 ): Promise<{ data: Uint8Array; format: "image/jpeg" } | null> => {
   try {
     const metadata = await parseBlob(file);
-    // console.log(metadata);
     const picture = metadata.common.picture?.[0];
 
     if (!picture) {

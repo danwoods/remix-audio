@@ -88,6 +88,8 @@ export const getAlbum = (files: Files, albumId: string): Album => {
 
 /** Album art cache to avoid repetitve fetches */
 const albumArtCache = new Map<string, Promise<string | null>>();
+/** Track blob URLs for cleanup */
+const blobUrlCache = new Map<string, string>();
 
 /** Fetch album art */
 export const getAlbumArt = (files: Files, albumId: string) => {
@@ -102,6 +104,16 @@ export const getAlbumArt = (files: Files, albumId: string) => {
         const arrayBuffer = tags.images[0].data;
         const blob = new Blob([arrayBuffer]);
         const srcBlob = URL.createObjectURL(blob);
+
+        // Revoke previous URL if it exists (cache replacement)
+        const previousUrl = blobUrlCache.get(albumId);
+        if (previousUrl) {
+          URL.revokeObjectURL(previousUrl);
+        }
+
+        // Track the new blob URL for cleanup
+        blobUrlCache.set(albumId, srcBlob);
+
         return srcBlob;
       } else {
         return null;
@@ -112,6 +124,16 @@ export const getAlbumArt = (files: Files, albumId: string) => {
   }
 
   return albumArtCache.get(albumId)!;
+};
+
+/** Cleanup function to revoke blob URLs (useful for cache invalidation) */
+export const revokeAlbumArtUrl = (albumId: string) => {
+  const url = blobUrlCache.get(albumId);
+  if (url) {
+    URL.revokeObjectURL(url);
+    blobUrlCache.delete(albumId);
+    albumArtCache.delete(albumId);
+  }
 };
 
 /** Given files and a track URL, get the following tracks on the album */
@@ -150,10 +172,10 @@ export const getAlbumIdsByRecent = (files: Files): Album[] => {
   };
 
   const sortAlbumsByMostRecentlyModifiedTracks = (a: Album, b: Album) => {
-    const firstSortedATrack = a.tracks.sort(
+    const firstSortedATrack = [...a.tracks].sort(
       sortTracksByMostRecentlyModified,
     )[0];
-    const firstSortedBTrack = b.tracks.sort(
+    const firstSortedBTrack = [...b.tracks].sort(
       sortTracksByMostRecentlyModified,
     )[0];
 

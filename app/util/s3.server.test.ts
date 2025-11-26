@@ -1,5 +1,4 @@
 import { describe, it, beforeEach, expect, vi } from "vitest";
-import AWS from "aws-sdk";
 
 // Mock the ID3 module
 vi.mock("./id3", () => ({
@@ -12,17 +11,19 @@ vi.mock("./id3", () => ({
   }),
 }));
 
-// Create mock S3 instances
-const mockS3Instance = {
-  headObject: vi.fn(),
-  putObject: vi.fn(),
-  upload: vi.fn(),
-};
+// Create mock S3Client send function
+const mockSend = vi.fn();
 
 // Setup initial mocks
-vi.spyOn(AWS, "S3").mockImplementation(
-  () => mockS3Instance as unknown as AWS.S3,
-);
+vi.mock("@aws-sdk/client-s3", async () => {
+  const actual = await vi.importActual("@aws-sdk/client-s3");
+  return {
+    ...actual,
+    S3Client: vi.fn().mockImplementation(() => ({
+      send: mockSend,
+    })),
+  };
+});
 
 // Now import the module that depends on the mocked modules
 import { s3UploadHandler } from "./s3.server";
@@ -38,18 +39,23 @@ describe("s3UploadHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Setup S3 mocks
-    mockS3Instance.headObject.mockImplementation(() => ({
-      promise: () => Promise.reject({ code: "NotFound" }),
-    }));
+    // Setup S3 mocks - default: headObject fails with NotFound, putObject succeeds
+    mockSend.mockImplementation((command) => {
+      const commandName = command.constructor.name;
 
-    mockS3Instance.putObject.mockImplementation(() => ({
-      promise: () => Promise.resolve({}),
-    }));
+      if (commandName === "HeadObjectCommand") {
+        const error = new Error("NotFound");
+        (error as { name: string }).name = "NotFound";
+        return Promise.reject(error);
+      }
 
-    mockS3Instance.upload.mockImplementation(() => ({
-      promise: () => Promise.resolve({ Location: "https://test-url.com/file" }),
-    }));
+      if (commandName === "PutObjectCommand") {
+        return Promise.resolve({});
+      }
+
+      // For upload stream (PutObjectCommand for audio file)
+      return Promise.resolve({});
+    });
   });
 
   it("should handle file upload with cover image", async () => {
@@ -68,40 +74,61 @@ describe("s3UploadHandler", () => {
     // Execute handler
     const result = await s3UploadHandler(mockUploadHandlerParams);
 
-    // Verify cover image check was performed
-    expect(mockS3Instance.headObject).toHaveBeenCalledTimes(1);
-    expect(mockS3Instance.headObject).toHaveBeenCalledWith({
+    // Verify cover image check was performed (HeadObjectCommand)
+    const headObjectCalls = mockSend.mock.calls.filter(
+      (call) => call[0].constructor.name === "HeadObjectCommand",
+    );
+    expect(headObjectCalls).toHaveLength(1);
+    expect(headObjectCalls[0][0].input).toMatchObject({
       Bucket: "test-bucket",
       Key: "Test Artist/Test Album/cover.jpeg",
     });
 
     // Verify cover image was uploaded (since headObject returned NotFound)
-    expect(mockS3Instance.putObject).toHaveBeenCalledTimes(1);
-    expect(mockS3Instance.putObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        Key: "Test Artist/Test Album/cover.jpeg",
-        Body: expect.any(Buffer),
-        ContentType: "image/jpeg",
-      }),
+    const putObjectCalls = mockSend.mock.calls.filter(
+      (call) =>
+        call[0].constructor.name === "PutObjectCommand" &&
+        call[0].input.Key === "Test Artist/Test Album/cover.jpeg",
     );
+    expect(putObjectCalls).toHaveLength(1);
+    expect(putObjectCalls[0][0].input).toMatchObject({
+      Key: "Test Artist/Test Album/cover.jpeg",
+      ContentType: "image/jpeg",
+    });
+    expect(putObjectCalls[0][0].input.Body).toBeInstanceOf(Buffer);
 
-    // Verify audio file was uploaded
-    expect(mockS3Instance.upload).toHaveBeenCalledTimes(1);
-    expect(mockS3Instance.upload).toHaveBeenCalledWith(
-      expect.objectContaining({
-        Key: "Test Artist/Test Album/1__Test Song",
-      }),
+    // Verify audio file was uploaded (PutObjectCommand for audio)
+    const audioUploadCalls = mockSend.mock.calls.filter(
+      (call) =>
+        call[0].constructor.name === "PutObjectCommand" &&
+        call[0].input.Key === "Test Artist/Test Album/1__Test Song",
     );
+    expect(audioUploadCalls).toHaveLength(1);
+    expect(audioUploadCalls[0][0].input).toMatchObject({
+      Key: "Test Artist/Test Album/1__Test Song",
+    });
 
-    // Verify return value
-    expect(result).toBe("https://test-url.com/file");
+    // Verify return value contains the expected URL pattern
+    expect(result).toContain(
+      "test-bucket.s3.test-region.amazonaws.com/Test Artist/Test Album/1__Test Song",
+    );
   });
 
   it("should skip cover image upload if it already exists", async () => {
-    // Override headObject implementation for this test
-    mockS3Instance.headObject.mockImplementation(() => ({
-      promise: () => Promise.resolve({}),
-    }));
+    // Override mockSend to return success for HeadObjectCommand
+    mockSend.mockImplementation((command) => {
+      const commandName = command.constructor.name;
+
+      if (commandName === "HeadObjectCommand") {
+        return Promise.resolve({});
+      }
+
+      if (commandName === "PutObjectCommand") {
+        return Promise.resolve({});
+      }
+
+      return Promise.resolve({});
+    });
 
     const mockData = [new Uint8Array([1, 2, 3])];
     const mockUploadHandlerParams = {
@@ -116,9 +143,24 @@ describe("s3UploadHandler", () => {
 
     await s3UploadHandler(mockUploadHandlerParams);
 
-    expect(mockS3Instance.headObject).toHaveBeenCalledTimes(1);
-    expect(mockS3Instance.putObject).not.toHaveBeenCalled();
-    expect(mockS3Instance.upload).toHaveBeenCalledTimes(1);
+    const headObjectCalls = mockSend.mock.calls.filter(
+      (call) => call[0].constructor.name === "HeadObjectCommand",
+    );
+    expect(headObjectCalls).toHaveLength(1);
+
+    const coverPutCalls = mockSend.mock.calls.filter(
+      (call) =>
+        call[0].constructor.name === "PutObjectCommand" &&
+        call[0].input.Key === "Test Artist/Test Album/cover.jpeg",
+    );
+    expect(coverPutCalls).toHaveLength(0);
+
+    const audioUploadCalls = mockSend.mock.calls.filter(
+      (call) =>
+        call[0].constructor.name === "PutObjectCommand" &&
+        call[0].input.Key === "Test Artist/Test Album/1__Test Song",
+    );
+    expect(audioUploadCalls).toHaveLength(1);
   });
 
   it("should handle files without cover images", async () => {
@@ -143,13 +185,26 @@ describe("s3UploadHandler", () => {
 
     await s3UploadHandler(mockUploadHandlerParams);
 
-    expect(mockS3Instance.headObject).not.toHaveBeenCalled();
-    expect(mockS3Instance.putObject).not.toHaveBeenCalled();
-    expect(mockS3Instance.upload).toHaveBeenCalledTimes(1);
-    expect(mockS3Instance.upload).toHaveBeenCalledWith(
-      expect.objectContaining({
-        Key: "Test Artist/Test Album/1__Test Song",
-      }),
+    const headObjectCalls = mockSend.mock.calls.filter(
+      (call) => call[0].constructor.name === "HeadObjectCommand",
     );
+    expect(headObjectCalls).toHaveLength(0);
+
+    const coverPutCalls = mockSend.mock.calls.filter(
+      (call) =>
+        call[0].constructor.name === "PutObjectCommand" &&
+        call[0].input.Key === "Test Artist/Test Album/cover.jpeg",
+    );
+    expect(coverPutCalls).toHaveLength(0);
+
+    const audioUploadCalls = mockSend.mock.calls.filter(
+      (call) =>
+        call[0].constructor.name === "PutObjectCommand" &&
+        call[0].input.Key === "Test Artist/Test Album/1__Test Song",
+    );
+    expect(audioUploadCalls).toHaveLength(1);
+    expect(audioUploadCalls[0][0].input).toMatchObject({
+      Key: "Test Artist/Test Album/1__Test Song",
+    });
   });
 });
