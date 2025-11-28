@@ -14,15 +14,36 @@ export type ID3Tags = {
 
 /**
  * Converts image data to JPEG format using Canvas
+ * NOTE: This function is BROWSER-ONLY and requires DOM APIs (Image, Canvas, Blob, URL)
+ * For server-side use, use getID3Tags which already provides base64-encoded images
  * @param imageData Original image data
  * @param format Original image format
  * @returns JPEG image as Uint8Array
+ * @throws Error if called in a server environment
  */
 const convertToJpeg = async (
   imageData: Uint8Array,
   format: string,
 ): Promise<Uint8Array> => {
-  const blob = new Blob([imageData], { type: format });
+  // Check if we're in a browser environment
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    throw new Error(
+      "convertToJpeg is browser-only. Use getID3Tags for server-side image extraction.",
+    );
+  }
+
+  // Ensure we have a proper ArrayBuffer for Blob (not SharedArrayBuffer)
+  const arrayBuffer =
+    imageData.buffer instanceof ArrayBuffer
+      ? imageData.buffer.slice(
+          imageData.byteOffset,
+          imageData.byteOffset + imageData.byteLength,
+        )
+      : new ArrayBuffer(imageData.length);
+  if (!(imageData.buffer instanceof ArrayBuffer)) {
+    new Uint8Array(arrayBuffer).set(imageData);
+  }
+  const blob = new Blob([arrayBuffer], { type: format });
   const imageUrl = URL.createObjectURL(blob);
 
   try {
@@ -37,20 +58,11 @@ const convertToJpeg = async (
     canvas.width = img.width;
     canvas.height = img.height;
     const ctx = canvas.getContext("2d");
+
     if (!ctx) {
-      // In Node.js environments, use node-canvas as a polyfill
-      if (typeof window === "undefined") {
-        const { createCanvas, Image } = await import("canvas");
-        const canvas = createCanvas(img.width, img.height);
-        const ctx = canvas.getContext("2d");
-        const nodeImage = new Image();
-        nodeImage.src = imageUrl;
-        ctx.drawImage(nodeImage, 0, 0);
-        const jpegBuffer = canvas.toBuffer("image/jpeg", { quality: 0.9 });
-        return new Uint8Array(jpegBuffer);
-      }
       throw new Error("Could not get canvas context");
     }
+
     ctx.drawImage(img, 0, 0);
 
     const jpegUrl = canvas.toDataURL("image/jpeg", 0.9);
@@ -67,12 +79,21 @@ const convertToJpeg = async (
 
 /**
  * Extracts the cover image from an audio file and converts it to JPEG
+ * NOTE: This function is BROWSER-ONLY and requires DOM APIs
+ * For server-side use, use getID3Tags which already provides base64-encoded images
  * @param file Audio file to extract cover art from
  * @returns Object containing the JPEG image data, or null if no image found
+ * @throws Error if called in a server environment
  */
 export const extractCoverImage = async (
   file: File,
 ): Promise<{ data: Uint8Array; format: "image/jpeg" } | null> => {
+  // Check if we're in a browser environment
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    throw new Error(
+      "extractCoverImage is browser-only. Use getID3Tags for server-side image extraction.",
+    );
+  }
   try {
     const metadata = await parseBlob(file);
     const picture = metadata.common.picture?.[0];
@@ -81,7 +102,26 @@ export const extractCoverImage = async (
       return null;
     }
 
-    const jpegData = await convertToJpeg(picture.data, picture.format);
+    // Convert picture.data to Uint8Array
+    // music-metadata may return Buffer (Node.js) or Uint8Array
+    // Use type assertion to handle both cases
+    const rawData = picture.data as Uint8Array | ArrayLike<number>;
+    let imageData: Uint8Array;
+
+    if (rawData instanceof Uint8Array) {
+      imageData = rawData;
+    } else if (rawData && typeof rawData.length === "number") {
+      // Handle Buffer or other array-like types
+      // Create a new Uint8Array by copying the data
+      imageData = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; i++) {
+        imageData[i] = rawData[i];
+      }
+    } else {
+      throw new Error("Unsupported picture data type");
+    }
+
+    const jpegData = await convertToJpeg(imageData, picture.format);
 
     return {
       data: jpegData,
@@ -107,9 +147,10 @@ export const getID3Tags = async (file: Uint8Array): Promise<ID3Tags> => {
   const imageMetadata = metadata.common.picture && metadata.common.picture[0];
 
   if (imageMetadata) {
-    const contents_in_base64 = Buffer.from(imageMetadata.data).toString(
-      "base64",
-    );
+    // Convert Uint8Array to base64 (replacing Buffer)
+    const uint8Array = new Uint8Array(imageMetadata.data);
+    const binaryString = String.fromCharCode(...uint8Array);
+    const contents_in_base64 = btoa(binaryString);
     const withPrefix = `data:${imageMetadata.format};base64, ${contents_in_base64}`;
     image = withPrefix;
   }

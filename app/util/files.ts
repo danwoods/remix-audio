@@ -219,7 +219,7 @@ export const search = (files: Files, searchStr: string): SearchResults => {
       results.artists.push({
         id: artist,
         title: artist,
-        localUrl: `/artists/${artist}`,
+        localUrl: `/artists/${encodeURIComponent(artist)}`,
       });
     }
 
@@ -228,7 +228,7 @@ export const search = (files: Files, searchStr: string): SearchResults => {
         results.albums.push({
           id: albumObj.id,
           title: album,
-          localUrl: `/artists/${artist}/albums/${album}`,
+          localUrl: `/artists/${encodeURIComponent(artist)}/albums/${encodeURIComponent(album)}`,
         });
       }
 
@@ -237,7 +237,7 @@ export const search = (files: Files, searchStr: string): SearchResults => {
           results.tracks.push({
             id: t.url,
             title: t.title,
-            localUrl: `/artists/${artist}/albums/${album}`,
+            localUrl: `/artists/${encodeURIComponent(artist)}/albums/${encodeURIComponent(album)}`,
             url: t.url,
           });
         }

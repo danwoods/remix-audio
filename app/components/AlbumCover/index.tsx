@@ -1,6 +1,6 @@
-import type { Files } from "../../util/files";
+import type { Files } from "../../util/files.ts";
 
-import { getAlbumArt } from "../../util/files";
+import { getAlbumArt } from "../../util/files.ts";
 import { useEffect, useState } from "react";
 
 /**
@@ -22,7 +22,7 @@ const AlbumCover = ({
 
   // Get album art
   useEffect(() => {
-    getAlbumArt(files, albumId).then((url) => {
+    getAlbumArt(files, albumId).then((url: string | null) => {
       if (url) {
         setAlbumArt(url);
       }

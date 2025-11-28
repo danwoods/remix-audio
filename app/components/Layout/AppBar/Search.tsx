@@ -1,9 +1,8 @@
-import type { Files, SearchResults } from "../../../util/files";
+import type { Files, SearchResults } from "../../../util/files.ts";
 
-import useClickOutside from "../../../hooks/useClickOutside";
-import { Link } from "@remix-run/react";
+import useClickOutside from "../../../hooks/useClickOutside.tsx";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import { search } from "../../../util/files";
+import { search } from "../../../util/files.ts";
 import { useEffect, useRef, useState } from "react";
 
 /** Container for search results */
@@ -47,9 +46,9 @@ const SearchResultsContainer = ({
           <ol>
             {searchResults.albums.map((a) => (
               <li key={a.id}>
-                <Link to={a.localUrl} onClick={onClick}>
+                <a href={a.localUrl} onClick={onClick}>
                   {a.title}
-                </Link>
+                </a>
               </li>
             ))}
           </ol>
@@ -61,15 +60,15 @@ const SearchResultsContainer = ({
           <ol>
             {searchResults.tracks.map((t) => (
               <li key={t.id}>
-                <Link
-                  to={t.localUrl}
+                <a
+                  href={t.localUrl}
                   onClick={() => {
                     onClick();
                     onPlayClick({ url: t.url });
                   }}
                 >
                   {t.title}
-                </Link>
+                </a>
               </li>
             ))}
           </ol>

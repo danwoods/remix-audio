@@ -1,25 +1,22 @@
 /** @file Listing of an album's tracks */
-import type { Context } from "../root";
-import type { Files, Track } from "../util/files";
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { Files, Track } from "../util/files.ts";
 
-import AlbumCover from "~/components/AlbumCover";
+import AlbumCover from "../components/AlbumCover/index.tsx";
 import { PauseIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { extractColors } from "extract-colors";
-import { getAlbum, getAlbumArt, sortTracksByTrackNumber } from "~/util/files";
-import { getUploadedFiles } from "../util/s3.server";
+import {
+  getAlbum,
+  getAlbumArt,
+  sortTracksByTrackNumber,
+} from "../util/files.ts";
 import { useEffect, useState } from "react";
-import { useLoaderData, useOutletContext } from "@remix-run/react";
+import { usePlayerContext } from "../context/PlayerContext.tsx";
 import { useInView } from "react-intersection-observer";
 
-export async function loader({ params }: LoaderFunctionArgs) {
-  const { artistId, albumId } = params;
-  if (!params.artistId || !params.albumId)
-    throw new Response("Missing an artist or album ID", { status: 400 });
-
-  const files = await getUploadedFiles();
-
-  return { artistId, albumId, files };
+export interface AlbumProps {
+  artistId: string;
+  albumId: string;
+  files: Files;
 }
 
 /** Header including album art, title, and artis */
@@ -143,16 +140,18 @@ const PlayPauseIcon = ({
 };
 
 /** Main album display page */
-const Album = () => {
-  const { currentTrack, isPlaying, playToggle } = useOutletContext<Context>();
-  const { artistId, albumId, files } = useLoaderData<typeof loader>();
+const Album = ({ artistId, albumId, files }: AlbumProps) => {
+  const { currentTrack, isPlaying, playToggle } = usePlayerContext();
   const [forceSmallSticky, setForceSmallSticky] = useState(false);
+  // useInView hook - will be false on server, true initially on client
+  // This can cause hydration mismatches, so we handle it carefully
   const { ref, inView } = useInView({
     initialInView: true,
     rootMargin: "-150px",
   });
 
   useEffect(() => {
+    // This effect only runs on client after hydration
     if (!inView) {
       setForceSmallSticky(true);
     } else {
@@ -178,7 +177,8 @@ const Album = () => {
           forceSmallSticky={forceSmallSticky}
         />
         {/* Trigger shifting to/from smaller header */}
-        <div ref={ref} />
+        {/* Suppress hydration warning for this element since useInView behaves differently on server/client */}
+        <div ref={ref} suppressHydrationWarning />
         <Tracklist
           tracks={tracks}
           isPlaying={isPlaying}

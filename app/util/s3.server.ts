@@ -1,10 +1,7 @@
 /** @File Utilities for working with AWS S3 */
-import type { UploadHandler } from "@remix-run/node";
-import type { Files } from "./files";
+import type { Files } from "./files.ts";
 
-import { PassThrough } from "stream";
-import { getID3Tags } from "./id3";
-import { writeAsyncIterableToWritable } from "@remix-run/node";
+import { getID3Tags } from "./id3.ts";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import {
   S3Client,
@@ -17,12 +14,14 @@ import {
 // Move environment validation into a function that's called during runtime
 // rather than during module initialization
 const validateConfig = () => {
-  const {
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
-    STORAGE_REGION,
-    STORAGE_BUCKET,
-  } = process.env;
+  // @ts-expect-error - Deno is available at runtime
+  const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+  // @ts-expect-error - Deno is available at runtime
+  const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+  // @ts-expect-error - Deno is available at runtime
+  const STORAGE_REGION = Deno.env.get("STORAGE_REGION");
+  // @ts-expect-error - Deno is available at runtime
+  const STORAGE_BUCKET = Deno.env.get("STORAGE_BUCKET");
 
   if (
     !(
@@ -64,8 +63,11 @@ export async function* createAsyncIteratorFromArrayBuffer(
   }
 }
 
-/** Create upload stream */
-const uploadStream = ({ Key }: { Key: string }) => {
+/** Upload file to S3 */
+export async function uploadStreamToS3(
+  data: AsyncIterable<Uint8Array>,
+  filename: string,
+) {
   const config = validateConfig();
   const client = new S3Client({
     region: config.STORAGE_REGION,
@@ -74,36 +76,34 @@ const uploadStream = ({ Key }: { Key: string }) => {
       secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
     },
   });
-  const pass = new PassThrough();
-  return {
-    writeStream: pass,
-    promise: (async () => {
-      const command = new PutObjectCommand({
-        Bucket: config.STORAGE_BUCKET,
-        Key,
-        Body: pass,
-      });
-      await client.send(command);
-      return {
-        Location: `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/${Key}`,
-      };
-    })(),
-  };
-};
 
-/** Stream file to S3 */
-export async function uploadStreamToS3(
-  data: AsyncIterable<Uint8Array>,
-  filename: string,
-) {
-  const stream = uploadStream({
+  // Collect all chunks into a single Uint8Array
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of data) {
+    chunks.push(chunk);
+  }
+
+  // Calculate total length
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+
+  // Combine all chunks into a single Uint8Array
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  // Upload to S3
+  const command = new PutObjectCommand({
+    Bucket: config.STORAGE_BUCKET,
     Key: filename,
+    Body: combined,
   });
 
-  await writeAsyncIterableToWritable(data, stream.writeStream);
-  const file = await stream.promise;
+  await client.send(command);
 
-  return file.Location;
+  return `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/${filename}`;
 }
 
 // S3 Folder Structure //////////////////////////////////////////////////////////
@@ -120,15 +120,15 @@ export async function uploadStreamToS3(
 // ---- [Tracks...]
 
 /**
- * Remix compatible handler for streaming files to S3. Extracts ID3 data from
+ * Handler for streaming files to S3. Extracts ID3 data from
  * files to organize into artist/album bucket structure.
- * @see https://remix.run/docs/en/main/guides/file-uploads#upload-handler-composition
+ * This replaces the Remix UploadHandler interface.
  **/
-export const s3UploadHandler: UploadHandler = async ({
-  name,
-  contentType,
-  data,
-}) => {
+export async function handleS3Upload(
+  name: string,
+  contentType: string,
+  data: AsyncIterable<Uint8Array>,
+): Promise<string | undefined> {
   const config = validateConfig();
 
   if (name !== "files") {
@@ -136,9 +136,19 @@ export const s3UploadHandler: UploadHandler = async ({
   }
 
   // Collect file data
-  const dataArray = [];
+  const dataArray: BlobPart[] = [];
   for await (const x of data) {
-    dataArray.push(x);
+    // Convert Uint8Array to ArrayBuffer for File constructor
+    // Ensure we have a proper ArrayBuffer (not SharedArrayBuffer)
+    if (x.buffer instanceof ArrayBuffer) {
+      const buffer = x.buffer.slice(x.byteOffset, x.byteOffset + x.byteLength);
+      dataArray.push(buffer);
+    } else {
+      // Fallback: create new ArrayBuffer and copy data
+      const buffer = new ArrayBuffer(x.length);
+      new Uint8Array(buffer).set(x);
+      dataArray.push(buffer);
+    }
   }
   const file = new File(dataArray, "temp", { type: contentType });
   const fileArrayBuffer = await file.arrayBuffer();
@@ -182,12 +192,16 @@ export const s3UploadHandler: UploadHandler = async ({
         (error as { name?: string }).name === "NotFound"
       ) {
         try {
-          // Convert base64 image to buffer
+          // Convert base64 image to Uint8Array (replacing Buffer)
           const base64Data = id3Tags.image.replace(
             /^data:image\/jpeg;base64,/,
             "",
           );
-          const imageBuffer = Buffer.from(base64Data, "base64");
+          // Convert base64 to Uint8Array
+          const binaryString = atob(base64Data);
+          const imageBuffer = Uint8Array.from(binaryString, (c) =>
+            c.charCodeAt(0),
+          );
 
           const putCommand = new PutObjectCommand({
             Bucket: config.STORAGE_BUCKET,
@@ -230,7 +244,7 @@ export const s3UploadHandler: UploadHandler = async ({
   );
 
   return uploadedFileLocation;
-};
+}
 
 // Reading ////////////////////////////////////////////////////////////////////
 
@@ -272,7 +286,17 @@ const fileFetch = async (): Promise<Files> => {
             return acc;
           }
 
-          const [artist, album, trackWNum] = keyParts;
+          let [artist, album] = keyParts;
+          const trackWNum = keyParts[2];
+
+          // Decode URL-encoded artist and album names from S3 keys
+          // S3 keys may be URL-encoded (e.g., "Childish%20Gambino" -> "Childish Gambino")
+          try {
+            artist = decodeURIComponent(artist);
+            album = decodeURIComponent(album);
+          } catch {
+            // If decoding fails, use as-is (already decoded or invalid)
+          }
 
           // Validate: artist and album must exist
           if (!artist || !album || !trackWNum) {

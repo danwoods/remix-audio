@@ -5,14 +5,18 @@
   "type": "module",
   "scripts": {
     "build": "remix vite:build",
+    "build:client": "vite build",
     "dev": "remix vite:dev",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "start": "remix-serve build/server/index.js",
     "start:local": "env -S $(grep -v '^#' .env) npm start",
+    "start:deno": "deno task start",
+    "dev:deno": "deno task dev",
     "typecheck": "tsc",
     "prepare": "npx husky install",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --exclude 'server/**/*.test.ts'",
+    "test:watch": "vitest",
+    "test:deno": "deno test server/router.test.ts --allow-read"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.614.0",
@@ -44,6 +48,7 @@
     "@types/wicg-file-system-access": "^2023.10.5",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "daisyui": "^4.12.10",
     "eslint": "^8.47.0",
     "eslint-import-resolver-typescript": "^3.6.1",

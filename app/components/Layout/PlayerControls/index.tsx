@@ -1,5 +1,5 @@
 /** @file Player controls seen at the bottom of the screen */
-import type { Files } from "../../../util/files";
+import type { Files } from "../../../util/files.ts";
 
 import {
   BackwardIcon,
@@ -8,12 +8,12 @@ import {
   PlayIcon,
   QueueListIcon,
 } from "@heroicons/react/24/solid";
-import AlbumCover from "~/components/AlbumCover";
+import AlbumCover from "../../AlbumCover/index.tsx";
 import {
   getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
   sortTracksByTrackNumber,
-} from "../../../util/files";
+} from "../../../util/files.ts";
 
 /**
  * Handle whether to display a play or pause button, including indicating if

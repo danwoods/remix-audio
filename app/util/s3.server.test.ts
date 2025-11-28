@@ -1,5 +1,21 @@
 import { describe, it, beforeEach, expect, vi } from "vitest";
 
+// Mock Deno global for Node.js test environment - must be before any imports
+// @ts-expect-error - Deno is not available in Node.js test environment
+global.Deno = {
+  env: {
+    get: (key: string) => {
+      const env: Record<string, string> = {
+        AWS_ACCESS_KEY_ID: "test-key",
+        AWS_SECRET_ACCESS_KEY: "test-secret",
+        STORAGE_REGION: "us-east-1",
+        STORAGE_BUCKET: "test-bucket",
+      };
+      return env[key] || undefined;
+    },
+  },
+};
+
 // Mock the ID3 module
 vi.mock("./id3", () => ({
   getID3Tags: vi.fn().mockResolvedValue({
@@ -26,7 +42,7 @@ vi.mock("@aws-sdk/client-s3", async () => {
 });
 
 // Now import the module that depends on the mocked modules
-import { s3UploadHandler } from "./s3.server";
+import { handleS3Upload } from "./s3.server";
 import { getID3Tags } from "./id3";
 
 // Mock environment variables
@@ -35,7 +51,7 @@ vi.stubEnv("AWS_SECRET_ACCESS_KEY", "test-secret");
 vi.stubEnv("STORAGE_REGION", "test-region");
 vi.stubEnv("STORAGE_BUCKET", "test-bucket");
 
-describe("s3UploadHandler", () => {
+describe("handleS3Upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -72,7 +88,11 @@ describe("s3UploadHandler", () => {
     };
 
     // Execute handler
-    const result = await s3UploadHandler(mockUploadHandlerParams);
+    const result = await handleS3Upload(
+      mockUploadHandlerParams.name,
+      mockUploadHandlerParams.contentType,
+      mockUploadHandlerParams.data,
+    );
 
     // Verify cover image check was performed (HeadObjectCommand)
     const headObjectCalls = mockSend.mock.calls.filter(
@@ -95,7 +115,7 @@ describe("s3UploadHandler", () => {
       Key: "Test Artist/Test Album/cover.jpeg",
       ContentType: "image/jpeg",
     });
-    expect(putObjectCalls[0][0].input.Body).toBeInstanceOf(Buffer);
+    expect(putObjectCalls[0][0].input.Body).toBeInstanceOf(Uint8Array);
 
     // Verify audio file was uploaded (PutObjectCommand for audio)
     const audioUploadCalls = mockSend.mock.calls.filter(
@@ -110,7 +130,7 @@ describe("s3UploadHandler", () => {
 
     // Verify return value contains the expected URL pattern
     expect(result).toContain(
-      "test-bucket.s3.test-region.amazonaws.com/Test Artist/Test Album/1__Test Song",
+      "test-bucket.s3.us-east-1.amazonaws.com/Test Artist/Test Album/1__Test Song",
     );
   });
 
@@ -141,7 +161,11 @@ describe("s3UploadHandler", () => {
       })(),
     };
 
-    await s3UploadHandler(mockUploadHandlerParams);
+    await handleS3Upload(
+      mockUploadHandlerParams.name,
+      mockUploadHandlerParams.contentType,
+      mockUploadHandlerParams.data,
+    );
 
     const headObjectCalls = mockSend.mock.calls.filter(
       (call) => call[0].constructor.name === "HeadObjectCommand",
@@ -183,7 +207,11 @@ describe("s3UploadHandler", () => {
       })(),
     };
 
-    await s3UploadHandler(mockUploadHandlerParams);
+    await handleS3Upload(
+      mockUploadHandlerParams.name,
+      mockUploadHandlerParams.contentType,
+      mockUploadHandlerParams.data,
+    );
 
     const headObjectCalls = mockSend.mock.calls.filter(
       (call) => call[0].constructor.name === "HeadObjectCommand",

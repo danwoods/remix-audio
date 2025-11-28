@@ -1,20 +1,14 @@
 /** @file Main content to display when at "/" */
-import type { Files } from "../util/files";
+import type { Files } from "../util/files.ts";
 
-import AlbumTile from "../components/AlbumTile";
-import HorizontalRowWithTitle from "../components/HorizontalRowWithTitle";
-import { getAlbumIdsByRecent } from "../util/files";
-import { getUploadedFiles } from "../util/s3.server";
-import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import AlbumTile from "../components/AlbumTile/index.tsx";
+import HorizontalRowWithTitle from "../components/HorizontalRowWithTitle/index.tsx";
+import { getAlbumIdsByRecent } from "../util/files.ts";
 
-export const loader = async () => {
-  const files = await getUploadedFiles();
-
-  const recentlyUploadedAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
-
-  return json({ files, recentlyUploadedAlbumIds });
-};
+export interface IndexProps {
+  files: Files;
+  recentlyUploadedAlbumIds: ReturnType<typeof getAlbumIdsByRecent>;
+}
 
 /** Single row on homepage */
 const Row = ({
@@ -34,15 +28,7 @@ const Row = ({
 );
 
 /** Default (/) content */
-const Index = () => {
-  const {
-    files,
-    recentlyUploadedAlbumIds,
-  }: {
-    files: Files;
-    recentlyUploadedAlbumIds: ReturnType<typeof getAlbumIdsByRecent>;
-  } = useLoaderData<typeof loader>();
-
+const Index = ({ files, recentlyUploadedAlbumIds }: IndexProps) => {
   const recentlyListenedToAlbumIds = [
     { id: "Childish Gambino/Poindexter" },
     { id: "Girl Talk/All Day" },

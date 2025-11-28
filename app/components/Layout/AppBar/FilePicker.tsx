@@ -1,8 +1,7 @@
 /** @file Handle all file/directory uploading functionality */
 import { PlusCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
-import { useFetcher } from "@remix-run/react";
+import { useState } from "react";
 
 /**
  * UI to process file uploads
@@ -12,21 +11,37 @@ const FilePicker = ({ btnClassName }: { btnClassName?: string }) => {
   const [showUploadUI, setShowUploadUI] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDroppedFiles, setHasDroppedFiles] = useState(false);
-  const fetcher = useFetcher();
-
-  useEffect(() => {
-    if (fetcher.state === "submitting") {
-      setIsSubmitting(true);
-    } else if (fetcher.state === "idle" && isSubmitting) {
-      close();
-    }
-  }, [fetcher.state, isSubmitting]);
 
   /** Hide modal and cleanup */
   const close = () => {
     setShowUploadUI(false);
     setHasDroppedFiles(false);
     setIsSubmitting(false);
+  };
+
+  /** Handle form submission */
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      const response = await fetch("/", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        // Redirect to home page after successful upload
+        window.location.href = "/";
+      } else {
+        console.error("Upload failed:", response.statusText);
+        setIsSubmitting(false);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -41,7 +56,11 @@ const FilePicker = ({ btnClassName }: { btnClassName?: string }) => {
       {showUploadUI &&
         createPortal(
           <dialog open={showUploadUI} className="modal">
-            <fetcher.Form method="post" encType="multipart/form-data">
+            <form
+              method="post"
+              encType="multipart/form-data"
+              onSubmit={handleSubmit}
+            >
               <div className="modal-box bg-base-300 flex flex-col justify-center rounded">
                 <div className="flex justify-end">
                   <button className="btn" type="button" onClick={close}>
@@ -76,7 +95,7 @@ const FilePicker = ({ btnClassName }: { btnClassName?: string }) => {
                   )}
                 </button>
               </div>
-            </fetcher.Form>
+            </form>
           </dialog>,
           document.body,
         )}

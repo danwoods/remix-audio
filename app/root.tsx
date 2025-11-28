@@ -1,69 +1,11 @@
-import type {
-  ActionFunctionArgs,
-  LinksFunction,
-  UploadHandler,
-} from "@remix-run/node";
-import type { Files } from "./util/files";
-import type { SyntheticEvent } from "react";
+import type { Files } from "./util/files.ts";
+import type { SyntheticEvent, ReactNode } from "react";
 
-import {
-  Links,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-  useLoaderData,
-} from "@remix-run/react";
-import {
-  json,
-  redirect,
-  unstable_composeUploadHandlers as composeUploadHandlers,
-  unstable_createMemoryUploadHandler as createMemoryUploadHandler,
-  unstable_parseMultipartFormData as parseMultipartFormData,
-} from "@remix-run/node";
-import AppBar from "./components/Layout/AppBar";
-import PlayerControls from "./components/Layout/PlayerControls";
-import appStylesHref from "./app.css?url";
-import { getRemainingAlbumTracks } from "./util/files";
-import { s3UploadHandler, getUploadedFiles } from "./util/s3.server";
+import AppBar from "./components/Layout/AppBar/index.tsx";
+import PlayerControls from "./components/Layout/PlayerControls/index.tsx";
+import { getRemainingAlbumTracks } from "./util/files.ts";
 import { useEffect, useRef, useState } from "react";
-
-/** Handle Uploads */
-export const action = async ({ request }: ActionFunctionArgs) => {
-  if (request.method === "POST") {
-    const uploadHandler: UploadHandler = composeUploadHandlers(
-      s3UploadHandler,
-      createMemoryUploadHandler(),
-    );
-
-    // Upload files
-    await parseMultipartFormData(request, uploadHandler);
-
-    // Pull new files
-    await getUploadedFiles(true);
-
-    return redirect("/");
-  }
-};
-
-/** Pull files */
-export const loader = async () => {
-  const files = await getUploadedFiles();
-
-  // Setup `head` links that are based on env vars
-  const headLinks = [
-    {
-      rel: "preconnect",
-      href: `https://${process.env.STORAGE_BUCKET}.s3.${process.env.STORAGE_REGION}.amazonaws.com`,
-    },
-  ];
-
-  return json({ files, headLinks });
-};
-
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: appStylesHref },
-];
+import { PlayerContext } from "./context/PlayerContext.tsx";
 
 export type Context = {
   playToggle: (track?: { url: string }) => void;
@@ -71,15 +13,13 @@ export type Context = {
   isPlaying: boolean;
 };
 
-export default function App() {
-  const {
-    files,
-    headLinks,
-  }: {
-    files: Files;
-    headLinks: { rel: string; href: string }[];
-  } = useLoaderData<typeof loader>();
+export interface AppProps {
+  files: Files;
+  headLinks?: Array<{ rel: string; href: string }>;
+  children?: ReactNode;
+}
 
+export default function App({ files, headLinks = [], children }: AppProps) {
   const audioElmRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
@@ -168,45 +108,43 @@ export default function App() {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Remix Audio</title>
-        <meta name="description" content="Your audio where you want it."></meta>
-        <Meta />
-        <Links />
+        <meta name="description" content="Your audio where you want it." />
         {headLinks.map((l) => (
           <link key={l.rel + l.href} rel={l.rel} href={l.href} />
         ))}
       </head>
       <body>
-        <AppBar files={files} playToggle={playToggle} />
-        <div className={`flex w-full`}>
-          <main
-            className={`md:mx-auto md:px-6 grow ${currentTrackUrl ? "pb-24" : ""}`}
-          >
-            <Outlet
-              context={{
-                isPlaying,
-                playToggle,
-                currentTrack: currentTrackUrl,
-              }}
-            />
-          </main>
-        </div>
-        <PlayerControls
-          currentTrack={currentTrackUrl}
-          files={files}
-          isPlaying={isPlaying}
-          playNext={playNext}
-          playToggle={playToggle}
-        />
-        <ScrollRestoration />
-        <Scripts />
-        {currentTrackUrl && (
-          <audio // eslint-disable-line jsx-a11y/media-has-caption
-            onEnded={playNext}
-            onTimeUpdate={onTimeUpdate}
-            ref={audioElmRef}
-            src={currentTrackUrl}
-          ></audio>
-        )}
+        <PlayerContext.Provider
+          value={{
+            isPlaying,
+            playToggle,
+            currentTrack: currentTrackUrl,
+          }}
+        >
+          <AppBar files={files} playToggle={playToggle} />
+          <div className={`flex w-full`}>
+            <main
+              className={`md:mx-auto md:px-6 grow ${currentTrackUrl ? "pb-24" : ""}`}
+            >
+              {children}
+            </main>
+          </div>
+          <PlayerControls
+            currentTrack={currentTrackUrl}
+            files={files}
+            isPlaying={isPlaying}
+            playNext={playNext}
+            playToggle={playToggle}
+          />
+          {currentTrackUrl && (
+            <audio // eslint-disable-line jsx-a11y/media-has-caption
+              onEnded={playNext}
+              onTimeUpdate={onTimeUpdate}
+              ref={audioElmRef}
+              src={currentTrackUrl}
+            ></audio>
+          )}
+        </PlayerContext.Provider>
       </body>
     </html>
   );
