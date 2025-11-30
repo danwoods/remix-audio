@@ -1,0 +1,21 @@
+echo "🧪 Running tests before push..."
+
+# Run Deno tests
+echo "Running Deno tests..."
+deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys
+
+if [ $? -ne 0 ]; then
+  echo "❌ Deno tests failed. Push aborted."
+  exit 1
+fi
+
+# Run Node/Vitest tests (exclude Deno tests)
+echo "Running Node/Vitest tests..."
+npm test -- --exclude="deno-tests/**" --exclude="server/**"
+
+if [ $? -ne 0 ]; then
+  echo "❌ Node tests failed. Push aborted."
+  exit 1
+fi
+
+echo "✅ All tests passed!"
