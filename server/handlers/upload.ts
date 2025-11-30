@@ -26,18 +26,46 @@ export async function handleUpload(req: Request): Promise<Response> {
       return new Response("No files provided", { status: 400 });
     }
 
+    const errors: string[] = [];
+    let successCount = 0;
+
     // Process each file
     for (const file of files) {
       if (file instanceof File) {
-        const data = formDataToAsyncIterable(file);
-        await handleS3Upload("files", file.type, data);
+        try {
+          const data = formDataToAsyncIterable(file);
+          await handleS3Upload("files", file.type, data);
+          successCount++;
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          const errorName = (error as { name?: string }).name || "Unknown";
+          console.error(
+            `Failed to upload file ${file.name}: ${errorName} - ${errorMessage}`,
+          );
+          errors.push(`${file.name}: ${errorMessage}`);
+          // Continue processing other files even if one fails
+        }
       }
     }
 
     // Force refresh of file cache
-    await getUploadedFiles(true);
+    try {
+      await getUploadedFiles(true);
+    } catch (error) {
+      console.error("Failed to refresh file cache:", error);
+      // Don't fail the entire request if cache refresh fails
+    }
 
-    // Redirect to home page
+    // If all files failed, return error
+    if (successCount === 0 && errors.length > 0) {
+      return new Response(`Upload failed for all files: ${errors.join("; ")}`, {
+        status: 500,
+      });
+    }
+
+    // If some files succeeded, redirect (partial success)
+    // If all succeeded, redirect (full success)
     return new Response(null, {
       status: 303,
       headers: { Location: "/" },
@@ -46,6 +74,8 @@ export async function handleUpload(req: Request): Promise<Response> {
     console.error("Upload error:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    const errorName = (error as { name?: string }).name || "Unknown";
+    console.error(`Upload error name: ${errorName}`);
     return new Response(`Upload failed: ${errorMessage}`, { status: 500 });
   }
 }

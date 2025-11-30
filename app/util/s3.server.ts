@@ -193,8 +193,9 @@ export async function handleS3Upload(
       ) {
         try {
           // Convert base64 image to Uint8Array (replacing Buffer)
+          // Handle any image format and optional whitespace after comma
           const base64Data = id3Tags.image.replace(
-            /^data:image\/jpeg;base64,/,
+            /^data:[^;]+;base64,\s*/,
             "",
           );
           // Convert base64 to Uint8Array

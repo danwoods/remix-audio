@@ -148,10 +148,18 @@ export const getID3Tags = async (file: Uint8Array): Promise<ID3Tags> => {
 
   if (imageMetadata) {
     // Convert Uint8Array to base64 (replacing Buffer)
+    // Process in chunks to avoid stack overflow with large images
     const uint8Array = new Uint8Array(imageMetadata.data);
-    const binaryString = String.fromCharCode(...uint8Array);
+    const chunkSize = 8192; // Process 8KB at a time
+    let binaryString = "";
+
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.slice(i, i + chunkSize);
+      binaryString += String.fromCharCode(...chunk);
+    }
+
     const contents_in_base64 = btoa(binaryString);
-    const withPrefix = `data:${imageMetadata.format};base64, ${contents_in_base64}`;
+    const withPrefix = `data:${imageMetadata.format};base64,${contents_in_base64}`;
     image = withPrefix;
   }
 
