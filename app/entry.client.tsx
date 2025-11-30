@@ -10,6 +10,7 @@ import type { Files } from "./util/files.ts";
 interface InitialData {
   files: unknown;
   headLinks?: Array<{ rel: string; href: string }>;
+  appName?: string;
   pageProps?: Record<string, unknown>;
 }
 const initialData = (window as { __INITIAL_DATA__?: InitialData })
@@ -47,6 +48,7 @@ if (rootElement && initialData) {
       <App
         files={initialData.files as Files}
         headLinks={initialData.headLinks || []}
+        appName={initialData.appName}
       >
         <PageComponent {...pageProps} />
       </App>,
@@ -59,6 +61,7 @@ if (rootElement && initialData) {
       <App
         files={initialData.files as Files}
         headLinks={initialData.headLinks || []}
+        appName={initialData.appName}
       />,
     );
   }

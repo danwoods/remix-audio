@@ -3,9 +3,9 @@ import {
   assertEquals,
   assertStringIncludes,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { handleAlbum } from "./album.ts";
-import { getUploadedFiles } from "../../app/util/s3.server.ts";
-import { loadEnv } from "../utils/loadEnv.ts";
+import { handleAlbum } from "../../../server/handlers/album.ts";
+import { getUploadedFiles } from "../../../app/util/s3.server.ts";
+import { loadEnv } from "../../../server/utils/loadEnv.ts";
 
 Deno.test("Album page renders correctly", async () => {
   // Load environment variables

@@ -360,7 +360,9 @@ const stream = new ReadableStream({
 - [x] Install/verify Deno-compatible dependencies
 - [x] Set up basic HTTP server with `Deno.serve()`
 - [x] Create router foundation
-- [ ] Set up development server with hot reload (deferred - focusing on core migration)
+- [x] Set up environment variable loading (`server/utils/loadEnv.ts`)
+- [x] Configure Deno permissions (including `--allow-sys` for AWS SDK)
+- [x] Set up development server with hot reload (`deno task dev`)
 
 ### Phase 2: Core Server
 
@@ -370,11 +372,13 @@ const stream = new ReadableStream({
 - [x] Migrate root action to POST route handler
 - [x] Set up SSR rendering function
 - [x] Create HTML template function
-- [ ] Implement client-side hydration setup
+- [x] Implement client-side hydration setup
 - [x] Migrate homepage route
 - [x] Migrate album detail route
-- [ ] Test basic routing and data loading
-- [ ] Test SSR rendering
+- [x] Set up static asset serving
+- [x] Create manifest utility for hashed assets
+- [ ] Test basic routing and data loading (in browser)
+- [ ] Test SSR rendering (in browser)
 
 ### Phase 3: File Upload
 
@@ -399,10 +403,12 @@ const stream = new ReadableStream({
 - [x] Replace Remix hooks with alternatives (props, Context API)
 - [x] Implement client-side routing (full-page navigation)
 - [x] Set up client-side hydration
-- [ ] Test client-side navigation
-- [ ] Verify SSR rendering matches client rendering
-- [ ] Test audio player functionality
-- [ ] Ensure hydration warnings are resolved
+- [x] Create client entry point (`app/entry.client.tsx`)
+- [x] Update Vite config for Deno client build
+- [ ] Test client-side navigation (in browser)
+- [ ] Verify SSR rendering matches client rendering (in browser)
+- [ ] Test audio player functionality (in browser)
+- [ ] Ensure hydration warnings are resolved (in browser)
 
 ### Phase 6: Testing
 
@@ -415,8 +421,10 @@ const stream = new ReadableStream({
 
 ### Phase 7: Deployment
 
-- [ ] Update build scripts
-- [ ] Configure production build
+- [x] Client bundle build working (`npm run build:client`)
+- [x] Configure asset serving in server
+- [ ] Update build scripts (create production build script)
+- [ ] Configure production build optimizations
 - [ ] Set up deployment pipeline
 - [ ] Test production deployment
 - [ ] Update documentation

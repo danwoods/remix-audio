@@ -1,7 +1,9 @@
 /** @file Server-side rendering utilities */
+import React from "react";
 import { renderToString } from "react-dom/server";
 import App from "../app/root.tsx";
 import { getClientAssets } from "./utils/manifest.ts";
+import { getAppName } from "./utils/appName.ts";
 import type { Files } from "../app/util/files.ts";
 
 export interface SSRData {
@@ -21,10 +23,20 @@ export async function renderPage(
 ): Promise<string> {
   // Render the page component as children of App
   const pageElement = <PageComponent {...pageProps} />;
-  const appHtml = renderToString(<App {...appProps}>{pageElement}</App>);
+
+  // Get app name from deno.json
+  const appName = await getAppName();
+
+  // Render the page component as children of App with appName
+  const appElement = (
+    <App {...appProps} appName={appName}>
+      {pageElement}
+    </App>
+  );
+  const appHtml = renderToString(appElement);
 
   // Serialize data for client hydration (escape </script> to prevent XSS)
-  const initialData = { ...appProps, pageProps };
+  const initialData = { ...appProps, pageProps, appName };
   const dataJson = JSON.stringify(initialData).replace(/</g, "\\u003c");
 
   // Get actual asset filenames from build
@@ -35,7 +47,7 @@ export async function renderPage(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Remix Audio</title>
+    <title>${appName}</title>
     <meta name="description" content="Your audio where you want it." />
     <link rel="stylesheet" href="${assets.css}" />
     ${(appProps.headLinks || [])

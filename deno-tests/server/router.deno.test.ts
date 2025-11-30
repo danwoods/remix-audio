@@ -1,7 +1,7 @@
 /** @file Tests for custom router */
 // eslint-disable-next-line import/no-unresolved
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { Router } from "./router.ts";
+import { Router } from "../../server/router.ts";
 
 Deno.test("Router matches static routes", async () => {
   const router = new Router();

@@ -16,10 +16,16 @@ export type Context = {
 export interface AppProps {
   files: Files;
   headLinks?: Array<{ rel: string; href: string }>;
+  appName?: string;
   children?: ReactNode;
 }
 
-export default function App({ files, headLinks = [], children }: AppProps) {
+export default function App({
+  files,
+  headLinks = [],
+  appName = "Remix Audio",
+  children,
+}: AppProps) {
   const audioElmRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
@@ -107,7 +113,7 @@ export default function App({ files, headLinks = [], children }: AppProps) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Remix Audio</title>
+        <title>{appName}</title>
         <meta name="description" content="Your audio where you want it." />
         {headLinks.map((l) => (
           <link key={l.rel + l.href} rel={l.rel} href={l.href} />
