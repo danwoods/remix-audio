@@ -19,7 +19,10 @@ module.exports = {
     commonjs: true,
     es6: true,
   },
-  ignorePatterns: ["!**/.server", "!**/.client", "deno-tests/**"],
+  globals: {
+    Deno: "readonly",
+  },
+  ignorePatterns: ["!**/.server", "!**/.client", "deno-tests/**", "server/**"],
 
   // Base config
   extends: ["eslint:recommended"],
@@ -78,6 +81,40 @@ module.exports = {
       files: [".eslintrc.js"],
       env: {
         node: true,
+      },
+    },
+
+    // Deno
+    {
+      files: ["server/**/*.ts", "server/**/*.tsx", "deno-tests/**/*.ts"],
+      plugins: ["@typescript-eslint"],
+      parser: "@typescript-eslint/parser",
+      env: {
+        browser: false,
+        node: false,
+      },
+      globals: {
+        Deno: "readonly",
+      },
+      parserOptions: {
+        // Deno uses URL imports and modern ES modules
+        ecmaVersion: "latest",
+        sourceType: "module",
+        project: "./tsconfig.deno.json",
+      },
+      settings: {
+        "import/resolver": {
+          typescript: {
+            project: "./tsconfig.deno.json",
+          },
+        },
+      },
+      rules: {
+        // Allow Deno-style URL imports
+        "import/no-unresolved": "off",
+        "@typescript-eslint/no-namespace": "off",
+        // Deno uses top-level await
+        "@typescript-eslint/no-floating-promises": "off",
       },
     },
   ],

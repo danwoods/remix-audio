@@ -1,6 +1,5 @@
 /** @file Tests for files utility functions */
-/* eslint-disable import/no-unresolved */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import {
   getArtist,
   sortTracksByTrackNumber,
@@ -11,7 +10,6 @@ import {
   search,
   type Files,
   type Track,
-  type Album,
 } from "../../../app/util/files.ts";
 
 Deno.test("getArtist returns artist data", () => {

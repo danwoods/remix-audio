@@ -4,7 +4,7 @@ import AlbumPage from "../../app/routes/artists.$artistId.albums.$albumId_.tsx";
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 
 export async function handleAlbum(
-  req: Request,
+  _req: Request,
   params: Record<string, string>,
 ): Promise<Response> {
   const { artistId, albumId } = params;

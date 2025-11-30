@@ -1,9 +1,5 @@
 /** @file Tests for manifest utility */
-/* eslint-disable import/no-unresolved */
-import {
-  assertEquals,
-  assertStringIncludes,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import {
   getAssetFilename,
   getClientAssets,
@@ -65,7 +61,7 @@ Deno.test(
         assertStringIncludes(result.css, "main");
         assertStringIncludes(result.css, ".css");
       }
-    } catch (error) {
+    } catch (_error) {
       // If directory doesn't exist, that's okay - fallback should work
       console.log("Build directory doesn't exist, using fallback paths");
     }

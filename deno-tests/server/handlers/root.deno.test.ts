@@ -1,9 +1,6 @@
 /** @file Tests for root route handler */
 /* eslint-disable import/no-unresolved */
-import {
-  assertEquals,
-  assertStringIncludes,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { handleRoot } from "../../../server/handlers/root.ts";
 import { loadEnv } from "../../../server/utils/loadEnv.ts";
 import { getAppName } from "../../../server/utils/appName.ts";

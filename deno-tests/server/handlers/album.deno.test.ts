@@ -1,8 +1,4 @@
-/* eslint-disable import/no-unresolved */
-import {
-  assertEquals,
-  assertStringIncludes,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { handleAlbum } from "../../../server/handlers/album.ts";
 import { getUploadedFiles } from "../../../app/util/s3.server.ts";
 import { loadEnv } from "../../../server/utils/loadEnv.ts";

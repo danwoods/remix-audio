@@ -1,6 +1,5 @@
 /** @file Tests for upload route handler */
-/* eslint-disable import/no-unresolved */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { handleUpload } from "../../../server/handlers/upload.ts";
 
 Deno.test("Upload handler returns 400 when no files provided", async () => {

@@ -13,12 +13,9 @@ export interface SSRData {
 /**
  * Render a React component to HTML string with the root App wrapper
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function renderPage(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  PageComponent: React.ComponentType<any>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pageProps: any,
+  PageComponent: React.ComponentType<Record<string, unknown>>,
+  pageProps: Record<string, unknown>,
   appProps: { files: Files; headLinks?: Array<{ rel: string; href: string }> },
 ): Promise<string> {
   // Render the page component as children of App

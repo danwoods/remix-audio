@@ -1,6 +1,5 @@
 /** @file Tests for loadEnv utility */
-/* eslint-disable import/no-unresolved */
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { loadEnv } from "../../../server/utils/loadEnv.ts";
 
 Deno.test("loadEnv handles missing .env file gracefully", async () => {
@@ -32,7 +31,6 @@ TEST_AFTER_COMMENT=works
     Deno.env.delete("TEST_KEY");
 
     // Load the test env
-    const originalLoadEnv = loadEnv;
     // We need to modify loadEnv to read from .env.temp, but that's complex
     // Instead, let's test the parsing logic by creating a test file
 

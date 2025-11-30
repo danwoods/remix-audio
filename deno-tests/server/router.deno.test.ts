@@ -1,6 +1,5 @@
 /** @file Tests for custom router */
-// eslint-disable-next-line import/no-unresolved
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { Router } from "../../server/router.ts";
 
 Deno.test("Router matches static routes", async () => {
@@ -9,7 +8,7 @@ Deno.test("Router matches static routes", async () => {
 
   router.add({
     pattern: "/",
-    handler: async () => {
+    handler: () => {
       called = true;
       return new Response("OK");
     },
@@ -28,7 +27,7 @@ Deno.test("Router matches dynamic routes", async () => {
 
   router.add({
     pattern: "/artists/:artistId/albums/:albumId",
-    handler: async (req, params) => {
+    handler: (_req, params) => {
       capturedParams = params;
       return new Response("OK");
     },
@@ -48,7 +47,7 @@ Deno.test("Router returns 404 for unmatched routes", async () => {
 
   router.add({
     pattern: "/",
-    handler: async () => new Response("OK"),
+    handler: () => new Response("OK"),
   });
 
   const req = new Request("http://localhost:8000/unknown");
@@ -65,7 +64,7 @@ Deno.test("Router respects HTTP methods", async () => {
   router.add({
     pattern: "/",
     method: "GET",
-    handler: async () => {
+    handler: () => {
       getCalled = true;
       return new Response("GET");
     },
@@ -74,7 +73,7 @@ Deno.test("Router respects HTTP methods", async () => {
   router.add({
     pattern: "/",
     method: "POST",
-    handler: async () => {
+    handler: () => {
       postCalled = true;
       return new Response("POST");
     },

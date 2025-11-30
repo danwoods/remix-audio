@@ -1,9 +1,5 @@
 /** @file Tests for SSR rendering utilities */
-/* eslint-disable import/no-unresolved */
-import {
-  assertEquals,
-  assertStringIncludes,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { renderPage } from "../../server/ssr.tsx";
 import IndexPage from "../../app/routes/_index.tsx";
 import type { Files } from "../../app/util/files.ts";
