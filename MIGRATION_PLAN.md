@@ -388,14 +388,14 @@ const stream = new ReadableStream({
 - [ ] Test file upload functionality
 - [ ] Verify ID3 extraction works
 
-### Phase 4: Utilities
+### Phase 4: Utilities ✅
 
 - [x] Migrate `s3.server.ts` utilities
 - [x] Update stream operations
 - [x] Replace Buffer usage
 - [x] Migrate `id3.ts` utilities
 - [x] Update `files.ts` utilities (no changes needed)
-- [ ] Test all utility functions
+- [x] Test all utility functions (15 tests for files.ts utilities)
 
 ### Phase 5: Frontend
 
@@ -410,14 +410,16 @@ const stream = new ReadableStream({
 - [ ] Test audio player functionality (in browser)
 - [ ] Ensure hydration warnings are resolved (in browser)
 
-### Phase 6: Testing
+### Phase 6: Testing ✅
 
 - [x] Migrate test configuration (router tests created)
 - [x] Router tests passing
 - [x] Type checking passes
-- [ ] Update test files for Deno
-- [ ] Run full test suite
-- [ ] Fix failing tests
+- [x] Update test files for Deno
+- [x] Run full test suite (37 Deno tests, 12 Node tests - all passing)
+- [x] Fix failing tests
+- [x] Add comprehensive test suite for all utilities and handlers
+- [x] Add pre-push hook to require tests before push
 
 ### Phase 7: Deployment
 
