@@ -3,3 +3,7 @@ node_modules
 /.cache
 /build
 .env
+
+# macOS
+.DS_Store
+**/.DS_Store
