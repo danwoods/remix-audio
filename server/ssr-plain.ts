@@ -8,7 +8,7 @@ export function renderPage(
     headLinks: Array<{ rel: string; href: string }>;
     assets: { css: string; js: string };
   },
-  children: React.ReactNode,
+  children: Array<string>,
 ): string {
   // Serialize data for client hydration (escape </script> to prevent XSS)
   //   const initialData = { ...appProps, pageProps, appName };

@@ -8,7 +8,7 @@ export interface AlbumCoverProps {
   className?: string;
   alt?: string;
   files?: Files;
-  src?: string;
+  src: string | null;
   placeholder?: string;
 }
 
