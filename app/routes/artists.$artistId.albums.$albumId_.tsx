@@ -6,7 +6,7 @@ import { PauseIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { extractColors } from "extract-colors";
 import {
   getAlbum,
-  getAlbumArt,
+  getAlbumArtAsBlobUrl,
   sortTracksByTrackNumber,
 } from "../util/files.ts";
 import { useEffect, useState } from "react";
@@ -34,7 +34,7 @@ const Header = ({
   const [bgGradient, setBgGradient] = useState<string | null>(null);
 
   useEffect(() => {
-    getAlbumArt(files, `${artistId}/${albumId}`)
+    getAlbumArtAsBlobUrl(files, `${artistId}/${albumId}`)
       .then((url) => {
         if (url) {
           return extractColors(url).then((colors) => [
