@@ -28,7 +28,9 @@
     "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --watch server/main.ts",
     "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys server/main.ts",
     "lint": "deno lint server/ deno-tests/",
-    "lint:fix": "deno lint --fix server/ deno-tests/"
+    "lint:fix": "deno lint --fix server/ deno-tests/",
+    "build": "deno task build:css",
+    "build:css": "tailwindcss -i ./app/entry.css -o ./app/app.css"
   },
   "fmt": {
     "include": ["app/", "server/"]

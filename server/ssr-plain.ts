@@ -2,6 +2,8 @@
  *  Render a React component to HTML string with the root App wrapper
  */
 
+const CSS_PATH = "/app.css";
+
 export function renderPage(
   props: {
     appName: string;
@@ -16,6 +18,8 @@ export function renderPage(
 
   //   // Get actual asset filenames from build
   //   const assets = await getClientAssets();
+
+  props.assets.css = CSS_PATH;
 
   return `<!DOCTYPE html>
 <html lang="en">

@@ -70,6 +70,18 @@ Deno.serve({ port }, async (req: Request) => {
     }
   }
 
+  // Handle app.css
+  if (url.pathname === "/app.css") {
+    try {
+      const file = await Deno.readFile("./app/app.css");
+      return new Response(file, {
+        headers: { "Content-Type": "text/css" },
+      });
+    } catch {
+      return new Response("Not Found", { status: 404 });
+    }
+  }
+
   // Route requests through router
   return router.handle(req);
 });
