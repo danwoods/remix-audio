@@ -22,19 +22,27 @@ export function renderPage(
   props.assets.css = CSS_PATH;
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="bg-black text-white">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${props.appName}</title>
     <meta name="description" content="Your audio where you want it." />
     <link rel="stylesheet" href="${props.assets.css}" />
-    ${(props.headLinks || [])
+    ${
+    (props.headLinks || [])
       .map((link) => `<link rel="${link.rel}" href="${link.href}" />`)
-      .join("\n    ")}
+      .join("\n    ")
+  }
   </head>
   <body>
-    <div id="root">${children}</div>
+    <div id="root">
+      <div class="flex w-full">
+        <main class="md:mx-auto md:px-6 grow">
+          ${children}
+        </main>
+      </div>
+    </div>
     <script type="module" src="${props.assets.js}"></script>
   </body>
 </html>`;
