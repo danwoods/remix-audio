@@ -2,16 +2,19 @@
 
 ## Issue
 
-When accessing the server, it returned "Internal Server Error" with the following problems:
+When accessing the server, it returned "Internal Server Error" with the
+following problems:
 
 1. **Missing .env file loading**: Deno doesn't automatically load `.env` files
-2. **Missing `--allow-sys` permission**: AWS SDK requires system access for OS information
+2. **Missing `--allow-sys` permission**: AWS SDK requires system access for OS
+   information
 
 ## Fixes Applied
 
 ### 1. Added .env File Loading
 
-Created `server/utils/loadEnv.ts` to load environment variables from `.env` file at startup.
+Created `server/utils/loadEnv.ts` to load environment variables from `.env` file
+at startup.
 
 **File**: `server/utils/loadEnv.ts`
 
@@ -38,7 +41,8 @@ Updated `deno.json` tasks to include `--allow-sys` flag required by AWS SDK.
 
 ### 3. Improved Error Handling
 
-Enhanced router error handling to show actual error messages instead of generic "Internal Server Error".
+Enhanced router error handling to show actual error messages instead of generic
+"Internal Server Error".
 
 **File**: `server/router.ts`
 
@@ -48,10 +52,10 @@ Enhanced router error handling to show actual error messages instead of generic 
 
 ## Verification
 
-✅ Server starts successfully  
-✅ Environment variables loaded from `.env`  
-✅ S3 connection works  
-✅ HTML rendered correctly  
+✅ Server starts successfully\
+✅ Environment variables loaded from `.env`\
+✅ S3 connection works\
+✅ HTML rendered correctly\
 ✅ Data serialized for client hydration
 
 ## How to Start Server

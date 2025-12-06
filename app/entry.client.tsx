@@ -1,5 +1,5 @@
 /** @file Client-side hydration entry point */
-import "./app.css";
+import "./entry.css";
 import { hydrateRoot } from "react-dom/client";
 import App from "./root.tsx";
 import IndexPage from "./routes/_index.tsx";

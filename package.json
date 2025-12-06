@@ -68,7 +68,6 @@
     "node": ">=20.0.0"
   },
   "lint-staged": {
-    "*": "prettier --ignore-unknown --write",
     "*.{js,jsx,ts,tsx}": "npm run lint"
   }
 }

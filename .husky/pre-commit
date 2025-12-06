@@ -1,3 +1,9 @@
+# Format staged files with deno fmt
+.husky/run-on-staged.sh "deno fmt" "ts,tsx,js,jsx,json,jsonc,md,markdown"
+
+# Run lint-staged (ESLint)
 npx lint-staged
+
+# Type check and run tests
 tsc
 npm test -- --exclude="deno-tests/**" --exclude="server/**"
