@@ -3,6 +3,7 @@ import { renderPage } from "../ssr-plain.ts";
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 
 import albumRowWithTitleHtml from "../../app/components/AlbumRow/album-row-with-title-html.ts";
+import { getAlbumIdsByRecent } from "../../app/util/files.ts";
 
 /** Index page route handler */
 export async function handleIndexHtml(
@@ -10,6 +11,7 @@ export async function handleIndexHtml(
   _params: Record<string, string>,
 ): Promise<Response> {
   const files = await getUploadedFiles();
+  const recentlyUploadedAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
 
   const recentlyListenedToAlbumIds = [
     { id: "Childish Gambino/Poindexter" },
@@ -18,7 +20,7 @@ export async function handleIndexHtml(
     { id: "The Rolling Stones/Let It Bleed" },
     { id: "The Black Keys/Ohio Players" },
   ];
-  
+
   const mostListenedToAlbumIds = [
     { id: "Pearl Jam/Dark Matter" },
     { id: "Run The Jewels/RTJ4" },
@@ -40,9 +42,14 @@ export async function handleIndexHtml(
         title: "Continue Listening",
       }),
       await albumRowWithTitleHtml({
+        albumIds: recentlyUploadedAlbumIds,
+        files: files,
+        title: "Latest",
+      }),
+      await albumRowWithTitleHtml({
         albumIds: mostListenedToAlbumIds,
         files: files,
-        title: "Most Listened To",
+        title: "Favorites",
       }),
     ],
   );
