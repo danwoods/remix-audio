@@ -8,15 +8,30 @@ import { useEffect, useState } from "react";
 const AppBar = ({
   files,
   playToggle,
+  pathname: initialPathname,
 }: {
   files: Files;
   playToggle: (t: { url: string }) => void;
+  pathname?: string;
 }) => {
-  const [pathname, setPathname] = useState("/");
+  // Initialize pathname from prop (SSR) or window.location (client hydration)
+  // This ensures server and client render the same initial value
+  const [pathname, setPathname] = useState(() => {
+    // On server, use the prop if provided, otherwise default to "/"
+    // On client, use window.location.pathname if prop not provided
+    if (typeof window !== "undefined") {
+      return initialPathname ?? window.location.pathname;
+    }
+    return initialPathname ?? "/";
+  });
 
   useEffect(() => {
-    // Set initial pathname
-    setPathname(window.location.pathname);
+    // Update pathname from window.location if prop changes or on mount
+    // This handles client-side navigation
+    const currentPathname = window.location.pathname;
+    if (currentPathname !== pathname) {
+      setPathname(currentPathname);
+    }
 
     // Listen for navigation events (full-page navigation)
     const handlePopState = () => {
@@ -27,7 +42,7 @@ const AppBar = ({
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, []);
+  }, [pathname]);
 
   return (
     <div

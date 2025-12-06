@@ -1,5 +1,5 @@
 import type { Files } from "./util/files.ts";
-import type { SyntheticEvent, ReactNode } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 
 import AppBar from "./components/Layout/AppBar/index.tsx";
 import PlayerControls from "./components/Layout/PlayerControls/index.tsx";
@@ -17,6 +17,7 @@ export interface AppProps {
   files: Files;
   headLinks?: Array<{ rel: string; href: string }>;
   appName?: string;
+  pathname?: string;
   children?: ReactNode;
 }
 
@@ -24,6 +25,7 @@ export default function App({
   files,
   headLinks = [],
   appName = "Remix Audio",
+  pathname,
   children,
 }: AppProps) {
   const audioElmRef = useRef<HTMLAudioElement>(null);
@@ -40,7 +42,7 @@ export default function App({
    *       2. If a track is passed in that is currently being played, it will pause
    *       2. If a track is passed in that is the current track, but it's not currently playing, it will resume
    *       3. If no track is passed in, it will stop playback
-   **/
+   */
   const playToggle = (track?: { url: string }) => {
     if (track) {
       if (track.url !== currentTrackUrl) {
@@ -74,7 +76,7 @@ export default function App({
    * Listen to progress changes for current track so we can start loading the
    * next track when it's close to finishing and move to the next track once
    * it's done.
-   **/
+   */
   const onTimeUpdate = (evt: SyntheticEvent<HTMLAudioElement, Event>) => {
     const t = evt.target as HTMLAudioElement;
     if (
@@ -127,10 +129,12 @@ export default function App({
             currentTrack: currentTrackUrl,
           }}
         >
-          <AppBar files={files} playToggle={playToggle} />
+          <AppBar files={files} playToggle={playToggle} pathname={pathname} />
           <div className={`flex w-full`}>
             <main
-              className={`md:mx-auto md:px-6 grow ${currentTrackUrl ? "pb-24" : ""}`}
+              className={`md:mx-auto md:px-6 grow ${
+                currentTrackUrl ? "pb-24" : ""
+              }`}
             >
               {children}
             </main>
@@ -148,7 +152,8 @@ export default function App({
               onTimeUpdate={onTimeUpdate}
               ref={audioElmRef}
               src={currentTrackUrl}
-            ></audio>
+            >
+            </audio>
           )}
         </PlayerContext.Provider>
       </body>

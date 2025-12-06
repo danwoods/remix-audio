@@ -11,6 +11,7 @@ interface InitialData {
   files: unknown;
   headLinks?: Array<{ rel: string; href: string }>;
   appName?: string;
+  pathname?: string;
   pageProps?: Record<string, unknown>;
 }
 const initialData = (window as { __INITIAL_DATA__?: InitialData })
@@ -49,6 +50,7 @@ if (rootElement && initialData) {
         files={initialData.files as Files}
         headLinks={initialData.headLinks || []}
         appName={initialData.appName}
+        pathname={initialData.pathname ?? pathname}
       >
         <PageComponent {...pageProps} />
       </App>,
@@ -62,6 +64,7 @@ if (rootElement && initialData) {
         files={initialData.files as Files}
         headLinks={initialData.headLinks || []}
         appName={initialData.appName}
+        pathname={initialData.pathname ?? pathname}
       />,
     );
   }

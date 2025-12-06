@@ -18,6 +18,14 @@ export async function handleIndexHtml(
     { id: "The Rolling Stones/Let It Bleed" },
     { id: "The Black Keys/Ohio Players" },
   ];
+  
+  const mostListenedToAlbumIds = [
+    { id: "Pearl Jam/Dark Matter" },
+    { id: "Run The Jewels/RTJ4" },
+    { id: "Pink Floyd/Wish You Were Here" },
+    { id: "Wu-Tang Clan/Enter The Wu-Tang: 36 Chambers" },
+    { id: "The Rolling Stones/Exile On Main St." },
+  ];
 
   const html = renderPage(
     {
@@ -30,6 +38,11 @@ export async function handleIndexHtml(
         albumIds: recentlyListenedToAlbumIds,
         files: files,
         title: "Continue Listening",
+      }),
+      await albumRowWithTitleHtml({
+        albumIds: mostListenedToAlbumIds,
+        files: files,
+        title: "Most Listened To",
       }),
     ],
   );

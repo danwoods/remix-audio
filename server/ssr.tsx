@@ -16,7 +16,11 @@ export interface SSRData {
 export async function renderPage(
   PageComponent: React.ComponentType<Record<string, unknown>>,
   pageProps: Record<string, unknown>,
-  appProps: { files: Files; headLinks?: Array<{ rel: string; href: string }> },
+  appProps: {
+    files: Files;
+    headLinks?: Array<{ rel: string; href: string }>;
+    pathname?: string;
+  },
 ): Promise<string> {
   // Render the page component as children of App
   const pageElement = <PageComponent {...pageProps} />;
@@ -26,7 +30,7 @@ export async function renderPage(
 
   // Render the page component as children of App with appName
   const appElement = (
-    <App {...appProps} appName={appName}>
+    <App {...appProps} appName={appName} pathname={appProps.pathname}>
       {pageElement}
     </App>
   );
@@ -47,9 +51,11 @@ export async function renderPage(
     <title>${appName}</title>
     <meta name="description" content="Your audio where you want it." />
     <link rel="stylesheet" href="${assets.css}" />
-    ${(appProps.headLinks || [])
+    ${
+    (appProps.headLinks || [])
       .map((link) => `<link rel="${link.rel}" href="${link.href}" />`)
-      .join("\n    ")}
+      .join("\n    ")
+  }
   </head>
   <body>
     <div id="root">${appHtml}</div>

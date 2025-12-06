@@ -12,20 +12,19 @@ export async function handleRoot(_req: Request): Promise<Response> {
   // Setup `head` links that are based on env vars
   const storageBucket = Deno.env.get("STORAGE_BUCKET");
   const storageRegion = Deno.env.get("STORAGE_REGION");
-  const headLinks =
-    storageBucket && storageRegion
-      ? [
-          {
-            rel: "preconnect",
-            href: `https://${storageBucket}.s3.${storageRegion}.amazonaws.com`,
-          },
-        ]
-      : [];
+  const headLinks = storageBucket && storageRegion
+    ? [
+      {
+        rel: "preconnect",
+        href: `https://${storageBucket}.s3.${storageRegion}.amazonaws.com`,
+      },
+    ]
+    : [];
 
   const html = await renderPage(
     IndexPage,
     { files, recentlyUploadedAlbumIds },
-    { files, headLinks },
+    { files, headLinks, pathname: "/" },
   );
 
   return new Response(html, {
