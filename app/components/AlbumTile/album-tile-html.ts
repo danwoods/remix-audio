@@ -1,6 +1,6 @@
 import type { Files } from "../../util/files.ts";
 import albumCoverHtml from "../AlbumCover/album-cover-html.ts";
-import { getAlbumArtAsDataUrl } from "../../util/files.ts";
+import { getAlbum } from "../../util/files.ts";
 
 /**
  * Props for the album tile HTML function
@@ -51,7 +51,10 @@ export default async function albumTileHtml(
   const escapedArtistName = escapeHtml(artistName);
   const escapedAlbumName = escapeHtml(albumName);
 
-  const src = await getAlbumArtAsDataUrl(files, albumId);
+  const albumObject = getAlbum(files, albumId);
+  const srcArr = albumObject.tracks[0].url.split("/");
+  srcArr.pop();
+  const src = [...srcArr, "cover.jpeg"].join("/");
 
   return `<a href="${escapeHtml(href)}">
   ${albumCoverHtml({ files, albumId, className: "rounded w-full", src })}

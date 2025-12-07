@@ -27,37 +27,23 @@ function escapeHtml(unsafe: string): string {
 /**
  * Generate HTML string for album cover image
  *
- * Returns HTML immediately with a placeholder. For dynamic loading,
- * use the async version or the custom element.
+ * Returns HTML img string. If the image fails to load, it will fallback to the placeholder.
  *
  * @param props - Album cover properties
  * @returns HTML string for an img element
  *
  * @example
  * ```ts
- * // With default placeholder
  * const html = albumCoverHtml({
- *   albumId: "artist/album",
  *   className: "w-32 h-32",
- *   alt: "Album cover"
- * });
- *
- * // With custom placeholder
- * const html2 = albumCoverHtml({
- *   albumId: "artist/album",
- *   placeholder: "/path/to/placeholder.png"
- * });
- *
- * // With explicit src
- * const html3 = albumCoverHtml({
- *   albumId: "artist/album",
- *   src: "/path/to/image.jpg"
+ *   alt: "Album cover",
+ *   src: "https://example.com/image.jpg",
+ *   placeholder: "https://placehold.co/100x100?text=."
  * });
  * ```
  */
 export default function albumCoverHtml(props: AlbumCoverProps): string {
   const {
-    albumId,
     className = "",
     alt = "album art",
     src,
@@ -71,9 +57,15 @@ export default function albumCoverHtml(props: AlbumCoverProps): string {
   const imageSrc = src || placeholder;
   const srcAttr = ` src="${escapeHtml(imageSrc)}"`;
 
-  // If files are provided, we can add a data attribute for the custom element
-  // to pick up and load dynamically
-  const dataAttr = props.files ? ` data-album-id="${escapeHtml(albumId)}"` : "";
+  // Add onerror handler to fallback to placeholder if image fails to load
+  // Only add if we have a src that's different from placeholder to avoid infinite loops
+  let onerrorAttr = "";
+  if (src && src !== placeholder) {
+    const escapedPlaceholder = escapeHtml(placeholder);
+    // Set onerror to replace src with placeholder, then nullify onerror to prevent loops
+    onerrorAttr =
+      ` onerror="this.onerror=null;this.src='${escapedPlaceholder}'"`;
+  }
 
-  return `<img${classAttr}${altAttr}${srcAttr}${dataAttr} />`;
+  return `<img${classAttr}${altAttr}${srcAttr}${onerrorAttr} />`;
 }
