@@ -45,4 +45,3 @@ export async function loadEnv(): Promise<void> {
     }
   }
 }
-

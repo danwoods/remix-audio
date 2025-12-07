@@ -4,6 +4,7 @@ import { getUploadedFiles } from "../../app/util/s3.server.ts";
 
 import albumRowWithTitleHtml from "../../app/components/AlbumRow/album-row-with-title-html.ts";
 import { getAlbumIdsByRecent } from "../../app/util/files.ts";
+import pkg from "../../deno.json" with { type: "json" };
 
 /** Index page route handler */
 export async function handleIndexHtml(
@@ -31,7 +32,7 @@ export async function handleIndexHtml(
 
   const html = renderPage(
     {
-      appName: "Album Cover",
+      appName: pkg.name,
       headLinks: [],
       assets: { css: "", js: "" },
     },

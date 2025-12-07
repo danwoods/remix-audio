@@ -2,6 +2,8 @@
  *  Render a React component to HTML string with the root App wrapper
  */
 
+import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
+
 const CSS_PATH = "/app.css";
 
 export function renderPage(
@@ -37,7 +39,8 @@ export function renderPage(
   </head>
   <body>
     <div id="root">
-      <div class="flex w-full">
+      <div class="flex w-full flex-col">
+        ${appBarHtml({ appName: props.appName })}
         <main class="md:mx-auto md:px-6 grow">
           ${children}
         </main>

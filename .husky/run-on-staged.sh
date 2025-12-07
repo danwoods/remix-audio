@@ -69,3 +69,4 @@ if [ -n "$CHANGED_FILES" ]; then
   echo "Staging changes made by command..."
   echo "$CHANGED_FILES" | xargs git add
 fi
+
