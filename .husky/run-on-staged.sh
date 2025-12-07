@@ -70,3 +70,4 @@ if [ -n "$CHANGED_FILES" ]; then
   echo "$CHANGED_FILES" | xargs git add
 fi
 
+
