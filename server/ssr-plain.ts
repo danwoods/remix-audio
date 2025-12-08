@@ -42,7 +42,7 @@ export function renderPage(
       <div class="flex w-full flex-col">
         ${appBarHtml({ appName: props.appName })}
         <main class="md:mx-auto md:px-6 grow">
-          ${children}
+          ${children.join("")}
         </main>
       </div>
     </div>

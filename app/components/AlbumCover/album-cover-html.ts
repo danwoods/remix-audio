@@ -50,7 +50,9 @@ export default function albumCoverHtml(props: AlbumCoverProps): string {
     placeholder = "https://placehold.co/100x100?text=.",
   } = props;
 
-  const classAttr = className ? ` class="${escapeHtml(className)}"` : "";
+  const baseClasses = "aspect-square ";
+  const allClasses = className ? `${baseClasses} ${className}` : baseClasses;
+  const classAttr = ` class="${escapeHtml(allClasses)}"`;
   const altAttr = ` alt="${escapeHtml(alt)}"`;
 
   // Use src if provided, otherwise use placeholder (or default)
