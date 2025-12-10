@@ -1,5 +1,3 @@
-import type { Files } from "../../util/files.ts";
-
 /**
  * Props for the album cover HTML function
  */
@@ -7,7 +5,6 @@ export interface AlbumCoverProps {
   albumId: string;
   className?: string;
   alt?: string;
-  files?: Files;
   src: string | null;
   placeholder?: string;
 }

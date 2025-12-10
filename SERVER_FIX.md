@@ -86,5 +86,3 @@ STORAGE_REGION=your_region
 STORAGE_BUCKET=your_bucket
 PORT=8000  # Optional
 ```
-
-

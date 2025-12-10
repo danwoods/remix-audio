@@ -5,6 +5,7 @@ import { handleUpload } from "./handlers/upload.ts";
 import { handleRoot } from "./handlers/root.ts";
 import { handleIndexHtml } from "./handlers/index.html.ts";
 import { loadEnv } from "./utils/loadEnv.ts";
+import { handleAlbumHtml } from "./handlers/album.html.ts";
 
 // Load environment variables from .env file
 await loadEnv();
@@ -15,6 +16,11 @@ const router = new Router();
 router.add({ pattern: "/", handler: handleRoot, method: "GET" });
 router.add({ pattern: "/index.html", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/", handler: handleUpload, method: "POST" });
+router.add({
+  pattern: "/artists/:artistId/albums/:albumId/html",
+  handler: handleAlbumHtml,
+  method: "GET",
+});
 router.add({
   pattern: "/artists/:artistId/albums/:albumId",
   handler: handleAlbum,
@@ -91,8 +97,9 @@ function getContentType(pathname: string): string {
   if (pathname.endsWith(".js")) return "application/javascript";
   if (pathname.endsWith(".json")) return "application/json";
   if (pathname.endsWith(".png")) return "image/png";
-  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg"))
+  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) {
     return "image/jpeg";
+  }
   if (pathname.endsWith(".svg")) return "image/svg+xml";
   return "application/octet-stream";
 }

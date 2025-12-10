@@ -5,6 +5,8 @@
 import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
 
 const CSS_PATH = "/app.css";
+const JS_PATH = "/build/main.js";
+``;
 
 export function renderPage(
   props: {
@@ -46,7 +48,12 @@ export function renderPage(
         </main>
       </div>
     </div>
-    <script type="module" src="${props.assets.js}"></script>
+    ${
+    props.assets.js
+      ? `<script type="module" src="${props.assets.js}"></script>`
+      : ""
+  }
+    <script type="module" src="${JS_PATH}"></script>
   </body>
 </html>`;
 }

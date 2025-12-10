@@ -46,7 +46,7 @@ export default async function albumTileHtml(
 
   const encodedArtistName = encodeURIComponent(artistName);
   const encodedAlbumName = encodeURIComponent(albumName);
-  const href = `/artists/${encodedArtistName}/albums/${encodedAlbumName}`;
+  const href = `/artists/${encodedArtistName}/albums/${encodedAlbumName}/html`;
 
   const escapedArtistName = escapeHtml(artistName);
   const escapedAlbumName = escapeHtml(albumName);
@@ -57,7 +57,7 @@ export default async function albumTileHtml(
   const src = [...srcArr, "cover.jpeg"].join("/");
 
   return `<a href="${escapeHtml(href)}">
-  ${albumCoverHtml({ files, albumId, className: "rounded w-full", src })}
+  ${albumCoverHtml({ albumId, className: "rounded w-full", src })}
   <div class="pt-1 md:pt-2">
     <p class="text-base font-bold line-clamp-1">${escapedAlbumName}</p>
     <p class="text-sm line-clamp-1">by ${escapedArtistName}</p>
