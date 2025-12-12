@@ -259,6 +259,9 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
+  .contents {
+    display: contents;
+  }
   .flex {
     display: flex;
   }

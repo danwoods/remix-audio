@@ -21,13 +21,18 @@ export async function handleAlbumHtml(
 
   const tracks = [...album.tracks].sort(sortTracksByTrackNumber);
 
+  const albumUrl = `https://${Deno.env.get("STORAGE_BUCKET")}.s3.${
+    Deno.env.get("STORAGE_REGION")
+  }.amazonaws.com/${artistId}/${albumId}`;
+
   const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sticky Shrinking Album Header</title>
+  <title>${pkg.name} - ${albumId}</title>
+  <meta name="description" content="Your audio where you want it.">
   <style>
     * {
       margin: 0;
@@ -204,7 +209,7 @@ export async function handleAlbumHtml(
 <body>
   <div class="page-title">${pkg.name}</div>
   
-  <album-header-custom-element data-album-id="${artistId}/${albumId}"></album-header-custom-element>
+  <album-header-custom-element data-album-url="${albumUrl}"></album-header-custom-element>
 
   <section class="tracklist">
     <h2 class="tracklist-title">Tracks</h2>
