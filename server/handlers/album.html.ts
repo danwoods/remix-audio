@@ -1,6 +1,7 @@
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 import { getAlbum, sortTracksByTrackNumber } from "../../app/util/files.ts";
 import pkg from "../../deno.json" with { type: "json" };
+import { createAlbumUrl } from "../../lib/album.ts";
 
 export async function handleAlbumHtml(
   _req: Request,
@@ -21,9 +22,12 @@ export async function handleAlbumHtml(
 
   const tracks = [...album.tracks].sort(sortTracksByTrackNumber);
 
-  const albumUrl = `https://${Deno.env.get("STORAGE_BUCKET")}.s3.${
-    Deno.env.get("STORAGE_REGION")
-  }.amazonaws.com/${artistId}/${albumId}`;
+  const albumUrl = createAlbumUrl(
+    Deno.env.get("STORAGE_BUCKET")!,
+    Deno.env.get("STORAGE_REGION")!,
+    artistId,
+    albumId,
+  );
 
   const html = `
 <!DOCTYPE html>

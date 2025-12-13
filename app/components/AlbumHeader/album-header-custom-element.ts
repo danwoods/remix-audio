@@ -2,6 +2,7 @@
 
 import * as id3 from "id3js";
 import { extractColors } from "extract-colors";
+import type { AlbumUrl } from "../../../lib/album.ts";
 
 /**
  * Lists the contents of an album bucket.
@@ -93,18 +94,24 @@ const setAlbumHeaderGradient = async (elm: HTMLElement, colors: string[]) => {
  * Custom element for the header on an album page.
  */
 export class AlbumHeaderCustomElement extends HTMLElement {
-  static observedAttributes = ["data-album-id"];
+  static observedAttributes = ["data-album-url"];
 
   constructor() {
     super();
 
-    const albumUrl = this.getAttribute("data-album-url") || "";
+    if (!this.getAttribute("data-album-url")) {
+      throw new Error("Album URL is required");
+    }
+
+    const albumUrl = this.getAttribute("data-album-url") as AlbumUrl;
     const albumUrlParts = albumUrl.split("/");
     const albumId = albumUrlParts.pop();
     const artistId = albumUrlParts.pop();
 
     if (!artistId || !albumId) {
-      throw new Error("Artist ID and album ID are required");
+      throw new Error(
+        "Artist ID or album ID missing or mis-configured in data-album-url attribute",
+      );
     }
 
     this.innerHTML = `
