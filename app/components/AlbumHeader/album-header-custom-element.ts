@@ -56,65 +56,6 @@ const getId3Tags = async (url: string) => {
 };
 
 /**
- * Converts a Uint8Array to a base64 data URL using efficient chunking.
- *
- * Uses chunking to avoid stack overflow when processing large arrays.
- *
- * @param data - The binary data as a Uint8Array.
- * @param mimeType - The MIME type of the data (e.g., "image/jpeg", "image/png").
- * @returns A promise that resolves to a data URL string in the format `data:{mimeType};base64,{base64}`.
- */
-const createDataUrlFromArrayBuffer = async (
-  data: Uint8Array,
-  mimeType: string,
-) => {
-  // Convert to base64 - use efficient chunking to avoid stack overflow
-  const uint8Array = new Uint8Array(data);
-  const chunkSize = 0x8000; // 32KB chunks
-  const chunks: string[] = [];
-
-  for (let i = 0; i < uint8Array.length; i += chunkSize) {
-    const chunk = uint8Array.subarray(
-      i,
-      Math.min(i + chunkSize, uint8Array.length),
-    );
-    // Build string for this chunk without spreading
-    let chunkStr = "";
-    for (let j = 0; j < chunk.length; j++) {
-      chunkStr += String.fromCharCode(chunk[j]);
-    }
-    chunks.push(chunkStr);
-  }
-
-  const binaryString = chunks.join("");
-  const base64 = btoa(binaryString);
-  const dataUrl = `data:${mimeType};base64,${base64}`;
-
-  return dataUrl;
-};
-
-/**
- * Extracts album art from an audio file and converts it to a data URL.
- *
- * @param url - The URL of the audio file containing the album art.
- * @returns A promise that resolves to a data URL string of the album art, or null if no album art is found.
- */
-const getAlbumArtAsDataUrl = async (url: string) => {
-  const tags = await getId3Tags(url);
-
-  let dataUrl = null;
-
-  if (Array.isArray(tags?.images)) {
-    const arrayBuffer = tags.images[0].data;
-    const mimeType = tags.images[0].mime || "image/jpeg";
-
-    dataUrl = await createDataUrlFromArrayBuffer(arrayBuffer, mimeType);
-  }
-
-  return dataUrl;
-};
-
-/**
  * Extracts gradient colors from album art for use in the header background.
  *
  * @param url - The URL of the audio file containing the album art.
@@ -133,17 +74,6 @@ const getAlbumHeaderGradient = async (url: string) => {
   }
 
   return null;
-};
-
-/**
- * Sets the album art image in the specified HTML element.
- *
- * @param elm - The HTML element to insert the album art image into.
- * @param dataUrl - The data URL of the album art image.
- */
-const setAlbumArt = async (elm: HTMLElement, dataUrl: string) => {
-  elm.innerHTML =
-    `<img src="${dataUrl}" alt="Album Art" style="max-width: 100%; max-height: 100%; border-radius: 8px;"/>`;
 };
 
 /**
@@ -180,7 +110,7 @@ export class AlbumHeaderCustomElement extends HTMLElement {
     this.innerHTML = `
       <header class="album-header" id="albumHeader">
         <div class="album-content">
-          <div class="album-art">🎵</div>
+          <div class="album-art"><album-image-custom-element data-album-url="${albumUrl}"></album-image-custom-element></div>
           <div class="album-info">
             <span class="album-label">Album</span>
             <h1 class="album-title">${albumId}</h1>
@@ -194,15 +124,6 @@ export class AlbumHeaderCustomElement extends HTMLElement {
     getAlbumContents(albumUrlParts.join("/"), artistId, albumId).then(
       (contents) => {
         const trackUrl = albumUrlParts.join("/") + "/" + contents[0];
-
-        getAlbumArtAsDataUrl(trackUrl).then((dataUrl) => {
-          if (dataUrl) {
-            setAlbumArt(
-              this.querySelector(".album-art") as HTMLElement,
-              dataUrl,
-            );
-          }
-        });
 
         getAlbumHeaderGradient(trackUrl).then((colors) => {
           if (colors) {

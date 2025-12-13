@@ -82,9 +82,6 @@ export async function handleAlbumHtml(
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       flex-shrink: 0;
       transition: width 0.15s ease-out, height 0.15s ease-out;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       font-size: 48px;
     }
 
