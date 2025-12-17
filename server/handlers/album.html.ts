@@ -2,12 +2,16 @@ import { getUploadedFiles } from "../../app/util/s3.server.ts";
 import { getAlbum, sortTracksByTrackNumber } from "../../app/util/files.ts";
 import pkg from "../../deno.json" with { type: "json" };
 import { createAlbumUrl } from "../../lib/album.ts";
+import { createLogger } from "../../app/util/logger.ts";
+
+const logger = createLogger("Album HTML");
 
 export async function handleAlbumHtml(
   _req: Request,
   params: Record<string, string>,
 ): Promise<Response> {
   const { artistId, albumId } = params;
+  logger.info("Handling album HTML", { artistId, albumId });
 
   if (!artistId || !albumId) {
     return new Response("Missing artist or album ID", { status: 400 });
@@ -15,12 +19,14 @@ export async function handleAlbumHtml(
 
   const files = await getUploadedFiles();
   const album = getAlbum(files, `${artistId}/${albumId}`);
+  logger.debug("Album", { album });
 
   if (!album) {
     return new Response("Album not found", { status: 404 });
   }
 
   const tracks = [...album.tracks].sort(sortTracksByTrackNumber);
+  logger.debug("Tracks", { tracks });
 
   const albumUrl = createAlbumUrl(
     Deno.env.get("STORAGE_BUCKET")!,
@@ -28,6 +34,7 @@ export async function handleAlbumHtml(
     artistId,
     albumId,
   );
+  logger.debug("Album URL", { albumUrl });
 
   const html = `
 <!DOCTYPE html>
@@ -166,6 +173,7 @@ export async function handleAlbumHtml(
     .track {
       display: flex;
       align-items: center;
+      cursor: pointer;
       padding: 12px 16px;
       border-radius: 8px;
       margin-bottom: 4px;
@@ -217,6 +225,7 @@ export async function handleAlbumHtml(
     <div id="tracklistContainer"></div>
   </section>
 
+  <player-controls-custom-element data-album-url="${albumUrl}"></player-controls-custom-element>
 
   <script>
     const albumHeader = document.getElementById('albumHeader');
@@ -224,22 +233,27 @@ export async function handleAlbumHtml(
 
     const tracks = [${
     tracks.map((track) =>
-      `{ name: "${track.title}", artist: "${artistId}", duration: "0:00" }`
+      `{ name: "${track.title}", artist: "${artistId}", url: "${track.url}" }`
     ).join(",\n")
   }];
 
     tracks.forEach((track, index) => {
-      const trackEl = document.createElement('div');
-      trackEl.className = 'track';
-      trackEl.innerHTML = \`
-        <span class="track-number">\${index + 1}</span>
-        <div class="track-info">
-          <div class="track-name">\${track.name}</div>
-          <div class="track-artist">\${track.artist}</div>
-        </div>
-        <span class="track-duration">\${track.duration}</span>
-      \`;
-      tracklistContainer.appendChild(trackEl);
+      const trackItemEl = document.createElement('tracklist-item-custom-element');
+
+      trackItemEl.setAttribute('data-track-name', track.name);
+      trackItemEl.setAttribute('data-track-artist', track.artist);
+      trackItemEl.setAttribute('data-track-number', index + 1);
+      trackItemEl.setAttribute('data-track-url', track.url);
+      trackItemEl.addEventListener('click', () => {
+        const playerControls = document.querySelector('player-controls-custom-element');
+        if (playerControls) {
+          playerControls.setAttribute('data-current-track-url', track.url);
+          playerControls.setAttribute('data-is-playing', 'true');
+        }
+
+      });
+
+      tracklistContainer.appendChild(trackItemEl);
     });
   </script>
   <script type="module" src="/build/main.js"></script>

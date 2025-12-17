@@ -4,24 +4,34 @@ import type { Files } from "./files.ts";
 import { getID3Tags } from "./id3.ts";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import {
-  S3Client,
-  ListObjectsV2Command,
-  PutObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   NoSuchKey,
+  PutObjectCommand,
+  S3Client,
 } from "@aws-sdk/client-s3";
+import { createLogger } from "./logger.ts";
+
+// Create logger instance for S3 operations
+// Can be controlled via S3_LOG_LEVEL env var, or falls back to LOG_LEVEL
+const logger = createLogger("S3", "S3_LOG_LEVEL");
 
 // Move environment validation into a function that's called during runtime
 // rather than during module initialization
 const validateConfig = () => {
-  // @ts-expect-error - Deno is available at runtime
+  logger.debug("Validating S3 configuration...");
+
   const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
-  // @ts-expect-error - Deno is available at runtime
   const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-  // @ts-expect-error - Deno is available at runtime
   const STORAGE_REGION = Deno.env.get("STORAGE_REGION");
-  // @ts-expect-error - Deno is available at runtime
   const STORAGE_BUCKET = Deno.env.get("STORAGE_BUCKET");
+
+  logger.debug("Configuration check:", {
+    hasAccessKey: !!AWS_ACCESS_KEY_ID,
+    hasSecretKey: !!AWS_SECRET_ACCESS_KEY,
+    region: STORAGE_REGION,
+    bucket: STORAGE_BUCKET,
+  });
 
   if (
     !(
@@ -31,9 +41,13 @@ const validateConfig = () => {
       STORAGE_BUCKET
     )
   ) {
+    logger.error(
+      "Storage configuration validation failed - missing required environment variables",
+    );
     throw new Error(`Storage is missing required configuration.`);
   }
 
+  logger.debug("Configuration validated successfully");
   return {
     AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
@@ -54,13 +68,35 @@ export async function* createAsyncIteratorFromArrayBuffer(
   chunkSize = 1024,
 ) {
   const uint8Array = new Uint8Array(arrayBuffer);
+  const totalSize = uint8Array.length;
+  const totalChunks = Math.ceil(totalSize / chunkSize);
+
+  logger.debug(`Creating async iterator from ArrayBuffer`, {
+    totalSize,
+    chunkSize,
+    totalChunks,
+  });
+
   let offset = 0;
+  let chunkIndex = 0;
 
   while (offset < uint8Array.length) {
     const chunk = uint8Array.slice(offset, offset + chunkSize);
     offset += chunkSize;
+    chunkIndex++;
+
+    logger.debug(`Yielding chunk ${chunkIndex}/${totalChunks}`, {
+      chunkSize: chunk.length,
+      offset,
+      remaining: totalSize - offset,
+    });
+
     yield chunk;
   }
+
+  logger.debug(
+    `Finished creating async iterator - processed ${chunkIndex} chunks`,
+  );
 }
 
 /** Upload file to S3 */
@@ -68,7 +104,16 @@ export async function uploadStreamToS3(
   data: AsyncIterable<Uint8Array>,
   filename: string,
 ) {
+  logger.info(`Starting upload to S3: ${filename}`);
+  const startTime = Date.now();
+
   const config = validateConfig();
+
+  logger.debug("Creating S3 client", {
+    region: config.STORAGE_REGION,
+    bucket: config.STORAGE_BUCKET,
+  });
+
   const client = new S3Client({
     region: config.STORAGE_REGION,
     credentials: {
@@ -77,33 +122,82 @@ export async function uploadStreamToS3(
     },
   });
 
+  logger.debug("Collecting chunks from async iterable...");
   // Collect all chunks into a single Uint8Array
   const chunks: Uint8Array[] = [];
+  let chunkCount = 0;
   for await (const chunk of data) {
     chunks.push(chunk);
+    chunkCount++;
+    logger.debug(`Collected chunk ${chunkCount}`, {
+      chunkSize: chunk.length,
+    });
   }
+
+  logger.debug(`Finished collecting ${chunkCount} chunks`);
 
   // Calculate total length
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  logger.info(
+    `Total file size: ${totalLength} bytes (${
+      (totalLength / 1024 / 1024).toFixed(2)
+    } MB)`,
+  );
 
   // Combine all chunks into a single Uint8Array
+  logger.debug("Combining chunks into single Uint8Array...");
   const combined = new Uint8Array(totalLength);
   let offset = 0;
   for (const chunk of chunks) {
     combined.set(chunk, offset);
     offset += chunk.length;
   }
+  logger.debug("Chunks combined successfully");
 
   // Upload to S3
+  logger.info(`Uploading to S3: ${config.STORAGE_BUCKET}/${filename}`);
   const command = new PutObjectCommand({
     Bucket: config.STORAGE_BUCKET,
     Key: filename,
     Body: combined,
   });
 
-  await client.send(command);
+  try {
+    const uploadStartTime = Date.now();
+    await client.send(command);
+    const uploadDuration = Date.now() - uploadStartTime;
 
-  return `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/${filename}`;
+    logger.info(`Upload completed successfully in ${uploadDuration}ms`, {
+      filename,
+      size: totalLength,
+      duration: uploadDuration,
+      speed: `${
+        (totalLength / 1024 / 1024 / (uploadDuration / 1000)).toFixed(2)
+      } MB/s`,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error
+      ? error.message
+      : "Unknown error";
+    const errorName = (error as { name?: string }).name || "Unknown";
+
+    logger.error(`Upload failed for ${filename}`, {
+      errorName,
+      errorMessage,
+      size: totalLength,
+      duration: Date.now() - startTime,
+    });
+
+    throw error;
+  }
+
+  const url =
+    `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/${filename}`;
+  logger.info(
+    `Upload finished. Total time: ${Date.now() - startTime}ms. URL: ${url}`,
+  );
+
+  return url;
 }
 
 // S3 Folder Structure //////////////////////////////////////////////////////////
@@ -123,21 +217,40 @@ export async function uploadStreamToS3(
  * Handler for streaming files to S3. Extracts ID3 data from
  * files to organize into artist/album bucket structure.
  * This replaces the Remix UploadHandler interface.
- **/
+ */
 export async function handleS3Upload(
   name: string,
   contentType: string,
   data: AsyncIterable<Uint8Array>,
 ): Promise<string | undefined> {
+  logger.info(`handleS3Upload called`, {
+    name,
+    contentType,
+  });
+
+  const startTime = Date.now();
   const config = validateConfig();
 
   if (name !== "files") {
+    logger.debug(`Skipping upload - name "${name}" does not match "files"`);
     return undefined;
   }
 
+  logger.info("Collecting file data from stream...");
   // Collect file data
   const dataArray: BlobPart[] = [];
+  let streamChunkCount = 0;
+  let totalStreamBytes = 0;
+
   for await (const x of data) {
+    streamChunkCount++;
+    totalStreamBytes += x.length;
+
+    logger.debug(`Processing stream chunk ${streamChunkCount}`, {
+      chunkSize: x.length,
+      totalBytesSoFar: totalStreamBytes,
+    });
+
     // Convert Uint8Array to ArrayBuffer for File constructor
     // Ensure we have a proper ArrayBuffer (not SharedArrayBuffer)
     if (x.buffer instanceof ArrayBuffer) {
@@ -145,23 +258,57 @@ export async function handleS3Upload(
       dataArray.push(buffer);
     } else {
       // Fallback: create new ArrayBuffer and copy data
+      logger.debug("Using fallback ArrayBuffer creation method");
       const buffer = new ArrayBuffer(x.length);
       new Uint8Array(buffer).set(x);
       dataArray.push(buffer);
     }
   }
+
+  logger.info(
+    `Collected ${streamChunkCount} chunks, total ${totalStreamBytes} bytes`,
+  );
+
+  logger.debug("Creating File object from collected data...");
   const file = new File(dataArray, "temp", { type: contentType });
   const fileArrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(fileArrayBuffer);
 
+  logger.debug("File object created", {
+    fileSize: file.size,
+    arrayBufferSize: fileArrayBuffer.byteLength,
+    uint8ArrayLength: uint8Array.length,
+  });
+
   // 1. Get file metadata
+  logger.info("Extracting ID3 tags from audio file...");
   let id3Tags;
   try {
+    const id3StartTime = Date.now();
     id3Tags = await getID3Tags(uint8Array);
+    const id3Duration = Date.now() - id3StartTime;
+
+    logger.info("ID3 tags extracted successfully", {
+      duration: id3Duration,
+      artist: id3Tags.artist,
+      album: id3Tags.album,
+      title: id3Tags.title,
+      trackNumber: id3Tags.trackNumber,
+      hasImage: !!id3Tags.image,
+      imageSize: id3Tags.image ? id3Tags.image.length : 0,
+    });
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    console.error(`Failed to extract ID3 tags from file: ${errorMessage}`);
+    const errorMessage = error instanceof Error
+      ? error.message
+      : "Unknown error";
+    const errorName = (error as { name?: string }).name || "Unknown";
+
+    logger.error(`Failed to extract ID3 tags from file`, {
+      errorName,
+      errorMessage,
+      fileSize: uint8Array.length,
+    });
+
     throw new Error(
       `Failed to extract metadata from audio file: ${errorMessage}`,
     );
@@ -170,6 +317,8 @@ export async function handleS3Upload(
   // 2. Handle cover image
   if (id3Tags.image) {
     const albumPath = `${id3Tags.artist}/${id3Tags.album}/cover.jpeg`;
+    logger.info(`Processing cover image: ${albumPath}`);
+
     const client = new S3Client({
       region: config.STORAGE_REGION,
       credentials: {
@@ -180,29 +329,39 @@ export async function handleS3Upload(
 
     try {
       // 2.1 Check if cover image exists
+      logger.debug(`Checking if cover image exists: ${albumPath}`);
       const headCommand = new HeadObjectCommand({
         Bucket: config.STORAGE_BUCKET,
         Key: albumPath,
       });
       await client.send(headCommand);
+      logger.info(`Cover image already exists, skipping upload: ${albumPath}`);
     } catch (error) {
       // 2.2 If cover doesn't exist, upload it
       if (
         error instanceof NoSuchKey ||
         (error as { name?: string }).name === "NotFound"
       ) {
+        logger.info(`Cover image not found, uploading: ${albumPath}`);
         try {
           // Convert base64 image to Uint8Array (replacing Buffer)
           // Handle any image format and optional whitespace after comma
+          logger.debug("Converting base64 image to Uint8Array...");
           const base64Data = id3Tags.image.replace(
             /^data:[^;]+;base64,\s*/,
             "",
           );
           // Convert base64 to Uint8Array
           const binaryString = atob(base64Data);
-          const imageBuffer = Uint8Array.from(binaryString, (c) =>
-            c.charCodeAt(0),
+          const imageBuffer = Uint8Array.from(
+            binaryString,
+            (c) => c.charCodeAt(0),
           );
+
+          logger.debug("Cover image converted", {
+            base64Length: base64Data.length,
+            imageBufferSize: imageBuffer.length,
+          });
 
           const putCommand = new PutObjectCommand({
             Bucket: config.STORAGE_BUCKET,
@@ -210,39 +369,73 @@ export async function handleS3Upload(
             Body: imageBuffer,
             ContentType: "image/jpeg",
           });
+
+          const coverUploadStart = Date.now();
           await client.send(putCommand);
+          const coverUploadDuration = Date.now() - coverUploadStart;
+
+          logger.info(
+            `Cover image uploaded successfully in ${coverUploadDuration}ms`,
+            {
+              albumPath,
+              size: imageBuffer.length,
+            },
+          );
         } catch (uploadError) {
           // Log but don't fail the entire upload if cover image upload fails
-          const errorMessage =
-            uploadError instanceof Error
-              ? uploadError.message
-              : "Unknown error";
-          const errorName =
-            (uploadError as { name?: string }).name || "Unknown";
-          console.error(
-            `Failed to upload cover image for ${albumPath}: ${errorName} - ${errorMessage}`,
+          const errorMessage = uploadError instanceof Error
+            ? uploadError.message
+            : "Unknown error";
+          const errorName = (uploadError as { name?: string }).name ||
+            "Unknown";
+
+          logger.error(
+            `Failed to upload cover image for ${albumPath}`,
+            {
+              errorName,
+              errorMessage,
+              albumPath,
+            },
           );
           // Continue with audio file upload even if cover image fails
         }
       } else {
         // Log other errors (permissions, network, etc.) but continue with upload
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
+        const errorMessage = error instanceof Error
+          ? error.message
+          : "Unknown error";
         const errorName = (error as { name?: string }).name || "Unknown";
-        console.error(
-          `Error checking cover image for ${albumPath}: ${errorName} - ${errorMessage}`,
+
+        logger.error(
+          `Error checking cover image for ${albumPath}`,
+          {
+            errorName,
+            errorMessage,
+            albumPath,
+          },
         );
         // Continue with audio file upload even if cover check fails
       }
     }
+  } else {
+    logger.debug("No cover image found in ID3 tags, skipping cover upload");
   }
 
   // 3. Upload audio file
-  const partitionedFilename = `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
+  const partitionedFilename =
+    `${id3Tags.artist}/${id3Tags.album}/${id3Tags.trackNumber}__${id3Tags.title}`;
+  logger.info(`Uploading audio file: ${partitionedFilename}`);
+
   const uploadedFileLocation = await uploadStreamToS3(
     createAsyncIteratorFromArrayBuffer(fileArrayBuffer),
     partitionedFilename,
   );
+
+  const totalDuration = Date.now() - startTime;
+  logger.info(`handleS3Upload completed successfully in ${totalDuration}ms`, {
+    uploadedFileLocation,
+    filename: partitionedFilename,
+  });
 
   return uploadedFileLocation;
 }
@@ -254,7 +447,16 @@ let filesFetchCache: Promise<Files> | null = null;
 
 /** Get file list from S3 and organize it into a `Files` object */
 const fileFetch = async (): Promise<Files> => {
+  logger.info("Fetching file list from S3...");
+  const startTime = Date.now();
+
   const config = validateConfig();
+
+  logger.debug("Creating S3 client for file listing", {
+    region: config.STORAGE_REGION,
+    bucket: config.STORAGE_BUCKET,
+  });
+
   const client = new S3Client({
     region: config.STORAGE_REGION,
     credentials: fromEnv(),
@@ -266,14 +468,25 @@ const fileFetch = async (): Promise<Files> => {
   try {
     let isTruncated = true;
     let files: Files = {};
+    let pageCount = 0;
+    let totalObjects = 0;
 
     while (isTruncated) {
-      const { Contents, IsTruncated, NextContinuationToken } =
-        await client.send(command);
+      pageCount++;
+      logger.debug(`Fetching page ${pageCount} of S3 objects...`);
+
+      const { Contents, IsTruncated, NextContinuationToken } = await client
+        .send(command);
 
       if (!Contents) {
+        logger.info(
+          "No contents returned from S3, returning empty files object",
+        );
         return files;
       }
+
+      logger.debug(`Page ${pageCount} returned ${Contents.length} objects`);
+      totalObjects += Contents.length;
 
       files = Contents?.reduce((acc, cur) => {
         if (cur.Key) {
@@ -281,7 +494,7 @@ const fileFetch = async (): Promise<Files> => {
 
           // Validate: must have exactly 3 parts (artist/album/track)
           if (keyParts.length !== 3) {
-            console.warn(
+            logger.warn(
               `Skipping invalid file structure: ${cur.Key} (expected artist/album/track)`,
             );
             return acc;
@@ -301,14 +514,14 @@ const fileFetch = async (): Promise<Files> => {
 
           // Validate: artist and album must exist
           if (!artist || !album || !trackWNum) {
-            console.warn(`Skipping file with missing parts: ${cur.Key}`);
+            logger.warn(`Skipping file with missing parts: ${cur.Key}`);
             return acc;
           }
 
           // Validate: track filename must have __ separator
           const trackParts = trackWNum.split("__");
           if (trackParts.length !== 2) {
-            console.warn(
+            logger.warn(
               `Skipping invalid track filename format: ${cur.Key} (expected number__title)`,
             );
             return acc;
@@ -319,9 +532,16 @@ const fileFetch = async (): Promise<Files> => {
 
           // Validate: track number must be a valid number
           if (Number.isNaN(trackNum) || trackNum <= 0) {
-            console.warn(`Skipping file with invalid track number: ${cur.Key}`);
+            logger.warn(`Skipping file with invalid track number: ${cur.Key}`);
             return acc;
           }
+
+          logger.debug(`Processing valid track: ${cur.Key}`, {
+            artist,
+            album,
+            trackNum,
+            title,
+          });
 
           // All validations passed, proceed with adding to files
           acc[artist] = acc[artist] || {};
@@ -345,10 +565,44 @@ const fileFetch = async (): Promise<Files> => {
 
       isTruncated = Boolean(IsTruncated);
       command.input.ContinuationToken = NextContinuationToken;
+
+      logger.debug(`Page ${pageCount} processed`, {
+        isTruncated,
+        hasNextToken: !!NextContinuationToken,
+      });
     }
+
+    const duration = Date.now() - startTime;
+    const artistCount = Object.keys(files).length;
+    let albumCount = 0;
+    let trackCount = 0;
+
+    for (const artist of Object.values(files)) {
+      albumCount += Object.keys(artist).length;
+      for (const album of Object.values(artist)) {
+        trackCount += album.tracks.length;
+      }
+    }
+
+    logger.info(`File fetch completed successfully in ${duration}ms`, {
+      totalObjects,
+      pages: pageCount,
+      artists: artistCount,
+      albums: albumCount,
+      tracks: trackCount,
+    });
+
     return files;
   } catch (err) {
-    console.error(err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    const errorName = (err as { name?: string }).name || "Unknown";
+
+    logger.error(`File fetch failed`, {
+      errorName,
+      errorMessage,
+      duration: Date.now() - startTime,
+    });
+
     throw err;
   }
 };
@@ -356,10 +610,20 @@ const fileFetch = async (): Promise<Files> => {
 /**
  * Get Files object
  * @param force Optionally force a fresh data pull. Otherwise data will be pulled from cache if available.
- **/
+ */
 export const getUploadedFiles = async (force?: boolean): Promise<Files> => {
-  if (!filesFetchCache || force) {
+  if (force) {
+    logger.info(
+      "Force refresh requested, clearing cache and fetching fresh data",
+    );
+    filesFetchCache = null;
+  }
+
+  if (!filesFetchCache) {
+    logger.debug("Cache miss, fetching files from S3");
     filesFetchCache = fileFetch();
+  } else {
+    logger.debug("Using cached file list");
   }
 
   return filesFetchCache;

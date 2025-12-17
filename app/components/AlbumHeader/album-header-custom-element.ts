@@ -3,36 +3,7 @@
 import * as id3 from "id3js";
 import { extractColors } from "extract-colors";
 import type { AlbumUrl } from "../../../lib/album.ts";
-
-/**
- * Lists the contents of an album bucket.
- *
- * @param albumUrl - The URL of the album bucket.
- * @returns A promise that resolves to an array of keys in the album bucket.
- */
-const getAlbumContents = (
-  albumUrl: string,
-  artistId: string,
-  albumId: string,
-) =>
-  fetch(`${albumUrl}/?list-type=2&prefix=${artistId}/${albumId}/`)
-    .then((response) => response.text())
-    .then((xml) => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(xml, "text/xml");
-
-      // S3 uses a namespace, so we need to handle it
-      const contents = doc.getElementsByTagName("Contents");
-      const keys = Array.from(contents).map((content) => {
-        return content.getElementsByTagName("Key")[0].textContent;
-      });
-
-      return keys;
-    })
-    .catch((error) => {
-      console.error("Error getting album contents", error);
-      return [];
-    });
+import { getAlbumContents } from "../../../lib/album.ts";
 
 /**
  * Extracts dominant colors from an album art image URL.
