@@ -1,20 +1,35 @@
-import { describe, it, beforeEach, expect, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock Deno global for Node.js test environment - must be before any imports
 // @ts-expect-error - Deno is not available in Node.js test environment
-global.Deno = {
-  env: {
-    get: (key: string) => {
-      const env: Record<string, string> = {
-        AWS_ACCESS_KEY_ID: "test-key",
-        AWS_SECRET_ACCESS_KEY: "test-secret",
-        STORAGE_REGION: "us-east-1",
-        STORAGE_BUCKET: "test-bucket",
-      };
-      return env[key] || undefined;
-    },
+const mockDenoEnv = {
+  get: (key: string) => {
+    const env: Record<string, string> = {
+      AWS_ACCESS_KEY_ID: "test-key",
+      AWS_SECRET_ACCESS_KEY: "test-secret",
+      STORAGE_REGION: "us-east-1",
+      STORAGE_BUCKET: "test-bucket",
+      LOG_LEVEL: "INFO",
+      S3_LOG_LEVEL: "INFO",
+    };
+    return env[key] || undefined;
   },
 };
+
+// Set Deno on both global and globalThis to ensure it's accessible
+global.Deno = { env: mockDenoEnv } as typeof Deno;
+(globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } })
+  .Deno = { env: mockDenoEnv };
+
+// Mock the logger module to avoid Deno dependency issues
+vi.mock("./logger", () => ({
+  createLogger: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  })),
+}));
 
 // Mock the ID3 module
 vi.mock("./id3", () => ({
