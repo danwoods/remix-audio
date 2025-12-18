@@ -44,6 +44,7 @@ export async function handleAlbumHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${pkg.name} - ${albumId}</title>
   <meta name="description" content="Your audio where you want it.">
+  <link rel="stylesheet" href="/app.css">
   <style>
     * {
       margin: 0;

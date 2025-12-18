@@ -1,4 +1,7 @@
 {
+  "exports": {
+    "main": "./server/main.ts"
+  },
   "nodeModulesDir": "auto",
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -34,7 +37,7 @@
     "lint": "deno lint server/ deno-tests/",
     "lint:fix": "deno lint --fix server/ deno-tests/",
     "build": "deno task build:css && deno task build:custom-elements",
-    "build:css": "tailwindcss -i ./app/entry.css -o ./app/app.css",
+    "build:css": "tailwindcss -i ./app/entry.css -o ./app/app.css --verbose",
     "build:custom-elements": "deno bundle --minify app/components/register-custom-elements.ts > build/main.js",
     "test:browser": "deno run --allow-net --allow-env --allow-read --allow-run --allow-sys --allow-write --no-check deno-tests/server/handlers/album.html.sticky.browser.playwright.ts"
   },

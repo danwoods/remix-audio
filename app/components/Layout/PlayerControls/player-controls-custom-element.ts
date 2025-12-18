@@ -3,7 +3,27 @@
 import { getBucketContents } from "../../../../lib/s3.ts";
 
 /**
- * Given a track's URL, pull data from it to determine the track's artist, album, and number
+ * Parses track metadata from a track URL.
+ *
+ * @param trackUrl - The full track URL in format: `{baseUrl}/{artistName}/{albumName}/{trackNumber}__{trackName}.{ext}`
+ * @returns An object containing parsed track information
+ * @returns `artistName` - The artist name extracted from the URL path
+ * @returns `albumName` - The album name extracted from the URL path
+ * @returns `trackName` - The track name extracted from the filename (after `__` separator)
+ * @returns `trackNumber` - The track number extracted from the filename (before `__` separator)
+ *
+ * @example
+ * ```typescript
+ * const url = "https://bucket.s3.amazonaws.com/Artist/Album/01__Track Name.mp3";
+ * const data = getParentDataFromTrackUrl(url);
+ * // Returns: { artistName: "Artist", albumName: "Album", trackName: "Track Name", trackNumber: "01" }
+ * ```
+ *
+ * @remarks
+ * The URL format is expected to be:
+ * - Path segments: `.../{artist}/{album}/{filename}`
+ * - Filename format: `{number}__{name}.{ext}` (double underscore separator)
+ * - Returns `null` values if the URL is null or doesn't match the expected format
  */
 const getParentDataFromTrackUrl = (trackUrl: string | null) => {
   if (!trackUrl) {
@@ -95,7 +115,67 @@ const getRemainingAlbumTracks = async (
 };
 
 /**
- * Custom element for player controls
+ * Custom element for player controls displayed at the bottom of the screen.
+ *
+ * @customElement player-controls-custom-element
+ *
+ * @example
+ * ```html
+ * <player-controls-custom-element
+ *   data-album-url="https://bucket.s3.amazonaws.com"
+ *   data-current-track-url="https://bucket.s3.amazonaws.com/artist/album/01__Track Name.mp3"
+ *   data-is-playing="true">
+ * </player-controls-custom-element>
+ * ```
+ *
+ * @example
+ * ```javascript
+ * const playerControls = document.querySelector('player-controls-custom-element');
+ *
+ * // Listen for play/pause events
+ * playerControls.addEventListener('player-toggle', (event) => {
+ *   const trackUrl = event.detail.url;
+ *   console.log('Toggle playback for:', trackUrl);
+ * });
+ *
+ * // Listen for next track events
+ * playerControls.addEventListener('player-next', () => {
+ *   console.log('Play next track');
+ * });
+ *
+ * // Update the current track
+ * playerControls.setAttribute('data-current-track-url', 'https://.../track.mp3');
+ * playerControls.setAttribute('data-is-playing', 'true');
+ * ```
+ *
+ * @attributes
+ * - `data-current-track-url` (string | null): The full URL of the currently playing track.
+ *   Expected format: `{baseUrl}/{artistName}/{albumName}/{trackNumber}__{trackName}.{ext}`
+ *   When set, the element will display track information and load remaining tracks in the album.
+ *
+ * - `data-is-playing` (string): Whether the current track is playing. Must be the string "true" or "false".
+ *   Controls the play/pause icon display.
+ *
+ * - `data-album-url` (string | null): The base URL for the album (S3 bucket URL).
+ *   Used to fetch remaining tracks in the album for the playlist dropdown.
+ *
+ * @events
+ * - `player-toggle` (CustomEvent): Dispatched when the play/pause button is clicked.
+ *   - `detail.url` (string): The URL of the track to play/pause
+ *   - `bubbles`: true
+ *   - `cancelable`: true
+ *
+ * - `player-next` (CustomEvent): Dispatched when the next track button is clicked.
+ *   - No detail payload
+ *   - `bubbles`: true
+ *   - `cancelable`: true
+ *
+ * @remarks
+ * The element automatically:
+ * - Loads remaining tracks in the album when both `data-album-url` and `data-current-track-url` are set
+ * - Parses track information from the URL format: `{number}__{name}.{ext}`
+ * - Updates the UI when attributes change
+ * - Hides itself when no track is set (using `translate-y-full` class)
  */
 export class PlayerControlsCustomElement extends HTMLElement {
   static observedAttributes = [
@@ -112,18 +192,25 @@ export class PlayerControlsCustomElement extends HTMLElement {
     title: string;
     trackNum: number;
   }> = [];
+  private loadTracksPromise: Promise<void> | null = null;
+  private boundHandleClick: (event: Event) => void;
 
   constructor() {
     super();
+    // Use event delegation to avoid memory leaks
+    // Store bound function so we can remove it later
+    this.boundHandleClick = this.handleClick.bind(this);
   }
 
   connectedCallback() {
+    this.addEventListener("click", this.boundHandleClick);
     this.updateAttributes();
     this.render();
   }
 
   disconnectedCallback() {
-    // Cleanup if needed
+    // Remove event listener on disconnect
+    this.removeEventListener("click", this.boundHandleClick);
   }
 
   attributeChangedCallback(
@@ -133,38 +220,57 @@ export class PlayerControlsCustomElement extends HTMLElement {
   ) {
     if (name === "data-current-track-url") {
       this.currentTrackUrl = _newValue;
-      // this.loadRemainingTracks();
-      console.log({ currentTrackUrl: this.currentTrackUrl });
+      this.loadRemainingTracks();
     } else if (name === "data-is-playing") {
       this.isPlaying = _newValue === "true";
     } else if (name === "data-album-url") {
       this.albumUrl = _newValue;
-      // this.loadRemainingTracks();
-      console.log({ albumUrl: this.albumUrl });
+      this.loadRemainingTracks();
     }
 
     this.render();
   }
 
-  private updateAttributes() {
+  private async updateAttributes() {
     this.currentTrackUrl = this.getAttribute("data-current-track-url");
     this.isPlaying = this.getAttribute("data-is-playing") === "true";
     this.albumUrl = this.getAttribute("data-album-url");
-    this.loadRemainingTracks();
+    await this.loadRemainingTracks();
   }
 
   private async loadRemainingTracks() {
-    if (this.albumUrl && this.currentTrackUrl) {
-      this.remainingTracks = await getRemainingAlbumTracks(
-        this.albumUrl,
-        this.currentTrackUrl,
-      );
-      this.render();
-    } else {
-      this.remainingTracks = [];
+    // Prevent multiple concurrent loads
+    if (this.loadTracksPromise) {
+      return this.loadTracksPromise;
     }
+
+    this.loadTracksPromise = (async () => {
+      try {
+        if (this.albumUrl && this.currentTrackUrl) {
+          this.remainingTracks = await getRemainingAlbumTracks(
+            this.albumUrl,
+            this.currentTrackUrl,
+          );
+          this.render();
+        } else {
+          this.remainingTracks = [];
+        }
+      } catch (error) {
+        console.error("Failed to load remaining tracks:", error);
+        this.remainingTracks = [];
+      } finally {
+        this.loadTracksPromise = null;
+      }
+    })();
+
+    return this.loadTracksPromise;
   }
 
+  /**
+   * Dispatches a `player-toggle` event when play/pause button is clicked.
+   * @param trackUrl - The URL of the track to play/pause
+   * @fires player-toggle
+   */
   private dispatchPlayerToggle(trackUrl: string) {
     const event = new CustomEvent("player-toggle", {
       detail: { url: trackUrl },
@@ -174,6 +280,10 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.dispatchEvent(event);
   }
 
+  /**
+   * Dispatches a `player-next` event when next track button is clicked.
+   * @fires player-next
+   */
   private dispatchPlayerNext() {
     const event = new CustomEvent("player-next", {
       bubbles: true,
@@ -212,11 +322,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
       </svg>`;
     }
 
-    // Album art element - construct full album URL from base URL and artist/album
-    // const fullAlbumUrl =
-    //   this.albumUrl && artistName && albumName
-    //     ? `${this.albumUrl}/${artistName}/${albumName}`
-    //     : null;
+    // Album art element
     const albumArtElement = this.albumUrl
       ? `<album-image-custom-element data-album-url="${
         escapeHtml(this.albumUrl)
@@ -309,40 +415,33 @@ export class PlayerControlsCustomElement extends HTMLElement {
         </div>
       </div>
     `;
-
-    // Attach event listeners
-    this.attachEventListeners();
   }
 
-  private attachEventListeners() {
+  private handleClick(event: Event) {
+    const target = event.target as HTMLElement;
+    const button = target.closest("button");
+
+    if (!button) return;
+
     // Play/Pause button
-    const playToggleBtn = this.querySelector("[data-play-toggle]");
-    if (playToggleBtn) {
-      playToggleBtn.addEventListener("click", () => {
-        if (this.currentTrackUrl) {
-          this.dispatchPlayerToggle(this.currentTrackUrl);
-        }
-      });
+    if (button.hasAttribute("data-play-toggle")) {
+      if (this.currentTrackUrl) {
+        this.dispatchPlayerToggle(this.currentTrackUrl);
+      }
+      return;
     }
 
     // Play Next button
-    const playNextBtn = this.querySelector("[data-play-next]");
-    if (playNextBtn) {
-      playNextBtn.addEventListener("click", () => {
-        this.dispatchPlayerNext();
-      });
+    if (button.hasAttribute("data-play-next")) {
+      this.dispatchPlayerNext();
+      return;
     }
 
     // Playlist items
-    const playlistButtons = this.querySelectorAll("[data-track-url]");
-    playlistButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const trackUrl = btn.getAttribute("data-track-url");
-        if (trackUrl) {
-          this.dispatchPlayerToggle(trackUrl);
-        }
-      });
-    });
+    const trackUrl = button.getAttribute("data-track-url");
+    if (trackUrl) {
+      this.dispatchPlayerToggle(trackUrl);
+    }
   }
 }
 
