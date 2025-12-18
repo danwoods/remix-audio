@@ -77,14 +77,16 @@ const getAlbumArtAsDataUrl = async (url: string) => {
  * Custom element for an album image.
  */
 export class AlbumImageCustomElement extends HTMLElement {
-  static observedAttributes = ["data-album-url"];
+  static observedAttributes = ["data-album-url", "class"];
 
   constructor() {
     super();
 
     this.innerHTML = `
-      <img alt="Album Art" style="max-width: 100%; max-height: 100%; border-radius: 8px;"/>
+      <img alt="Album Art"/>
     `;
+
+    this.updateImageClasses();
 
     const albumUrl = this.getAttribute("data-album-url") || "";
     const albumUrlParts = albumUrl.split("/");
@@ -108,7 +110,16 @@ export class AlbumImageCustomElement extends HTMLElement {
     );
   }
 
+  private updateImageClasses() {
+    const img = this.querySelector("img");
+    if (img) {
+      // Copy classes from custom element to img element
+      img.className = this.className;
+    }
+  }
+
   connectedCallback() {
+    this.updateImageClasses();
   }
 
   disconnectedCallback() {
@@ -130,6 +141,9 @@ export class AlbumImageCustomElement extends HTMLElement {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _newValue: string | null,
   ) {
+    if (name === "class") {
+      this.updateImageClasses();
+    }
     console.log(`Attribute ${name} has changed.`);
   }
 }

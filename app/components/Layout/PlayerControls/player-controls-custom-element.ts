@@ -116,6 +116,12 @@ const getRemainingAlbumTracks = async (
 
 /**
  * Custom element for player controls displayed at the bottom of the screen.
+ * This element is self-contained and manages all player logic internally.
+ *
+ * The element is controlled entirely through HTML attributes. User interactions
+ * (play/pause/next buttons, playlist selection) are handled internally. External
+ * code can control playback by setting attributes and react to state changes via
+ * the `change` event or `onchange` attribute.
  *
  * @customElement player-controls-custom-element
  *
@@ -124,7 +130,8 @@ const getRemainingAlbumTracks = async (
  * <player-controls-custom-element
  *   data-album-url="https://bucket.s3.amazonaws.com"
  *   data-current-track-url="https://bucket.s3.amazonaws.com/artist/album/01__Track Name.mp3"
- *   data-is-playing="true">
+ *   data-is-playing="true"
+ *   onchange="handlePlayerChange">
  * </player-controls-custom-element>
  * ```
  *
@@ -132,61 +139,77 @@ const getRemainingAlbumTracks = async (
  * ```javascript
  * const playerControls = document.querySelector('player-controls-custom-element');
  *
- * // Listen for play/pause events
- * playerControls.addEventListener('player-toggle', (event) => {
- *   const trackUrl = event.detail.url;
- *   console.log('Toggle playback for:', trackUrl);
+ * // Listen for state change events
+ * playerControls.addEventListener('change', (event) => {
+ *   console.log('Player state changed:', {
+ *     currentTrack: event.detail.currentTrack,
+ *     isPlaying: event.detail.isPlaying
+ *   });
  * });
  *
- * // Listen for next track events
- * playerControls.addEventListener('player-next', () => {
- *   console.log('Play next track');
- * });
- *
- * // Update the current track
+ * // Control playback by setting attributes
  * playerControls.setAttribute('data-current-track-url', 'https://.../track.mp3');
  * playerControls.setAttribute('data-is-playing', 'true');
+ *
+ * // To pause, set is-playing to false
+ * playerControls.setAttribute('data-is-playing', 'false');
+ *
+ * // To stop, remove the current track URL
+ * playerControls.removeAttribute('data-current-track-url');
  * ```
  *
  * @attributes
- * - `data-current-track-url` (string | null): The full URL of the currently playing track.
+ * - `data-current-track-url` (string | null): Current track URL.
  *   Expected format: `{baseUrl}/{artistName}/{albumName}/{trackNumber}__{trackName}.{ext}`
- *   When set, the element will display track information and load remaining tracks in the album.
+ *   Setting this attribute will load and optionally play the track (if `data-is-playing` is "true").
+ *   Removing this attribute will stop playback.
  *
- * - `data-is-playing` (string): Whether the current track is playing. Must be the string "true" or "false".
- *   Controls the play/pause icon display.
+ * - `data-is-playing` (string): Playing state. Must be the string "true" or "false".
+ *   Controls whether the current track is playing or paused.
  *
  * - `data-album-url` (string | null): The base URL for the album (S3 bucket URL).
  *   Used to fetch remaining tracks in the album for the playlist dropdown.
+ *   Required for the playlist feature to work.
+ *
+ * - `onchange` (string): Optional function name to call when player state changes.
+ *   The function will be called with a CustomEvent as the argument.
+ *   Alternatively, listen to the 'change' event using addEventListener.
  *
  * @events
- * - `player-toggle` (CustomEvent): Dispatched when the play/pause button is clicked.
- *   - `detail.url` (string): The URL of the track to play/pause
+ * - `change` (CustomEvent): Dispatched when player state changes (track or playing state).
+ *   This event is fired whenever the current track or playing state changes, whether
+ *   due to user interaction or attribute changes.
+ *   - `detail.currentTrack` (string | null): Current track URL
+ *   - `detail.isPlaying` (boolean): Whether currently playing
  *   - `bubbles`: true
- *   - `cancelable`: true
- *
- * - `player-next` (CustomEvent): Dispatched when the next track button is clicked.
- *   - No detail payload
- *   - `bubbles`: true
- *   - `cancelable`: true
+ *   - `cancelable`: false
  *
  * @remarks
  * The element automatically:
+ * - Manages its own audio element and playback state internally
+ * - Handles all user interactions (play/pause/next buttons, playlist clicks)
  * - Loads remaining tracks in the album when both `data-album-url` and `data-current-track-url` are set
+ * - Preloads the next track when within 20 seconds of the end
+ * - Auto-plays the next track when the current track ends
  * - Parses track information from the URL format: `{number}__{name}.{ext}`
  * - Updates the UI when attributes change
  * - Hides itself when no track is set (using `translate-y-full` class)
+ *
+ * All player logic is self-contained within this element. External code should
+ * control playback by setting attributes, not by calling methods.
  */
 export class PlayerControlsCustomElement extends HTMLElement {
   static observedAttributes = [
     "data-current-track-url",
     "data-is-playing",
     "data-album-url",
+    "onchange",
   ];
 
   private currentTrackUrl: string | null = null;
   private isPlaying: boolean = false;
   private albumUrl: string | null = null;
+  private nextTrackLoaded: boolean = false;
   private remainingTracks: Array<{
     url: string;
     title: string;
@@ -194,23 +217,44 @@ export class PlayerControlsCustomElement extends HTMLElement {
   }> = [];
   private loadTracksPromise: Promise<void> | null = null;
   private boundHandleClick: (event: Event) => void;
+  private audioElement: HTMLAudioElement | null = null;
+  private boundTimeUpdate: (event: Event) => void;
+  private boundEnded: (event: Event) => void;
 
   constructor() {
     super();
     // Use event delegation to avoid memory leaks
     // Store bound function so we can remove it later
     this.boundHandleClick = this.handleClick.bind(this);
+    this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
+    this.boundEnded = this.handleEnded.bind(this);
   }
 
   connectedCallback() {
+    // Ensure the custom element displays as a block element with full width
+    this.style.display = "block";
+    this.style.width = "100%";
+
     this.addEventListener("click", this.boundHandleClick);
+    this.createAudioElement();
     this.updateAttributes();
     this.render();
   }
 
   disconnectedCallback() {
-    // Remove event listener on disconnect
+    // Remove event listeners on disconnect
     this.removeEventListener("click", this.boundHandleClick);
+    if (this.audioElement) {
+      this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
+      this.audioElement.removeEventListener("ended", this.boundEnded);
+      this.audioElement.pause();
+      this.audioElement.src = "";
+      // Remove audio element from DOM if we added it
+      if (this.audioElement.parentNode) {
+        this.audioElement.parentNode.removeChild(this.audioElement);
+      }
+      this.audioElement = null;
+    }
   }
 
   attributeChangedCallback(
@@ -219,13 +263,25 @@ export class PlayerControlsCustomElement extends HTMLElement {
     _newValue: string | null,
   ) {
     if (name === "data-current-track-url") {
-      this.currentTrackUrl = _newValue;
-      this.loadRemainingTracks();
+      // Only update if different to avoid unnecessary re-renders
+      if (this.currentTrackUrl !== _newValue) {
+        this.currentTrackUrl = _newValue;
+        this.updateAudioSource();
+        this.loadRemainingTracks();
+        this.dispatchChangeEvent();
+      }
     } else if (name === "data-is-playing") {
-      this.isPlaying = _newValue === "true";
+      const newIsPlaying = _newValue === "true";
+      if (this.isPlaying !== newIsPlaying) {
+        this.isPlaying = newIsPlaying;
+        this.updateAudioPlayback();
+        this.dispatchChangeEvent();
+      }
     } else if (name === "data-album-url") {
-      this.albumUrl = _newValue;
-      this.loadRemainingTracks();
+      if (this.albumUrl !== _newValue) {
+        this.albumUrl = _newValue;
+        this.loadRemainingTracks();
+      }
     }
 
     this.render();
@@ -236,6 +292,86 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.isPlaying = this.getAttribute("data-is-playing") === "true";
     this.albumUrl = this.getAttribute("data-album-url");
     await this.loadRemainingTracks();
+  }
+
+  private createAudioElement() {
+    // Create audio element if it doesn't exist
+    if (!this.audioElement) {
+      this.audioElement = document.createElement("audio");
+      this.audioElement.addEventListener("timeupdate", this.boundTimeUpdate);
+      this.audioElement.addEventListener("ended", this.boundEnded);
+      // Hide the audio element (it's just for playback, not display)
+      this.audioElement.style.display = "none";
+      document.body.appendChild(this.audioElement);
+      this.updateAudioSource();
+      this.updateAudioPlayback();
+    }
+  }
+
+  private updateAudioSource() {
+    if (!this.audioElement) return;
+
+    if (this.currentTrackUrl) {
+      this.audioElement.src = this.currentTrackUrl;
+      this.nextTrackLoaded = false;
+      // After setting source, update playback state when metadata is loaded
+      const handleLoadedMetadata = () => {
+        // Check current playing state, not the captured one
+        if (this.isPlaying) {
+          this.updateAudioPlayback();
+        }
+      };
+      this.audioElement.addEventListener(
+        "loadedmetadata",
+        handleLoadedMetadata,
+        { once: true },
+      );
+      // If metadata is already loaded, update playback immediately
+      if (this.audioElement.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        handleLoadedMetadata();
+      }
+    } else {
+      this.audioElement.src = "";
+      this.audioElement.pause();
+    }
+  }
+
+  private updateAudioPlayback() {
+    if (!this.audioElement || !this.audioElement.src) return;
+
+    if (this.isPlaying && this.currentTrackUrl) {
+      this.audioElement.play().catch((error) => {
+        console.error("Failed to play audio:", error);
+        this.isPlaying = false;
+        this.setAttribute("data-is-playing", "false");
+        this.dispatchChangeEvent();
+      });
+      this.nextTrackLoaded = false;
+    } else {
+      this.audioElement.pause();
+    }
+  }
+
+  private handleTimeUpdate(event: Event) {
+    const audio = event.target as HTMLAudioElement;
+    if (
+      !this.nextTrackLoaded &&
+      !Number.isNaN(audio.duration) &&
+      // If we're within 20s of the end of the track
+      audio.duration - 20 < audio.currentTime &&
+      this.currentTrackUrl
+    ) {
+      this.nextTrackLoaded = true;
+      const [nextTrack] = this.remainingTracks;
+      if (nextTrack) {
+        // Preload the next track
+        new Audio(nextTrack.url);
+      }
+    }
+  }
+
+  private handleEnded() {
+    this.playNext();
   }
 
   private async loadRemainingTracks() {
@@ -267,29 +403,86 @@ export class PlayerControlsCustomElement extends HTMLElement {
   }
 
   /**
-   * Dispatches a `player-toggle` event when play/pause button is clicked.
-   * @param trackUrl - The URL of the track to play/pause
-   * @fires player-toggle
+   * Play/Pause/Resume/Stop
+   * There are 4 different scenarios this supports:
+   * 1. If a track is passed in that is not currently being played, it will start playing that track
+   * 2. If a track is passed in that is currently being played, it will pause
+   * 3. If a track is passed in that is the current track, but it's not currently playing, it will resume
+   * 4. If no track is passed in, it will stop playback
    */
-  private dispatchPlayerToggle(trackUrl: string) {
-    const event = new CustomEvent("player-toggle", {
-      detail: { url: trackUrl },
-      bubbles: true,
-      cancelable: true,
-    });
-    this.dispatchEvent(event);
+  private playToggle(trackUrl?: string) {
+    if (trackUrl) {
+      if (trackUrl !== this.currentTrackUrl) {
+        this.currentTrackUrl = trackUrl;
+        this.setAttribute("data-current-track-url", trackUrl);
+        this.isPlaying = true;
+        this.setAttribute("data-is-playing", "true");
+        this.updateAudioSource();
+        this.updateAudioPlayback();
+        this.loadRemainingTracks();
+        this.dispatchChangeEvent();
+      } else if (this.isPlaying) {
+        this.pause();
+      } else {
+        this.isPlaying = true;
+        this.setAttribute("data-is-playing", "true");
+        this.updateAudioPlayback();
+        this.dispatchChangeEvent();
+      }
+    } else {
+      this.currentTrackUrl = null;
+      this.removeAttribute("data-current-track-url");
+      this.pause();
+    }
+  }
+
+  /** Pause track */
+  private pause() {
+    this.isPlaying = false;
+    this.setAttribute("data-is-playing", "false");
+    this.updateAudioPlayback();
+    this.dispatchChangeEvent();
+  }
+
+  /** Play next track */
+  private playNext() {
+    if (this.currentTrackUrl && this.remainingTracks.length > 0) {
+      const [nextTrack] = this.remainingTracks;
+      if (nextTrack) {
+        this.playToggle(nextTrack.url);
+      }
+    }
   }
 
   /**
-   * Dispatches a `player-next` event when next track button is clicked.
-   * @fires player-next
+   * Dispatches a `change` event when player state changes.
+   * Also calls the onchange attribute handler if set.
+   * @fires change
    */
-  private dispatchPlayerNext() {
-    const event = new CustomEvent("player-next", {
+  private dispatchChangeEvent() {
+    const event = new CustomEvent("change", {
+      detail: {
+        currentTrack: this.currentTrackUrl,
+        isPlaying: this.isPlaying,
+      },
       bubbles: true,
-      cancelable: true,
+      cancelable: false,
     });
     this.dispatchEvent(event);
+
+    // Call onchange attribute handler if set
+    const onchangeHandler = this.getAttribute("onchange");
+    if (onchangeHandler) {
+      try {
+        // Try to call as a function name on window
+        const handler = (window as Record<string, unknown>)[onchangeHandler];
+        if (typeof handler === "function") {
+          handler(event);
+        }
+      } catch (error) {
+        console.warn("Failed to call onchange handler:", error);
+      }
+    }
   }
 
   private render() {
@@ -326,7 +519,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
     const albumArtElement = this.albumUrl
       ? `<album-image-custom-element data-album-url="${
         escapeHtml(this.albumUrl)
-      }" style="width: 80px; height: 80px; border-radius: 8px;"></album-image-custom-element>`
+      }" class="rounded z-10 size-20"></album-image-custom-element>`
       : `<img alt="album art" src="https://placehold.co/100x100?text=." class="rounded z-10 size-20" />`;
 
     // Track name
@@ -365,23 +558,23 @@ export class PlayerControlsCustomElement extends HTMLElement {
       .join("");
 
     const playlistHtml = `
-      <div class="dropdown dropdown-top dropdown-end cursor-default">
-        <button class="btn btn-xs btn-square mr-6 ${
-      !this.remainingTracks.length ? "btn-disabled" : ""
+      <div class="relative cursor-default">
+        <button class="p-2 rounded mr-6 ${
+      !this.remainingTracks.length ? "opacity-50 cursor-not-allowed" : ""
     }">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
             <path d="M5.507 4.048A3 3 0 0 1 7.785 3h8.43a3 3 0 0 1 2.278 1.048l1.722 2.008A4.533 4.533 0 0 1 19.5 6.166v11.668a4.533 4.533 0 0 1-1.285 3.11l-1.722 2.008A3 3 0 0 1 16.215 21H7.785a3 3 0 0 1-2.278-1.048l-1.722-2.008A4.533 4.533 0 0 1 2.5 17.834V6.166a4.533 4.533 0 0 1 1.285-3.11l1.722-2.008Z" />
             <path fill-rule="evenodd" d="M6.75 8.25a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
           </svg>
         </button>
-        <ol class="dropdown-content menu bg-primary rounded-box z-[1] w-52 p-2 shadow divide-y divide-solid">
+        <ol class="absolute bottom-full right-0 mb-2 bg-black rounded z-[1] w-52 p-2 shadow divide-y divide-solid">
           ${playlistItems}
         </ol>
       </div>
     `;
 
     this.innerHTML = `
-      <div class="btm-nav btm-nav-md bg-base-100 z-10 h-fit justify-between transition-transform ${visibilityClass}">
+      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-base-100 z-10 h-fit flex justify-between transition-transform ${visibilityClass}">
         <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-start">
           <div class="flex cursor-default">
             ${albumArtElement}
@@ -426,21 +619,21 @@ export class PlayerControlsCustomElement extends HTMLElement {
     // Play/Pause button
     if (button.hasAttribute("data-play-toggle")) {
       if (this.currentTrackUrl) {
-        this.dispatchPlayerToggle(this.currentTrackUrl);
+        this.playToggle(this.currentTrackUrl);
       }
       return;
     }
 
     // Play Next button
     if (button.hasAttribute("data-play-next")) {
-      this.dispatchPlayerNext();
+      this.playNext();
       return;
     }
 
     // Playlist items
     const trackUrl = button.getAttribute("data-track-url");
     if (trackUrl) {
-      this.dispatchPlayerToggle(trackUrl);
+      this.playToggle(trackUrl);
     }
   }
 }

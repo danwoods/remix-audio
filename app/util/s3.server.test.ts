@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock Deno global for Node.js test environment - must be before any imports
-// @ts-expect-error - Deno is not available in Node.js test environment
 const mockDenoEnv = {
   get: (key: string) => {
     const env: Record<string, string> = {
@@ -57,8 +56,8 @@ vi.mock("@aws-sdk/client-s3", async () => {
 });
 
 // Now import the module that depends on the mocked modules
-import { handleS3Upload } from "./s3.server";
-import { getID3Tags } from "./id3";
+import { handleS3Upload } from "./s3.server.ts";
+import { getID3Tags } from "./id3.ts";
 
 // Mock environment variables
 vi.stubEnv("AWS_ACCESS_KEY_ID", "test-key");
