@@ -73,6 +73,24 @@ const getAlbumArtAsDataUrl = async (url: string) => {
   return dataUrl;
 };
 
+// TEMPLATE ///////////////////////////////////////////////////////////////////
+
+const template = document.createElement("template");
+
+template.innerHTML = `
+  <style>
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+  <img alt="Album Art"/>
+`;
+
+// ELEMENT ////////////////////////////////////////////////////////////////////
+
 /**
  * Custom element for an album image.
  */
@@ -82,9 +100,11 @@ export class AlbumImageCustomElement extends HTMLElement {
   constructor() {
     super();
 
-    this.innerHTML = `
-      <img alt="Album Art"/>
-    `;
+    // Create shadow root in constructor to encapsulate styles
+    this.attachShadow({ mode: "open" });
+
+    // Clone the template content and append it to the shadow root
+    this.shadowRoot!.appendChild(template.content.cloneNode(true));
 
     this.updateImageClasses();
 
@@ -103,7 +123,7 @@ export class AlbumImageCustomElement extends HTMLElement {
 
         getAlbumArtAsDataUrl(trackUrl).then((dataUrl) => {
           if (dataUrl) {
-            this.querySelector("img")?.setAttribute("src", dataUrl);
+            this.shadowRoot!.querySelector("img")?.setAttribute("src", dataUrl);
           }
         });
       },
@@ -111,7 +131,7 @@ export class AlbumImageCustomElement extends HTMLElement {
   }
 
   private updateImageClasses() {
-    const img = this.querySelector("img");
+    const img = this.shadowRoot!.querySelector("img");
     if (img) {
       // Copy classes from custom element to img element
       img.className = this.className;

@@ -475,7 +475,8 @@ export class PlayerControlsCustomElement extends HTMLElement {
     if (onchangeHandler) {
       try {
         // Try to call as a function name on window
-        const handler = (window as Record<string, unknown>)[onchangeHandler];
+        const handler =
+          (window as unknown as Record<string, unknown>)[onchangeHandler];
         if (typeof handler === "function") {
           handler(event);
         }
