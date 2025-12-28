@@ -1,10 +1,8 @@
 # Format staged files with deno fmt
 .husky/run-on-staged.sh "deno fmt" "ts,tsx,js,jsx,json,jsonc,md,markdown"
 
-# Run lint-staged (ESLint)
-npx lint-staged
+# Lint staged files with deno lint
+.husky/run-on-staged.sh "deno lint --fix" "ts,tsx,js,jsx,json,jsonc,md,markdown"
 
 # Type check and run tests
-# Skip tsc for now as it doesn't understand Deno types - use deno check instead for Deno files
 deno check app/components/**/*.ts app/util/*.ts server/**/*.ts 2>/dev/null || true
-npm test -- --exclude="deno-tests/**" --exclude="server/**" --exclude="app/util/s3.server.test.ts"
