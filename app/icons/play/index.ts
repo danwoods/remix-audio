@@ -12,9 +12,7 @@ const svgTemplate = `
 
 export const PlayIconCustomElement = createIconElement({
   svgTemplate,
-  elementName: "play-icon",
   defaultClasses: "size-6",
-  description: "Custom element that renders a play icon SVG.",
 });
 
 customElements.define("play-icon", PlayIconCustomElement);

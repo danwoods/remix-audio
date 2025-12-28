@@ -8,14 +8,10 @@ import { applyMergedClasses } from "../util/mergeClasses.ts";
 export interface CreateIconElementOptions {
   /** The SVG template string (should include the full SVG element) */
   svgTemplate: string;
-  /** The custom element tag name (e.g., "play-icon") */
-  elementName: string;
   /** Default classes to apply (defaults to "size-6") */
   defaultClasses?: string;
   /** Custom styles to inject (defaults to standard icon styles) */
   customStyles?: string;
-  /** Description for JSDoc */
-  description?: string;
 }
 
 /**
@@ -28,7 +24,6 @@ export interface CreateIconElementOptions {
  * ```ts
  * const PlayIcon = createIconElement({
  *   svgTemplate: `<svg>...</svg>`,
- *   elementName: "play-icon",
  *   defaultClasses: "size-6",
  * });
  * customElements.define("play-icon", PlayIcon);
@@ -37,8 +32,6 @@ export interface CreateIconElementOptions {
 export function createIconElement(options: CreateIconElementOptions) {
   const {
     svgTemplate,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    elementName,
     defaultClasses = "size-6",
     customStyles = `
     svg {
@@ -46,8 +39,6 @@ export function createIconElement(options: CreateIconElementOptions) {
       height: 100%;
     }
   `,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    description = `Custom element that renders an icon SVG`,
   } = options;
 
   // Create template outside the class
@@ -62,16 +53,7 @@ export function createIconElement(options: CreateIconElementOptions) {
   /**
    * Custom element that renders an icon SVG.
    *
-   * @customElement ${elementName}
-   *
-   * @example
-   * ```html
-   * <${elementName}></${elementName}>
-   * <${elementName} class="size-8 text-blue-500"></${elementName}>
-   * ```
-   *
    * @remarks
-   * ${description}
    * The icon uses Tailwind CSS classes (${defaultClasses} by default) and inherits the current text color
    * via currentColor. Custom classes passed via the `class` attribute will be merged
    * with the default classes. You can override the size or add additional classes.

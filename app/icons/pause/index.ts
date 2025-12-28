@@ -12,9 +12,7 @@ const svgTemplate = `
 
 export const PauseIconCustomElement = createIconElement({
   svgTemplate,
-  elementName: "pause-icon",
   defaultClasses: "size-6",
-  description: "Custom element that renders a pause icon SVG.",
 });
 
 customElements.define("pause-icon", PauseIconCustomElement);
