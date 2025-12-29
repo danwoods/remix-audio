@@ -15,7 +15,7 @@ let imgAltAttribute = "";
 let imgSrcAttribute = "";
 let imgComplete = false;
 let imgNaturalHeight = 0;
-const imgEventListeners: { [key: string]: (() => void)[] } = {};
+const imgEventListeners: { [key: string]: ((event: Event) => void)[] } = {};
 let elementAttributes: { [key: string]: string } = {};
 let mockImgElement: Partial<HTMLImageElement> | null = null;
 
@@ -42,7 +42,8 @@ beforeEach(() => {
         imgNaturalHeight = 100;
         // Fire load event on next tick to allow event listeners to be attached first
         setTimeout(() => {
-          imgEventListeners.load.forEach((fn) => fn());
+          const event = new Event("load");
+          imgEventListeners.load.forEach((fn) => fn(event));
         }, 0);
       }
     },
@@ -51,9 +52,20 @@ beforeEach(() => {
       if (name === "src") return imgSrcAttribute;
       return null;
     },
-    addEventListener: (event: string, handler: () => void) => {
-      if (!imgEventListeners[event]) imgEventListeners[event] = [];
-      imgEventListeners[event].push(handler);
+    addEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      _options?: boolean | AddEventListenerOptions,
+    ) => {
+      if (!imgEventListeners[type]) imgEventListeners[type] = [];
+      // Handle both function listeners and object listeners
+      if (typeof listener === "function") {
+        imgEventListeners[type].push(listener);
+      } else if (
+        listener && typeof listener === "object" && "handleEvent" in listener
+      ) {
+        imgEventListeners[type].push((event) => listener.handleEvent(event));
+      }
     },
     get complete() {
       return imgComplete;
