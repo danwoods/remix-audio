@@ -1,0 +1,15 @@
+---
+alwaysApply: true
+---
+
+This is a Deno codebase and as such should strive to use Deno's built in functionality as much as possible.
+
+This codebase will have EXCELENT test coverage. Any change should result in a new or updated test.
+
+This codebase will have EXCELENT documentation, and will follow Deno best practices with regaurd to documentation.
+
+This codebase uses a custom HTML element approach to building UIs. It uses Tailwind to re-use classes.
+
+This codebase produces an application that allows playing music.
+
+This codebase does not cut corners. NEVER do things like commiting/pushing with --no-verfiy or disabling tests.

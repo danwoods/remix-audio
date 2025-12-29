@@ -1,7 +1,4 @@
 {
-  "exports": {
-    "main": "./server/main.ts"
-  },
   "nodeModulesDir": "auto",
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -38,6 +35,7 @@
     "lint:fix": "deno lint --fix server/ deno-tests/",
     "build": "deno task build:css && deno task build:custom-elements",
     "build:css": "tailwindcss -i ./app/entry.css -o ./app/app.css --verbose",
+    "build:docs": "deno doc --html --name='Remix Audio Components' --output=./docs doc.exports.ts",
     "build:custom-elements": "deno bundle --minify app/components/register-custom-elements.ts > build/main.js",
     "test:browser": "deno run --allow-net --allow-env --allow-read --allow-run --allow-sys --allow-write --no-check deno-tests/server/handlers/album.html.sticky.browser.playwright.ts"
   },

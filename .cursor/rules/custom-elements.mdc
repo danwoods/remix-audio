@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Custom Elements Pattern
 
 When creating custom elements, always follow the pattern documented in `CUSTOM_ELEMENTS.md`.
