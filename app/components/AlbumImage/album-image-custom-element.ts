@@ -21,12 +21,12 @@ const getId3Tags = async (url: string) => {
  *
  * @param data - The binary data as a Uint8Array.
  * @param mimeType - The MIME type of the data (e.g., "image/jpeg", "image/png").
- * @returns A promise that resolves to a data URL string in the format `data:{mimeType};base64,{base64}`.
+ * @returns A data URL string in the format `data:{mimeType};base64,{base64}`.
  */
-const createDataUrlFromArrayBuffer = async (
+const createDataUrlFromArrayBuffer = (
   data: Uint8Array,
   mimeType: string,
-) => {
+): string => {
   // Convert to base64 - use efficient chunking to avoid stack overflow
   const uint8Array = new Uint8Array(data);
   const chunkSize = 0x8000; // 32KB chunks
@@ -58,19 +58,22 @@ const createDataUrlFromArrayBuffer = async (
  * @param url - The URL of the audio file containing the album art.
  * @returns A promise that resolves to a data URL string of the album art, or null if no album art is found.
  */
-const getAlbumArtAsDataUrl = async (url: string) => {
-  const tags = await getId3Tags(url);
+const getAlbumArtAsDataUrl = async (url: string): Promise<string | null> => {
+  try {
+    const tags = await getId3Tags(url);
 
-  let dataUrl = null;
+    if (Array.isArray(tags?.images) && tags.images.length > 0) {
+      const arrayBuffer = tags.images[0].data;
+      const mimeType = tags.images[0].mime || "image/jpeg";
 
-  if (Array.isArray(tags?.images)) {
-    const arrayBuffer = tags.images[0].data;
-    const mimeType = tags.images[0].mime || "image/jpeg";
+      return createDataUrlFromArrayBuffer(arrayBuffer, mimeType);
+    }
 
-    dataUrl = await createDataUrlFromArrayBuffer(arrayBuffer, mimeType);
+    return null;
+  } catch (_error) {
+    // Silently fail - album art is optional
+    return null;
   }
-
-  return dataUrl;
 };
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
@@ -86,7 +89,7 @@ template.innerHTML = `
       object-fit: cover;
     }
   </style>
-  <img alt="Album Art"/>
+  <img alt=""/>
 `;
 
 // ELEMENT ////////////////////////////////////////////////////////////////////
@@ -96,6 +99,10 @@ template.innerHTML = `
  */
 export class AlbumImageCustomElement extends HTMLElement {
   static observedAttributes = ["data-album-url", "class"];
+
+  private artistId: string | null = null;
+  private albumId: string | null = null;
+  private loadImageAbortController: AbortController | null = null;
 
   constructor() {
     super();
@@ -107,27 +114,110 @@ export class AlbumImageCustomElement extends HTMLElement {
     this.shadowRoot!.appendChild(template.content.cloneNode(true));
 
     this.updateImageClasses();
+  }
+
+  private async loadAlbumImage() {
+    // Abort any pending image load
+    if (this.loadImageAbortController) {
+      this.loadImageAbortController.abort();
+    }
+    this.loadImageAbortController = new AbortController();
+    const signal = this.loadImageAbortController.signal;
 
     const albumUrl = this.getAttribute("data-album-url") || "";
+    if (!albumUrl) {
+      return;
+    }
+
     const albumUrlParts = albumUrl.split("/");
     const albumId = albumUrlParts.pop();
     const artistId = albumUrlParts.pop();
 
     if (!artistId || !albumId) {
-      throw new Error("Artist ID and album ID are required");
+      return;
     }
 
-    getAlbumContents(albumUrlParts.join("/"), artistId, albumId).then(
-      (contents) => {
-        const trackUrl = albumUrlParts.join("/") + "/" + contents[0];
+    // Store for use in event handlers
+    this.artistId = artistId;
+    this.albumId = albumId;
 
-        getAlbumArtAsDataUrl(trackUrl).then((dataUrl) => {
-          if (dataUrl) {
-            this.shadowRoot!.querySelector("img")?.setAttribute("src", dataUrl);
+    try {
+      const contents = await getAlbumContents(
+        albumUrlParts.join("/"),
+        artistId,
+        albumId,
+      );
+
+      if (signal.aborted || !contents || contents.length === 0) {
+        return;
+      }
+
+      const trackUrl = albumUrlParts.join("/") + "/" + contents[0];
+      const dataUrl = await getAlbumArtAsDataUrl(trackUrl);
+
+      if (signal.aborted || !dataUrl) {
+        return;
+      }
+
+      const img = this.shadowRoot!.querySelector("img");
+      if (!img) {
+        return;
+      }
+
+      // Set src first with empty alt to prevent flash
+      img.setAttribute("src", dataUrl);
+
+      // Set alt text for accessibility once image is loaded
+      // Check if already loaded (cached images)
+      if (img.complete && img.naturalHeight !== 0) {
+        this.setAltText(img);
+      } else {
+        const loadHandler = () => {
+          if (!signal.aborted) {
+            this.setAltText(img);
           }
+          // Clean up listeners
+          img.removeEventListener("load", loadHandler);
+          img.removeEventListener("error", errorHandler);
+        };
+        const errorHandler = () => {
+          if (!signal.aborted) {
+            this.setAltText(img);
+          }
+          // Clean up listeners
+          img.removeEventListener("load", loadHandler);
+          img.removeEventListener("error", errorHandler);
+        };
+
+        img.addEventListener("load", loadHandler, { once: true });
+        img.addEventListener("error", errorHandler, { once: true });
+
+        // Clean up listeners if aborted
+        signal.addEventListener("abort", () => {
+          img.removeEventListener("load", loadHandler);
+          img.removeEventListener("error", errorHandler);
         });
-      },
-    );
+      }
+    } catch (_error) {
+      // Silently fail - album art is optional
+      // Error could be from network, parsing, etc.
+    }
+  }
+
+  connectedCallback() {
+    this.updateImageClasses();
+    this.loadAlbumImage();
+  }
+
+  private setAltText(img: HTMLImageElement) {
+    if (this.albumId && this.artistId) {
+      img.setAttribute(
+        "alt",
+        `Album art for ${this.albumId} by ${this.artistId}`,
+      );
+    } else {
+      img.setAttribute("alt", "Album art");
+    }
   }
 
   private updateImageClasses() {
@@ -138,20 +228,20 @@ export class AlbumImageCustomElement extends HTMLElement {
     }
   }
 
-  connectedCallback() {
-    this.updateImageClasses();
-  }
-
   disconnectedCallback() {
-    console.log("Custom element removed from page.");
+    // Clean up any pending image loads
+    if (this.loadImageAbortController) {
+      this.loadImageAbortController.abort();
+      this.loadImageAbortController = null;
+    }
   }
 
   connectedMoveCallback() {
-    console.log("Custom element moved with moveBefore()");
+    // Element moved in DOM - no action needed
   }
 
   adoptedCallback() {
-    console.log("Custom element moved to new page.");
+    // Element moved to new document - no action needed
   }
 
   attributeChangedCallback(
@@ -163,8 +253,10 @@ export class AlbumImageCustomElement extends HTMLElement {
   ) {
     if (name === "class") {
       this.updateImageClasses();
+    } else if (name === "data-album-url") {
+      // Reload image when album URL changes
+      this.loadAlbumImage();
     }
-    console.log(`Attribute ${name} has changed.`);
   }
 }
 
