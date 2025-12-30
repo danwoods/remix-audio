@@ -52,6 +52,5 @@ export function applyMergedClasses(
   customClasses: string,
 ): void {
   const merged = mergeClasses(defaultClasses, customClasses);
-  console.log("applyMergedClasses", defaultClasses, customClasses, merged);
   element.setAttribute("class", merged);
 }

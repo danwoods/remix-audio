@@ -14,3 +14,5 @@ Key requirements:
 - Include JSDoc comments with `@customElement` tag
 
 See `app/icons/play/index.ts` and `app/components/AlbumImage/album-image-custom-element.ts` for examples.
+
+Use https://github.com/webcomponents/gold-standard/wiki as a baseline for quality

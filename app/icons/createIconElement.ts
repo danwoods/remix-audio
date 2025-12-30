@@ -1,6 +1,6 @@
 /** @file Factory function for creating icon custom elements */
 
-import { applyMergedClasses } from "../util/mergeClasses.ts";
+import { applyMergedClasses, mergeClasses } from "../util/mergeClasses.ts";
 
 /**
  * Options for creating an icon custom element.
@@ -81,11 +81,15 @@ export function createIconElement(options: CreateIconElementOptions) {
     private updateSvgClasses() {
       const svg = this.shadowRoot!.querySelector("svg");
       if (svg) {
-        console.log("updateSvgClasses", this.defaultClasses, this.className);
         applyMergedClasses(svg, this.defaultClasses, this.className);
       }
       // Also apply classes to the host element for proper sizing
-      applyMergedClasses(this, this.defaultClasses, this.className);
+      // Only update if the merged classes are different to avoid recursion
+      const merged = mergeClasses(this.defaultClasses, this.className);
+      const currentClass = this.getAttribute("class") || "";
+      if (merged !== currentClass) {
+        this.setAttribute("class", merged);
+      }
     }
 
     connectedCallback() {

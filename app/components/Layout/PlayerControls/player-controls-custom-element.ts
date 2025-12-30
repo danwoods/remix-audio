@@ -81,19 +81,55 @@ const getRemainingAlbumTracks = async (
     return [];
   }
 
-  const albumUrlParts = albumUrl.split("/");
-  const bucketUrl = albumUrlParts.join("/");
+  // Extract base bucket URL from albumUrl
+  // albumUrl format: https://bucket.s3.region.amazonaws.com/artist/album
+  // We need: https://bucket.s3.region.amazonaws.com
+  const urlObj = new URL(albumUrl);
+  const bucketUrl = `${urlObj.protocol}//${urlObj.host}`;
   const prefix = `${artistName}/${albumName}/`;
-  const contents = (await getBucketContents(bucketUrl, prefix)).filter(
-    (key): key is string => key !== null && key !== undefined,
-  );
+
+  let contents: string[] = [];
+  try {
+    const rawContents = await getBucketContents(bucketUrl, prefix);
+    contents = rawContents.filter(
+      (key): key is string => key !== null && key !== undefined,
+    );
+  } catch (error) {
+    console.error(
+      "getRemainingAlbumTracks: Error fetching bucket contents:",
+      error,
+    );
+    throw error;
+  }
 
   const currentTrackPieces = currentTrackUrl.split("/");
-  const currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
+  let currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
+  // Decode URL encoding in case the track URL is encoded
+  try {
+    currentTrackKey = decodeURIComponent(currentTrackKey);
+  } catch {
+    // If decoding fails, use as-is
+  }
+  // Remove file extension if present for matching
+  const currentTrackKeyNoExt = currentTrackKey.replace(/\.[^.]+$/, "");
   const currentTrackIndex = contents.findIndex((key) => {
     // Extract filename from full key path for comparison
-    const keyFilename = key.split("/").pop();
-    return keyFilename === currentTrackKey;
+    const keyFilename = key.split("/").pop() || "";
+    const keyFilenameNoExt = keyFilename.replace(/\.[^.]+$/, "");
+
+    // Try multiple matching strategies:
+    // 1. Exact match
+    // 2. Match without extension
+    // 3. Match with URL decoding
+    // 4. Match single underscore with double underscore (2_Plateau matches 2__Plateau)
+    const normalizedCurrent = currentTrackKeyNoExt.replace(/_/g, "__");
+    const normalizedKey = keyFilenameNoExt.replace(/_/g, "__");
+
+    return keyFilename === currentTrackKey ||
+      keyFilenameNoExt === currentTrackKeyNoExt ||
+      normalizedKey === normalizedCurrent ||
+      decodeURIComponent(keyFilename) === currentTrackKey ||
+      keyFilename === encodeURIComponent(currentTrackKey);
   });
 
   if (currentTrackIndex === -1) {
@@ -220,11 +256,18 @@ export class PlayerControlsCustomElement extends HTMLElement {
     title: string;
     trackNum: number;
   }> = [];
+  private allAlbumTracks: Array<{
+    url: string;
+    title: string;
+    trackNum: number;
+  }> = [];
   private loadTracksPromise: Promise<void> | null = null;
+  private playlistOpen: boolean = false;
   private boundHandleClick: (event: Event) => void;
   private audioElement: HTMLAudioElement | null = null;
   private boundTimeUpdate: (event: Event) => void;
   private boundEnded: (event: Event) => void;
+  private boundHandleDocumentClick: (event: Event) => void;
 
   constructor() {
     super();
@@ -233,6 +276,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.boundHandleClick = this.handleClick.bind(this);
     this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
     this.boundEnded = this.handleEnded.bind(this);
+    this.boundHandleDocumentClick = this.handleDocumentClick.bind(this);
   }
 
   connectedCallback() {
@@ -241,6 +285,8 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.style.width = "100%";
 
     this.addEventListener("click", this.boundHandleClick);
+    // Close playlist dropdown when clicking outside
+    document.addEventListener("click", this.handleDocumentClick);
     this.createAudioElement();
     this.updateAttributes();
     this.render();
@@ -249,6 +295,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
   disconnectedCallback() {
     // Remove event listeners on disconnect
     this.removeEventListener("click", this.boundHandleClick);
+    document.removeEventListener("click", this.boundHandleDocumentClick);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -262,7 +309,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
     }
   }
 
-  attributeChangedCallback(
+  async attributeChangedCallback(
     name: string,
     _oldValue: string | null,
     _newValue: string | null,
@@ -270,9 +317,16 @@ export class PlayerControlsCustomElement extends HTMLElement {
     if (name === "data-current-track-url") {
       // Only update if different to avoid unnecessary re-renders
       if (this.currentTrackUrl !== _newValue) {
+        // Cancel any existing load promise since we're changing tracks
+        if (this.loadTracksPromise) {
+          this.loadTracksPromise = null;
+        }
         this.currentTrackUrl = _newValue;
         this.updateAudioSource();
-        this.loadRemainingTracks();
+        // Render immediately with current state, then update when tracks load
+        this.render();
+        await this.loadRemainingTracks();
+        // loadRemainingTracks will call render() after tracks are loaded
         this.dispatchChangeEvent();
       }
     } else if (name === "data-is-playing") {
@@ -281,15 +335,24 @@ export class PlayerControlsCustomElement extends HTMLElement {
         this.isPlaying = newIsPlaying;
         this.updateAudioPlayback();
         this.dispatchChangeEvent();
+        this.render();
       }
     } else if (name === "data-album-url") {
       if (this.albumUrl !== _newValue) {
+        // Cancel any existing load promise since we're changing albums
+        if (this.loadTracksPromise) {
+          this.loadTracksPromise = null;
+        }
         this.albumUrl = _newValue;
-        this.loadRemainingTracks();
+        // Render immediately, then update when tracks load
+        this.render();
+        await this.loadRemainingTracks();
+        // loadRemainingTracks will call render() after tracks are loaded
       }
+    } else {
+      // For other attributes, just render
+      this.render();
     }
-
-    this.render();
   }
 
   private async updateAttributes() {
@@ -379,10 +442,29 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.playNext();
   }
 
-  private loadRemainingTracks() {
-    // Prevent multiple concurrent loads
+  private async loadRemainingTracks() {
+    // If already loading, wait for it with a timeout
     if (this.loadTracksPromise) {
-      return this.loadTracksPromise;
+      try {
+        // Wait with timeout to prevent infinite waiting
+        await Promise.race([
+          this.loadTracksPromise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Load timeout after 10 seconds")),
+              10000,
+            )
+          ),
+        ]);
+      } catch (error) {
+        console.error(
+          "loadRemainingTracks: Previous load failed or timed out:",
+          error,
+        );
+        // Reset the promise so we can try again
+        this.loadTracksPromise = null;
+      }
+      return;
     }
 
     this.loadTracksPromise = (async () => {
@@ -392,19 +474,72 @@ export class PlayerControlsCustomElement extends HTMLElement {
             this.albumUrl,
             this.currentTrackUrl,
           );
+          // Also load all tracks for prev button functionality
+          await this.loadAllAlbumTracks();
+          // Re-render after tracks are loaded to update playlist UI
           this.render();
         } else {
           this.remainingTracks = [];
+          this.allAlbumTracks = [];
         }
       } catch (error) {
         console.error("Failed to load remaining tracks:", error);
         this.remainingTracks = [];
+        this.allAlbumTracks = [];
       } finally {
         this.loadTracksPromise = null;
       }
     })();
 
     return this.loadTracksPromise;
+  }
+
+  /**
+   * Load all tracks in the album for prev button functionality
+   */
+  private async loadAllAlbumTracks() {
+    if (!this.albumUrl || !this.currentTrackUrl) {
+      this.allAlbumTracks = [];
+      return;
+    }
+
+    try {
+      const { artistName, albumName } = getParentDataFromTrackUrl(
+        this.currentTrackUrl,
+      );
+      if (!artistName || !albumName) {
+        this.allAlbumTracks = [];
+        return;
+      }
+
+      // Extract base bucket URL from albumUrl
+      const urlObj = new URL(this.albumUrl);
+      const bucketUrl = `${urlObj.protocol}//${urlObj.host}`;
+      const prefix = `${artistName}/${albumName}/`;
+
+      const contents = (await getBucketContents(bucketUrl, prefix)).filter(
+        (key): key is string => key !== null && key !== undefined,
+      );
+
+      this.allAlbumTracks = contents
+        .map((key) => {
+          const filename = key.split("/").pop() || key;
+          const trackPieces = filename.split("__");
+          const trackNum = parseInt(trackPieces[0], 10) || 0;
+          const title = trackPieces[1] || filename;
+          const fullUrl = `${bucketUrl}/${key}`;
+
+          return {
+            url: fullUrl,
+            title,
+            trackNum,
+          };
+        })
+        .sort((a, b) => a.trackNum - b.trackNum);
+    } catch (error) {
+      console.error("Failed to load all album tracks:", error);
+      this.allAlbumTracks = [];
+    }
   }
 
   /**
@@ -415,7 +550,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
    * 3. If a track is passed in that is the current track, but it's not currently playing, it will resume
    * 4. If no track is passed in, it will stop playback
    */
-  private playToggle(trackUrl?: string) {
+  private async playToggle(trackUrl?: string) {
     if (trackUrl) {
       if (trackUrl !== this.currentTrackUrl) {
         this.currentTrackUrl = trackUrl;
@@ -424,7 +559,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
         this.setAttribute("data-is-playing", "true");
         this.updateAudioSource();
         this.updateAudioPlayback();
-        this.loadRemainingTracks();
+        await this.loadRemainingTracks();
         this.dispatchChangeEvent();
       } else if (this.isPlaying) {
         this.pause();
@@ -455,6 +590,28 @@ export class PlayerControlsCustomElement extends HTMLElement {
       const [nextTrack] = this.remainingTracks;
       if (nextTrack) {
         this.playToggle(nextTrack.url);
+      }
+    }
+  }
+
+  /** Play previous track */
+  private playPrev() {
+    if (!this.currentTrackUrl || this.allAlbumTracks.length === 0) {
+      return;
+    }
+
+    const currentTrackPieces = this.currentTrackUrl.split("/");
+    const currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
+    const currentTrackIndex = this.allAlbumTracks.findIndex((track) => {
+      const trackPieces = track.url.split("/");
+      const trackKey = trackPieces[trackPieces.length - 1];
+      return trackKey === currentTrackKey;
+    });
+
+    if (currentTrackIndex > 0) {
+      const prevTrack = this.allAlbumTracks[currentTrackIndex - 1];
+      if (prevTrack) {
+        this.playToggle(prevTrack.url);
       }
     }
   }
@@ -553,13 +710,15 @@ export class PlayerControlsCustomElement extends HTMLElement {
       .join("");
 
     const playlistHtml = `
-      <div class="relative cursor-default">
-        <button class="p-2 rounded mr-6 ${
+      <div class="relative">
+        <button class="p-2 rounded mr-6 cursor-pointer ${
       !this.remainingTracks.length ? "opacity-50 cursor-not-allowed" : ""
-    }">
+    }" data-playlist-toggle>
           <playlist-icon></playlist-icon>
         </button>
-        <ol class="absolute bottom-full right-0 mb-2 bg-black rounded z-[1] w-52 p-2 shadow divide-y divide-solid">
+        <ol class="absolute bottom-full right-0 mb-2 bg-black rounded z-[1] w-52 p-2 shadow divide-y divide-solid ${
+      this.playlistOpen && this.remainingTracks.length > 0 ? "" : "hidden"
+    }">
           ${playlistItems}
         </ol>
       </div>
@@ -580,7 +739,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
         </div>
         <div class="basis-2/5 h-full">
           <div class="flex justify-evenly w-full cursor-pointer">
-            <button class="max-sm:hidden">
+            <button class="max-sm:hidden" data-play-prev>
               <prev-icon></prev-icon>
             </button>
             <button class="md:px-6 cursor-pointer" data-play-toggle>
@@ -604,11 +763,33 @@ export class PlayerControlsCustomElement extends HTMLElement {
 
     if (!button) return;
 
+    // Stop event propagation for playlist button to prevent document click handler from closing it immediately
+    if (button.hasAttribute("data-playlist-toggle")) {
+      event.stopPropagation();
+      // Allow toggling even if tracks haven't loaded yet (will show empty or loading state)
+      this.playlistOpen = !this.playlistOpen;
+      this.render();
+      // If tracks haven't loaded yet, try loading them
+      if (
+        this.remainingTracks.length === 0 && this.albumUrl &&
+        this.currentTrackUrl
+      ) {
+        this.loadRemainingTracks();
+      }
+      return;
+    }
+
     // Play/Pause button
     if (button.hasAttribute("data-play-toggle")) {
       if (this.currentTrackUrl) {
         this.playToggle(this.currentTrackUrl);
       }
+      return;
+    }
+
+    // Play Previous button
+    if (button.hasAttribute("data-play-prev")) {
+      this.playPrev();
       return;
     }
 
@@ -621,7 +802,21 @@ export class PlayerControlsCustomElement extends HTMLElement {
     // Playlist items
     const trackUrl = button.getAttribute("data-track-url");
     if (trackUrl) {
+      this.playlistOpen = false; // Close dropdown when selecting a track
       this.playToggle(trackUrl);
+    }
+  }
+
+  private handleDocumentClick(event: Event) {
+    // Close playlist dropdown if clicking outside
+    const target = event.target as HTMLElement;
+    const playlistContainer = this.querySelector("[data-playlist-toggle]")
+      ?.closest(".relative");
+    if (playlistContainer && !playlistContainer.contains(target)) {
+      if (this.playlistOpen) {
+        this.playlistOpen = false;
+        this.render();
+      }
     }
   }
 }
