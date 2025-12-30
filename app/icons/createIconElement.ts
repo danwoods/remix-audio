@@ -32,7 +32,7 @@ export interface CreateIconElementOptions {
 export function createIconElement(options: CreateIconElementOptions) {
   const {
     svgTemplate,
-    defaultClasses = "size-6",
+    defaultClasses = "size-6 inline-block",
     customStyles = `
     svg {
       display: block;
@@ -84,6 +84,8 @@ export function createIconElement(options: CreateIconElementOptions) {
         console.log("updateSvgClasses", this.defaultClasses, this.className);
         applyMergedClasses(svg, this.defaultClasses, this.className);
       }
+      // Also apply classes to the host element for proper sizing
+      applyMergedClasses(this, this.defaultClasses, this.className);
     }
 
     connectedCallback() {

@@ -1,6 +1,11 @@
 /** @file Custom element for player controls seen at the bottom of the screen */
 
 import { getBucketContents } from "../../../../lib/s3.ts";
+import "../../../icons/play/index.ts";
+import "../../../icons/pause/index.ts";
+import "../../../icons/prev/index.ts";
+import "../../../icons/next/index.ts";
+import "../../../icons/playlist/index.ts";
 
 /**
  * Parses track metadata from a track URL.
@@ -374,7 +379,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.playNext();
   }
 
-  private async loadRemainingTracks() {
+  private loadRemainingTracks() {
     // Prevent multiple concurrent loads
     if (this.loadTracksPromise) {
       return this.loadTracksPromise;
@@ -540,9 +545,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
           escapeHtml(track.url)
         }">
           ${escapeHtml(track.title)}
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-            <path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.285L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
-          </svg>
+          <play-icon></play-icon>
         </button>
       </li>
     `,
@@ -554,10 +557,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
         <button class="p-2 rounded mr-6 ${
       !this.remainingTracks.length ? "opacity-50 cursor-not-allowed" : ""
     }">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-            <path d="M5.507 4.048A3 3 0 0 1 7.785 3h8.43a3 3 0 0 1 2.278 1.048l1.722 2.008A4.533 4.533 0 0 1 19.5 6.166v11.668a4.533 4.533 0 0 1-1.285 3.11l-1.722 2.008A3 3 0 0 1 16.215 21H7.785a3 3 0 0 1-2.278-1.048l-1.722-2.008A4.533 4.533 0 0 1 2.5 17.834V6.166a4.533 4.533 0 0 1 1.285-3.11l1.722-2.008Z" />
-            <path fill-rule="evenodd" d="M6.75 8.25a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
-          </svg>
+          <playlist-icon></playlist-icon>
         </button>
         <ol class="absolute bottom-full right-0 mb-2 bg-black rounded z-[1] w-52 p-2 shadow divide-y divide-solid">
           ${playlistItems}
@@ -566,8 +566,8 @@ export class PlayerControlsCustomElement extends HTMLElement {
     `;
 
     this.innerHTML = `
-      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-base-100 z-10 h-fit flex justify-between transition-transform ${visibilityClass}">
-        <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-start">
+      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-fit flex justify-between items-center transition-transform ${visibilityClass}">
+        <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
           <div class="flex cursor-default">
             ${albumArtElement}
             <div class="ml-3 pt-2">
@@ -578,20 +578,16 @@ export class PlayerControlsCustomElement extends HTMLElement {
             </div>
           </div>
         </div>
-        <div class="basis-2/5">
-          <div class="flex justify-evenly w-full cursor-default">
+        <div class="basis-2/5 h-full">
+          <div class="flex justify-evenly w-full cursor-pointer">
             <button class="max-sm:hidden">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                <path d="M9.195 18.44c1.25.714 2.805-.189 2.805-1.628v-4.084l5.391 3.584c1.25.714 2.805-.188 2.805-1.628V7.284c0-1.44-1.555-2.342-2.805-1.628L12 9.23V5.153c0-1.44-1.555-2.343-2.805-1.629l-7.5 4.27a1.875 1.875 0 0 0 0 3.212l7.5 4.27Z" />
-              </svg>
+              <prev-icon></prev-icon>
             </button>
-            <button class="md:px-6" data-play-toggle>
+            <button class="md:px-6 cursor-pointer" data-play-toggle>
               ${playPauseIcon}
             </button>
-            <button data-play-next>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
-                <path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.285L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
-              </svg>
+            <button class="cursor-pointer" data-play-next>
+              <next-icon></next-icon>
             </button>
           </div>
         </div>
