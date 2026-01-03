@@ -24,7 +24,7 @@ import { getBucketContents } from "../../lib/s3.ts";
  * assertEquals(data.albumName, "Album");
  * assertEquals(data.trackName, "Track Name.mp3");
  * assertEquals(data.trackNumber, "01");
- * assertEquals(data.albumUrl, "Artist/Album");
+ * assertEquals(data.albumUrl, "https://bucket.s3.amazonaws.com/Artist/Album");
  * ```
  *
  * @remarks
