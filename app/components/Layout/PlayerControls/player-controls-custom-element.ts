@@ -1,159 +1,16 @@
 /** @file Custom element for player controls seen at the bottom of the screen */
 
 import { getBucketContents } from "../../../../lib/s3.ts";
+import {
+  escapeHtml,
+  getParentDataFromTrackUrl,
+  getRemainingAlbumTracks,
+} from "../../../util/track.ts";
 import "../../../icons/play/index.ts";
 import "../../../icons/pause/index.ts";
 import "../../../icons/prev/index.ts";
 import "../../../icons/next/index.ts";
 import "../../../icons/playlist/index.ts";
-
-/**
- * Parses track metadata from a track URL.
- *
- * @param trackUrl - The full track URL in format: `{baseUrl}/{artistName}/{albumName}/{trackNumber}__{trackName}.{ext}`
- * @returns An object containing parsed track information
- * @returns `artistName` - The artist name extracted from the URL path
- * @returns `albumName` - The album name extracted from the URL path
- * @returns `trackName` - The track name extracted from the filename (after `__` separator)
- * @returns `trackNumber` - The track number extracted from the filename (before `__` separator)
- *
- * @example
- * ```typescript
- * const url = "https://bucket.s3.amazonaws.com/Artist/Album/01__Track Name.mp3";
- * const data = getParentDataFromTrackUrl(url);
- * // Returns: { artistName: "Artist", albumName: "Album", trackName: "Track Name", trackNumber: "01" }
- * ```
- *
- * @remarks
- * The URL format is expected to be:
- * - Path segments: `.../{artist}/{album}/{filename}`
- * - Filename format: `{number}__{name}.{ext}` (double underscore separator)
- * - Returns `null` values if the URL is null or doesn't match the expected format
- */
-const getParentDataFromTrackUrl = (trackUrl: string | null) => {
-  if (!trackUrl) {
-    return {
-      artistName: null,
-      albumName: null,
-      trackName: null,
-      trackNumber: null,
-    };
-  }
-
-  const currentTrackPieces = trackUrl.split("/");
-  const artistName = currentTrackPieces[currentTrackPieces.length - 3];
-  const albumName = currentTrackPieces[currentTrackPieces.length - 2];
-  const trackPieces = currentTrackPieces[currentTrackPieces.length - 1].split(
-    "__",
-  );
-  const trackName = trackPieces && trackPieces[1];
-  const trackNumber = trackPieces && trackPieces[0];
-
-  return {
-    artistName,
-    albumName,
-    trackName,
-    trackNumber,
-  };
-};
-
-/**
- * Escape HTML special characters to prevent XSS
- */
-function escapeHtml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-/**
- * Get remaining tracks in album after current track
- */
-const getRemainingAlbumTracks = async (
-  albumUrl: string,
-  currentTrackUrl: string,
-): Promise<Array<{ url: string; title: string; trackNum: number }>> => {
-  const { artistName, albumName } = getParentDataFromTrackUrl(currentTrackUrl);
-  if (!artistName || !albumName) {
-    return [];
-  }
-
-  // Extract base bucket URL from albumUrl
-  // albumUrl format: https://bucket.s3.region.amazonaws.com/artist/album
-  // We need: https://bucket.s3.region.amazonaws.com
-  const urlObj = new URL(albumUrl);
-  const bucketUrl = `${urlObj.protocol}//${urlObj.host}`;
-  const prefix = `${artistName}/${albumName}/`;
-
-  let contents: string[] = [];
-  try {
-    const rawContents = await getBucketContents(bucketUrl, prefix);
-    contents = rawContents.filter(
-      (key): key is string => key !== null && key !== undefined,
-    );
-  } catch (error) {
-    console.error(
-      "getRemainingAlbumTracks: Error fetching bucket contents:",
-      error,
-    );
-    throw error;
-  }
-
-  const currentTrackPieces = currentTrackUrl.split("/");
-  let currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
-  // Decode URL encoding in case the track URL is encoded
-  try {
-    currentTrackKey = decodeURIComponent(currentTrackKey);
-  } catch {
-    // If decoding fails, use as-is
-  }
-  // Remove file extension if present for matching
-  const currentTrackKeyNoExt = currentTrackKey.replace(/\.[^.]+$/, "");
-  const currentTrackIndex = contents.findIndex((key) => {
-    // Extract filename from full key path for comparison
-    const keyFilename = key.split("/").pop() || "";
-    const keyFilenameNoExt = keyFilename.replace(/\.[^.]+$/, "");
-
-    // Try multiple matching strategies:
-    // 1. Exact match
-    // 2. Match without extension
-    // 3. Match with URL decoding
-    // 4. Match single underscore with double underscore (2_Plateau matches 2__Plateau)
-    const normalizedCurrent = currentTrackKeyNoExt.replace(/_/g, "__");
-    const normalizedKey = keyFilenameNoExt.replace(/_/g, "__");
-
-    return keyFilename === currentTrackKey ||
-      keyFilenameNoExt === currentTrackKeyNoExt ||
-      normalizedKey === normalizedCurrent ||
-      decodeURIComponent(keyFilename) === currentTrackKey ||
-      keyFilename === encodeURIComponent(currentTrackKey);
-  });
-
-  if (currentTrackIndex === -1) {
-    return [];
-  }
-
-  const remainingKeys = contents.slice(currentTrackIndex + 1);
-  const tracks = remainingKeys.map((key) => {
-    // Extract filename from full key path
-    const filename = key.split("/").pop() || key;
-    const trackPieces = filename.split("__");
-    const trackNum = parseInt(trackPieces[0], 10) || 0;
-    const title = trackPieces[1] || filename;
-    const fullUrl = `${bucketUrl}/${key}`;
-
-    return {
-      url: fullUrl,
-      title,
-      trackNum,
-    };
-  });
-
-  return tracks.sort((a, b) => a.trackNum - b.trackNum);
-};
 
 /**
  * Custom element for player controls displayed at the bottom of the screen.
@@ -711,7 +568,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
 
     const playlistHtml = `
       <div class="relative">
-        <button class="p-2 rounded mr-6 cursor-pointer ${
+        <button class="p-2 rounded mr-6 cursor-pointer size-20 ${
       !this.remainingTracks.length ? "opacity-50 cursor-not-allowed" : ""
     }" data-playlist-toggle>
           <playlist-icon></playlist-icon>
@@ -725,8 +582,11 @@ export class PlayerControlsCustomElement extends HTMLElement {
     `;
 
     this.innerHTML = `
-      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-fit flex justify-between items-center transition-transform ${visibilityClass}">
-        <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
+      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex justify-between items-center transition-transform ${visibilityClass}">
+        <track-info-custom-element data-track-url="${
+      escapeHtml(this.currentTrackUrl)
+    }"></track-info-custom-element>
+        <!-- <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
           <div class="flex cursor-default">
             ${albumArtElement}
             <div class="ml-3 pt-2">
@@ -736,7 +596,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
               </div>
             </div>
           </div>
-        </div>
+        </div> -->
         <div class="basis-2/5 h-full">
           <div class="flex justify-evenly w-full cursor-pointer">
             <button class="max-sm:hidden" data-play-prev>
