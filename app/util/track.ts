@@ -85,11 +85,17 @@ export const getParentDataFromTrackUrl = (trackUrl: string | null) => {
  * ```
  */
 export function escapeHtml(unsafe: string | null): typeof unsafe {
-  return unsafe?.replace(/&/g, "&amp;")
+  if (unsafe === null) {
+    return null;
+  }
+  if (unsafe === "") {
+    return "";
+  }
+  return unsafe.replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;") || null;
+    .replace(/'/g, "&#039;");
 }
 
 /**
@@ -126,7 +132,15 @@ export const getRemainingAlbumTracks = async (
   albumUrl: string,
   currentTrackUrl: string,
 ): Promise<Array<TrackInfo>> => {
-  const { artistName, albumName } = getParentDataFromTrackUrl(currentTrackUrl);
+  let artistName: string | null;
+  let albumName: string | null;
+  try {
+    const data = getParentDataFromTrackUrl(currentTrackUrl);
+    artistName = data.artistName;
+    albumName = data.albumName;
+  } catch {
+    return [];
+  }
   if (!artistName || !albumName) {
     return [];
   }
@@ -172,8 +186,13 @@ export const getRemainingAlbumTracks = async (
     // 2. Match without extension
     // 3. Match with URL decoding
     // 4. Match single underscore with double underscore (2_Plateau matches 2__Plateau)
-    const normalizedCurrent = currentTrackKeyNoExt.replace(/_/g, "__");
-    const normalizedKey = keyFilenameNoExt.replace(/_/g, "__");
+    // Normalize: convert single underscores to double, but preserve existing double underscores
+    // Replace __ with a placeholder, then single _ with __, then restore __
+    const normalizeUnderscores = (str: string) => {
+      return str.replace(/__/g, "\0").replace(/_/g, "__").replace(/\0/g, "__");
+    };
+    const normalizedCurrent = normalizeUnderscores(currentTrackKeyNoExt);
+    const normalizedKey = normalizeUnderscores(keyFilenameNoExt);
 
     return keyFilename === currentTrackKey ||
       keyFilenameNoExt === currentTrackKeyNoExt ||
@@ -230,7 +249,15 @@ export const getAllAlbumTracks = async (
   albumUrl: string,
   currentTrackUrl: string,
 ): Promise<Array<TrackInfo>> => {
-  const { artistName, albumName } = getParentDataFromTrackUrl(currentTrackUrl);
+  let artistName: string | null;
+  let albumName: string | null;
+  try {
+    const data = getParentDataFromTrackUrl(currentTrackUrl);
+    artistName = data.artistName;
+    albumName = data.albumName;
+  } catch {
+    return [];
+  }
   if (!artistName || !albumName) {
     return [];
   }

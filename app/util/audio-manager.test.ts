@@ -153,6 +153,10 @@ describe("AudioManager", () => {
 
     // Trigger timeupdate event
     const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
     audioEventListeners.timeupdate.forEach((listener) =>
       listener(timeupdateEvent)
     );
@@ -172,6 +176,10 @@ describe("AudioManager", () => {
 
     // Trigger timeupdate event
     const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
     audioEventListeners.timeupdate.forEach((listener) =>
       listener(timeupdateEvent)
     );
@@ -187,6 +195,10 @@ describe("AudioManager", () => {
 
     // Trigger timeupdate from audio element
     const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
     audioEventListeners.timeupdate.forEach((handler) =>
       handler(timeupdateEvent)
     );
@@ -251,6 +263,10 @@ describe("AudioManager", () => {
 
     // Trigger timeupdate event
     const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
     audioEventListeners.timeupdate.forEach((listener) =>
       listener(timeupdateEvent)
     );
@@ -270,6 +286,10 @@ describe("AudioManager", () => {
 
     // Trigger timeupdate event
     const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
     audioEventListeners.timeupdate.forEach((listener) =>
       listener(timeupdateEvent)
     );

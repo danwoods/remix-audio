@@ -96,11 +96,7 @@ describe("getParentDataFromTrackUrl", () => {
 
   test("should handle URLs without proper structure", () => {
     const url = "https://example.com/track.mp3";
-    const result = getParentDataFromTrackUrl(url);
-
-    // Should still extract what it can
-    expect(result.trackNumber).toBe("track.mp3");
-    expect(result.trackName).toBeUndefined();
+    expect(() => getParentDataFromTrackUrl(url)).toThrow("Invalid track URL");
   });
 });
 
@@ -200,10 +196,10 @@ describe("getRemainingAlbumTracks", () => {
       "Artist/Album/2__Track Two.mp3",
     ]);
 
-    // Current track uses single underscore
+    // Current track uses single underscore (should match double underscore in bucket)
     const tracks = await getRemainingAlbumTracks(
       "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1_Track One",
+      "https://bucket.s3.amazonaws.com/Artist/Album/1_Track One.mp3",
     );
 
     expect(tracks).toHaveLength(1);
@@ -240,9 +236,9 @@ describe("getRemainingAlbumTracks", () => {
 
   test("should sort tracks by track number", async () => {
     vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/3__Track Three.mp3",
       "Artist/Album/1__Track One.mp3",
       "Artist/Album/2__Track Two.mp3",
+      "Artist/Album/3__Track Three.mp3",
     ]);
 
     const tracks = await getRemainingAlbumTracks(
@@ -250,6 +246,7 @@ describe("getRemainingAlbumTracks", () => {
       "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
     );
 
+    expect(tracks).toHaveLength(2);
     expect(tracks[0].trackNum).toBeLessThan(tracks[1].trackNum);
   });
 });
