@@ -77,6 +77,9 @@ let audioPlayCalls: unknown[][] = [];
 let audioPauseCalls: unknown[][] = [];
 let audioCurrentTime = 0;
 let audioDuration = 100;
+let _audioSrcValue = "";
+let _audioReadyState = 0;
+let _audioPaused = true;
 let audioParentNode: Node | null = null;
 
 // ============================================================================
@@ -295,14 +298,7 @@ function setupDOMEnvironment() {
       return true;
     }
 
-    querySelector(selector: string) {
-      if (selector === "[data-playlist-toggle]") {
-        return {
-          closest: () => ({
-            contains: () => false,
-          }),
-        } as unknown as HTMLElement;
-      }
+    querySelector(_selector: string) {
       return null;
     }
 
@@ -346,11 +342,11 @@ function resetTestState() {
   mockBucketContentsError = null;
   audioPlayCalls = [];
   audioPauseCalls = [];
-  audioSrcValue = "";
+  _audioSrcValue = "";
   audioCurrentTime = 0;
   audioDuration = 100;
-  audioReadyState = 0;
-  audioPaused = true;
+  _audioReadyState = 0;
+  _audioPaused = true;
   audioParentNode = null;
 
   // Create mock audio element
@@ -402,7 +398,7 @@ function resetTestState() {
   // Mock fetch for S3 bucket requests
   globalThis.fetch = ((_url: string | URL | Request) => {
     if (mockBucketContentsError) {
-      throw mockBucketContentsError;
+      return Promise.reject(mockBucketContentsError);
     }
     // Return a mock XML response matching S3 ListObjectsV2 format
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -413,9 +409,11 @@ ${
       ).join("\n")
     }
 </ListBucketResult>`;
-    return new Response(xml, {
-      headers: { "Content-Type": "application/xml" },
-    });
+    return Promise.resolve(
+      new Response(xml, {
+        headers: { "Content-Type": "application/xml" },
+      }),
+    );
   }) as typeof fetch;
 
   // Mock DOMParser
@@ -497,23 +495,9 @@ function createTestElement(): InstanceType<typeof PlayerControlsCustomElement> {
   resetTestState();
   const element = new PlayerControlsCustomElement();
 
-  // Override querySelector to return mock elements when needed
+  // Override querySelector if needed for other tests
   const originalQuerySelector = element.querySelector.bind(element);
   element.querySelector = (selector: string) => {
-    if (selector === "[data-playlist-toggle]") {
-      return {
-        closest: (sel?: string) => {
-          if (sel === ".relative") {
-            return {
-              contains: () => false,
-            };
-          }
-          return {
-            contains: () => false,
-          };
-        },
-      } as unknown as HTMLElement;
-    }
     return originalQuerySelector(selector);
   };
 
@@ -561,12 +545,12 @@ function createTestElement(): InstanceType<typeof PlayerControlsCustomElement> {
  *
  * @param element - The PlayerControlsCustomElement instance
  * @param selector - The data attribute selector (e.g., "data-play-toggle")
- * @param stopPropagation - Whether to stop event propagation (for playlist toggle)
+ * @param stopPropagation - Whether to stop event propagation
  *
  * @example
  * ```ts
  * simulateClick(element, "data-play-toggle");
- * simulateClick(element, "data-playlist-toggle", true);
+ * simulateClick(element, "data-play-next");
  * ```
  */
 function simulateClick(
@@ -1079,10 +1063,10 @@ Deno.test("PlayerControlsCustomElement - should handle prev button click", async
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
-Deno.test("PlayerControlsCustomElement - should handle playlist toggle button click", () => {
+Deno.test("PlayerControlsCustomElement - playlist is handled by playlist-custom-element", () => {
   /**
-   * Tests that clicking the playlist toggle button opens/closes the playlist dropdown.
-   * The playlist state is internal, so we verify through render changes.
+   * Tests that the playlist functionality is delegated to playlist-custom-element.
+   * The playlist-custom-element manages its own state and click handling.
    */
   const element = createTestElement();
   element.connectedCallback();
@@ -1096,15 +1080,8 @@ Deno.test("PlayerControlsCustomElement - should handle playlist toggle button cl
     "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
   );
 
-  // Get initial innerHTML (stored for comparison)
-  const _initialHTML = innerHTMLValue;
-
-  // Simulate click on playlist toggle button
-  simulateClick(element, "data-playlist-toggle", true);
-
-  // Verify the element responded (innerHTML should have changed)
-  // Note: The playlist state is internal, so we verify through render changes
-  assert(innerHTMLValue !== initialHTML || innerHTMLValue.length > 0);
+  // Verify playlist-custom-element is rendered in the HTML
+  assert(innerHTMLValue.includes("playlist-custom-element"));
 });
 
 Deno.test({
@@ -1149,10 +1126,10 @@ Deno.test({
   sanitizeOps: false,
 });
 
-Deno.test("PlayerControlsCustomElement - should close playlist dropdown on outside click", async () => {
+Deno.test("PlayerControlsCustomElement - playlist dropdown is handled by playlist-custom-element", async () => {
   /**
-   * Tests that clicking outside the playlist dropdown closes it.
-   * This uses document-level click listeners for proper event delegation.
+   * Tests that playlist dropdown functionality is handled by playlist-custom-element.
+   * The playlist-custom-element manages its own document click listeners for closing.
    */
   const element = createTestElement();
   element.connectedCallback();
@@ -1167,50 +1144,12 @@ Deno.test("PlayerControlsCustomElement - should close playlist dropdown on outsi
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
 
-  // Ensure querySelector works properly for handleDocumentClick
-  const originalQuerySelector = element.querySelector.bind(element);
-  element.querySelector = (selector: string) => {
-    if (selector === "[data-playlist-toggle]") {
-      return {
-        closest: (sel?: string) => {
-          if (sel === ".relative") {
-            return {
-              contains: () => false, // Click is outside
-            };
-          }
-          return null;
-        },
-      } as unknown as HTMLElement;
-    }
-    return originalQuerySelector(selector);
-  };
+  // Verify playlist-custom-element is rendered
+  assert(innerHTMLValue.includes("playlist-custom-element"));
 
-  // Open playlist
-  simulateClick(element, "data-playlist-toggle", true);
-  await new Promise((resolve) => setTimeout(resolve, 10));
-
-  // Simulate document click outside
-  const clickEvent = new Event("click");
-  const mockTarget = {
-    closest: () => null,
-  } as unknown as HTMLElement;
-  Object.defineProperty(clickEvent, "target", {
-    value: mockTarget,
-    writable: false,
-  });
-
-  // Call listeners with error handling
-  documentClickListeners.forEach((listener) => {
-    try {
-      listener(clickEvent);
-    } catch (_e) {
-      // Ignore errors from querySelector - the test verifies the handler was called
-    }
-  });
-
-  // Playlist should be closed (tested through render state)
-  await new Promise((resolve) => setTimeout(resolve, 10));
-  assert(true); // If no error, the handler executed successfully
+  // Verify no document click listeners are added by player-controls (playlist handles its own)
+  // The documentClickListeners array should be empty since we removed that functionality
+  assertEquals(documentClickListeners.length, 0);
 });
 
 // ============================================================================

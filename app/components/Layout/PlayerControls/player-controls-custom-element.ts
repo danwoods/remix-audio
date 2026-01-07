@@ -119,21 +119,20 @@ export class PlayerControlsCustomElement extends HTMLElement {
     trackNum: number;
   }> = [];
   private loadTracksPromise: Promise<void> | null = null;
-  private playlistOpen: boolean = false;
   private boundHandleClick: (event: Event) => void;
+  private boundHandlePlaylistSelect: (event: Event) => void;
   private audioElement: HTMLAudioElement | null = null;
   private boundTimeUpdate: (event: Event) => void;
   private boundEnded: (event: Event) => void;
-  private boundHandleDocumentClick: (event: Event) => void;
 
   constructor() {
     super();
     // Use event delegation to avoid memory leaks
     // Store bound function so we can remove it later
     this.boundHandleClick = this.handleClick.bind(this);
+    this.boundHandlePlaylistSelect = this.handlePlaylistSelect.bind(this);
     this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
     this.boundEnded = this.handleEnded.bind(this);
-    this.boundHandleDocumentClick = this.handleDocumentClick.bind(this);
   }
 
   connectedCallback() {
@@ -142,8 +141,8 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.style.width = "100%";
 
     this.addEventListener("click", this.boundHandleClick);
-    // Close playlist dropdown when clicking outside
-    document.addEventListener("click", this.handleDocumentClick);
+    // Listen for 'select' events from playlist-custom-element
+    this.addEventListener("select", this.boundHandlePlaylistSelect);
     this.createAudioElement();
     this.updateAttributes();
     this.render();
@@ -152,7 +151,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
   disconnectedCallback() {
     // Remove event listeners on disconnect
     this.removeEventListener("click", this.boundHandleClick);
-    document.removeEventListener("click", this.boundHandleDocumentClick);
+    this.removeEventListener("select", this.boundHandlePlaylistSelect);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -550,36 +549,11 @@ export class PlayerControlsCustomElement extends HTMLElement {
       `
       : "";
 
-    // Playlist dropdown
-    const playlistItems = this.remainingTracks
-      .map(
-        (track) => `
-      <li>
-        <button class="py-1 w-full flex justify-between px-0" data-track-url="${
-          escapeHtml(track.url)
-        }">
-          ${escapeHtml(track.title)}
-          <play-icon></play-icon>
-        </button>
-      </li>
-    `,
-      )
-      .join("");
-
-    const playlistHtml = `
-      <div class="relative">
-        <button class="p-2 rounded mr-6 cursor-pointer size-20 ${
-      !this.remainingTracks.length ? "opacity-50 cursor-not-allowed" : ""
-    }" data-playlist-toggle>
-          <playlist-icon></playlist-icon>
-        </button>
-        <ol class="absolute bottom-full right-0 mb-2 bg-black rounded z-[1] w-52 p-2 shadow divide-y divide-solid ${
-      this.playlistOpen && this.remainingTracks.length > 0 ? "" : "hidden"
-    }">
-          ${playlistItems}
-        </ol>
-      </div>
-    `;
+    const playlistHtml = `<playlist-custom-element data-album-url="${
+      escapeHtml(this.albumUrl)
+    }" data-current-track-id="${
+      escapeHtml(this.currentTrackUrl)
+    }"></playlist-custom-element>`;
 
     this.innerHTML = `
       <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex justify-between items-center transition-transform ${visibilityClass}">
@@ -623,22 +597,6 @@ export class PlayerControlsCustomElement extends HTMLElement {
 
     if (!button) return;
 
-    // Stop event propagation for playlist button to prevent document click handler from closing it immediately
-    if (button.hasAttribute("data-playlist-toggle")) {
-      event.stopPropagation();
-      // Allow toggling even if tracks haven't loaded yet (will show empty or loading state)
-      this.playlistOpen = !this.playlistOpen;
-      this.render();
-      // If tracks haven't loaded yet, try loading them
-      if (
-        this.remainingTracks.length === 0 && this.albumUrl &&
-        this.currentTrackUrl
-      ) {
-        this.loadRemainingTracks();
-      }
-      return;
-    }
-
     // Play/Pause button
     if (button.hasAttribute("data-play-toggle")) {
       if (this.currentTrackUrl) {
@@ -658,25 +616,21 @@ export class PlayerControlsCustomElement extends HTMLElement {
       this.playNext();
       return;
     }
-
-    // Playlist items
-    const trackUrl = button.getAttribute("data-track-url");
-    if (trackUrl) {
-      this.playlistOpen = false; // Close dropdown when selecting a track
-      this.playToggle(trackUrl);
-    }
   }
 
-  private handleDocumentClick(event: Event) {
-    // Close playlist dropdown if clicking outside
-    const target = event.target as HTMLElement;
-    const playlistContainer = this.querySelector("[data-playlist-toggle]")
-      ?.closest(".relative");
-    if (playlistContainer && !playlistContainer.contains(target)) {
-      if (this.playlistOpen) {
-        this.playlistOpen = false;
-        this.render();
-      }
+  /**
+   * Handles 'select' events from playlist-custom-element.
+   * When a track is selected from the playlist, this method plays that track.
+   * @private
+   */
+  private handlePlaylistSelect(event: Event) {
+    const customEvent = event as CustomEvent<{
+      url: string;
+      title: string;
+      trackNum: number;
+    }>;
+    if (customEvent.detail?.url) {
+      this.playToggle(customEvent.detail.url);
     }
   }
 }
