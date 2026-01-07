@@ -1,7 +1,6 @@
 /** @file Tests for track utility functions */
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import { getBucketContents } from "../../lib/s3.ts";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import {
   escapeHtml,
   getAllAlbumTracks,
@@ -9,319 +8,342 @@ import {
   getRemainingAlbumTracks,
 } from "./track.ts";
 
-// Mock dependencies
-vi.mock("../../lib/s3.ts");
-
-// Mock fetch for S3 API calls
-const mockFetch = vi.fn();
-
-beforeEach(() => {
-  // Reset mocks
-  vi.clearAllMocks();
-  mockFetch.mockClear();
-
-  globalThis.fetch = mockFetch;
-
-  // Mock DOMParser for S3 XML parsing
+// Mock DOMParser for Deno test environment
+if (typeof globalThis.DOMParser === "undefined") {
   globalThis.DOMParser = class DOMParser {
-    parseFromString(_xml: string, _type: string) {
+    parseFromString(xml: string, _type: string) {
+      // Simple XML parser for test purposes
+      // Extract keys from XML
+      const keys: string[] = [];
+      const keyRegex = /<Key>(.*?)<\/Key>/g;
+      let match;
+      while ((match = keyRegex.exec(xml)) !== null) {
+        keys.push(match[1]);
+      }
+
+      // Create array-like object that works with Array.from()
+      const contents = keys.map((key) => ({
+        getElementsByTagName: (tag: string) => {
+          if (tag === "Key") {
+            // Return array-like object with textContent
+            return [{ textContent: key }];
+          }
+          return [];
+        },
+      }));
+
+      // Make it array-like for Array.from()
+      contents.length = keys.length;
+
       return {
         getElementsByTagName: (tagName: string) => {
           if (tagName === "Contents") {
-            return [
-              {
-                getElementsByTagName: (keyTag: string) => {
-                  if (keyTag === "Key") {
-                    return [{ textContent: "Artist/Album/1__Track One.mp3" }];
-                  }
-                  return [];
-                },
-              },
-              {
-                getElementsByTagName: (keyTag: string) => {
-                  if (keyTag === "Key") {
-                    return [{ textContent: "Artist/Album/2__Track Two.mp3" }];
-                  }
-                  return [];
-                },
-              },
-              {
-                getElementsByTagName: (keyTag: string) => {
-                  if (keyTag === "Key") {
-                    return [{ textContent: "Artist/Album/3__Track Three.mp3" }];
-                  }
-                  return [];
-                },
-              },
-            ];
+            return contents as unknown as HTMLCollectionOf<Element>;
           }
-          return [];
+          return [] as unknown as HTMLCollectionOf<Element>;
         },
       } as unknown as Document;
     }
   } as unknown as typeof DOMParser;
+}
+
+// Mock fetch to return S3 XML response
+let mockBucketContents: string[] = [];
+let mockBucketContentsError: Error | null = null;
+
+// Override fetch to return mock S3 responses
+globalThis.fetch = ((_input: RequestInfo | URL, _init?: RequestInit) => {
+  if (mockBucketContentsError) {
+    throw mockBucketContentsError;
+  }
+  // Return a mock XML response matching S3 ListObjectsV2 format
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+${
+    mockBucketContents.map((key) => `  <Contents><Key>${key}</Key></Contents>`)
+      .join("\n")
+  }
+</ListBucketResult>`;
+  return Promise.resolve(
+    new Response(xml, {
+      headers: { "Content-Type": "application/xml" },
+    }),
+  );
+}) as typeof fetch;
+
+function resetMocks() {
+  mockBucketContents = [];
+  mockBucketContentsError = null;
+}
+
+Deno.test("getParentDataFromTrackUrl - should parse valid track URL correctly", () => {
+  const url = "https://bucket.s3.amazonaws.com/Artist/Album/01__Track Name.mp3";
+  const result = getParentDataFromTrackUrl(url);
+
+  assertEquals(result.artistName, "Artist");
+  assertEquals(result.albumName, "Album");
+  assertEquals(result.trackName, "Track Name.mp3");
+  assertEquals(result.trackNumber, "01");
 });
 
-describe("getParentDataFromTrackUrl", () => {
-  test("should parse valid track URL correctly", () => {
-    const url =
-      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track Name.mp3";
-    const result = getParentDataFromTrackUrl(url);
+Deno.test("getParentDataFromTrackUrl - should return null values for null input", () => {
+  const result = getParentDataFromTrackUrl(null);
 
-    expect(result.artistName).toBe("Artist");
-    expect(result.albumName).toBe("Album");
-    expect(result.trackName).toBe("Track Name.mp3");
-    expect(result.trackNumber).toBe("01");
-  });
-
-  test("should return null values for null input", () => {
-    const result = getParentDataFromTrackUrl(null);
-
-    expect(result.artistName).toBeNull();
-    expect(result.albumName).toBeNull();
-    expect(result.trackName).toBeNull();
-    expect(result.trackNumber).toBeNull();
-  });
-
-  test("should handle URLs with different formats", () => {
-    const url =
-      "https://bucket.s3.us-east-1.amazonaws.com/Artist Name/Album Name/05__Song Title.flac";
-    const result = getParentDataFromTrackUrl(url);
-
-    expect(result.artistName).toBe("Artist Name");
-    expect(result.albumName).toBe("Album Name");
-    expect(result.trackName).toBe("Song Title.flac");
-    expect(result.trackNumber).toBe("05");
-  });
-
-  test("should handle URLs without proper structure", () => {
-    const url = "https://example.com/track.mp3";
-    expect(() => getParentDataFromTrackUrl(url)).toThrow("Invalid track URL");
-  });
+  assertEquals(result.artistName, null);
+  assertEquals(result.albumName, null);
+  assertEquals(result.trackName, null);
+  assertEquals(result.trackNumber, null);
 });
 
-describe("escapeHtml", () => {
-  test("should escape HTML special characters", () => {
-    expect(escapeHtml("<script>alert('xss')</script>")).toBe(
-      "&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;",
-    );
-  });
+Deno.test("getParentDataFromTrackUrl - should handle URLs with different formats", () => {
+  const url =
+    "https://bucket.s3.us-east-1.amazonaws.com/Artist Name/Album Name/05__Song Title.flac";
+  const result = getParentDataFromTrackUrl(url);
 
-  test("should escape ampersand", () => {
-    expect(escapeHtml("A & B")).toBe("A &amp; B");
-  });
-
-  test("should escape quotes", () => {
-    expect(escapeHtml('He said "hello"')).toBe("He said &quot;hello&quot;");
-  });
-
-  test("should escape single quotes", () => {
-    expect(escapeHtml("It's working")).toBe("It&#039;s working");
-  });
-
-  test("should escape angle brackets", () => {
-    expect(escapeHtml("<div>content</div>")).toBe(
-      "&lt;div&gt;content&lt;/div&gt;",
-    );
-  });
-
-  test("should handle empty string", () => {
-    expect(escapeHtml("")).toBe("");
-  });
-
-  test("should handle string with no special characters", () => {
-    expect(escapeHtml("plain text")).toBe("plain text");
-  });
+  assertEquals(result.artistName, "Artist Name");
+  assertEquals(result.albumName, "Album Name");
+  assertEquals(result.trackName, "Song Title.flac");
+  assertEquals(result.trackNumber, "05");
 });
 
-describe("getRemainingAlbumTracks", () => {
-  test("should return remaining tracks after current track", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-      "Artist/Album/3__Track Three.mp3",
-    ]);
+Deno.test("getParentDataFromTrackUrl - should handle URLs without proper structure", () => {
+  const url = "https://example.com/track.mp3";
+  assertThrows(
+    () => getParentDataFromTrackUrl(url),
+    Error,
+    "Invalid track URL",
+  );
+});
 
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
+Deno.test("escapeHtml - should escape HTML special characters", () => {
+  assertEquals(
+    escapeHtml("<script>alert('xss')</script>"),
+    "&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;",
+  );
+});
 
-    expect(tracks).toHaveLength(2);
-    expect(tracks[0].title).toBe("Track Two.mp3");
-    expect(tracks[0].trackNum).toBe(2);
-    expect(tracks[1].title).toBe("Track Three.mp3");
-    expect(tracks[1].trackNum).toBe(3);
-  });
+Deno.test("escapeHtml - should escape ampersand", () => {
+  assertEquals(escapeHtml("A & B"), "A &amp; B");
+});
 
-  test("should return empty array if no remaining tracks", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track One.mp3",
-    ]);
+Deno.test("escapeHtml - should escape quotes", () => {
+  assertEquals(escapeHtml('He said "hello"'), "He said &quot;hello&quot;");
+});
 
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
+Deno.test("escapeHtml - should escape single quotes", () => {
+  assertEquals(escapeHtml("It's working"), "It&#039;s working");
+});
 
-    expect(tracks).toHaveLength(0);
-  });
+Deno.test("escapeHtml - should escape angle brackets", () => {
+  assertEquals(
+    escapeHtml("<div>content</div>"),
+    "&lt;div&gt;content&lt;/div&gt;",
+  );
+});
 
-  test("should return empty array if artist/album cannot be parsed", async () => {
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/invalid",
-    );
+Deno.test("escapeHtml - should handle empty string", () => {
+  assertEquals(escapeHtml(""), "");
+});
 
-    expect(tracks).toHaveLength(0);
-    expect(getBucketContents).not.toHaveBeenCalled();
-  });
+Deno.test("escapeHtml - should handle string with no special characters", () => {
+  assertEquals(escapeHtml("plain text"), "plain text");
+});
 
-  test("should handle S3 API errors", async () => {
-    vi.mocked(getBucketContents).mockRejectedValue(
-      new Error("S3 API Error"),
-    );
+Deno.test("getRemainingAlbumTracks - should return remaining tracks after current track", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+    "Artist/Album/3__Track Three.mp3",
+  ];
 
-    await expect(
-      getRemainingAlbumTracks(
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  assertEquals(tracks.length, 2);
+  assertEquals(tracks[0].title, "Track Two.mp3");
+  assertEquals(tracks[0].trackNum, 2);
+  assertEquals(tracks[1].title, "Track Three.mp3");
+  assertEquals(tracks[1].trackNum, 3);
+});
+
+Deno.test("getRemainingAlbumTracks - should return empty array if no remaining tracks", async () => {
+  resetMocks();
+  mockBucketContents = ["Artist/Album/1__Track One.mp3"];
+
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  assertEquals(tracks.length, 0);
+});
+
+Deno.test("getRemainingAlbumTracks - should return empty array if artist/album cannot be parsed", async () => {
+  resetMocks();
+
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/invalid",
+  );
+
+  assertEquals(tracks.length, 0);
+});
+
+Deno.test("getRemainingAlbumTracks - should handle S3 API errors", async () => {
+  resetMocks();
+  mockBucketContentsError = new Error("S3 API Error");
+
+  await assertRejects(
+    async () => {
+      await getRemainingAlbumTracks(
         "https://bucket.s3.amazonaws.com/Artist/Album",
         "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-      ),
-    ).rejects.toThrow("S3 API Error");
-  });
-
-  test("should match tracks with single underscore", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-    ]);
-
-    // Current track uses single underscore (should match double underscore in bucket)
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1_Track One.mp3",
-    );
-
-    expect(tracks).toHaveLength(1);
-  });
-
-  test("should match tracks without file extension", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-    ]);
-
-    // Current track without extension
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One",
-    );
-
-    expect(tracks).toHaveLength(1);
-  });
-
-  test("should handle URL-encoded track names", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track%20One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-    ]);
-
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
-
-    expect(tracks.length).toBeGreaterThan(0);
-  });
-
-  test("should sort tracks by track number", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-      "Artist/Album/3__Track Three.mp3",
-    ]);
-
-    const tracks = await getRemainingAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
-
-    expect(tracks).toHaveLength(2);
-    expect(tracks[0].trackNum).toBeLessThan(tracks[1].trackNum);
-  });
+      );
+    },
+    Error,
+    "S3 API Error",
+  );
 });
 
-describe("getAllAlbumTracks", () => {
-  test("should return all tracks in album", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/1__Track One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-      "Artist/Album/3__Track Three.mp3",
-    ]);
+Deno.test("getRemainingAlbumTracks - should match tracks with single underscore", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+  ];
 
-    const tracks = await getAllAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
+  // Current track uses single underscore (should match double underscore in bucket)
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1_Track One.mp3",
+  );
 
-    expect(tracks).toHaveLength(3);
-    expect(tracks[0].trackNum).toBe(1);
-    expect(tracks[1].trackNum).toBe(2);
-    expect(tracks[2].trackNum).toBe(3);
-  });
+  assertEquals(tracks.length, 1);
+});
 
-  test("should return empty array if artist/album cannot be parsed", async () => {
-    const tracks = await getAllAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/invalid",
-    );
+Deno.test("getRemainingAlbumTracks - should match tracks without file extension", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+  ];
 
-    expect(tracks).toHaveLength(0);
-    expect(getBucketContents).not.toHaveBeenCalled();
-  });
+  // Current track without extension
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One",
+  );
 
-  test("should handle S3 API errors gracefully", async () => {
-    vi.mocked(getBucketContents).mockRejectedValue(
-      new Error("S3 API Error"),
-    );
+  assertEquals(tracks.length, 1);
+});
 
-    const tracks = await getAllAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
+Deno.test("getRemainingAlbumTracks - should handle URL-encoded track names", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track%20One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+  ];
 
-    expect(tracks).toHaveLength(0);
-  });
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
 
-  test("should sort tracks by track number", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/3__Track Three.mp3",
-      "Artist/Album/1__Track One.mp3",
-      "Artist/Album/2__Track Two.mp3",
-    ]);
+  assertEquals(tracks.length > 0, true);
+});
 
-    const tracks = await getAllAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
+Deno.test("getRemainingAlbumTracks - should sort tracks by track number", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+    "Artist/Album/3__Track Three.mp3",
+  ];
 
-    expect(tracks[0].trackNum).toBe(1);
-    expect(tracks[1].trackNum).toBe(2);
-    expect(tracks[2].trackNum).toBe(3);
-  });
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
 
-  test("should handle tracks without track numbers", async () => {
-    vi.mocked(getBucketContents).mockResolvedValue([
-      "Artist/Album/invalid__Track.mp3",
-      "Artist/Album/1__Track One.mp3",
-    ]);
+  assertEquals(tracks.length, 2);
+  assertEquals(tracks[0].trackNum < tracks[1].trackNum, true);
+});
 
-    const tracks = await getAllAlbumTracks(
-      "https://bucket.s3.amazonaws.com/Artist/Album",
-      "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
-    );
+Deno.test("getAllAlbumTracks - should return all tracks in album", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+    "Artist/Album/3__Track Three.mp3",
+  ];
 
-    // Should still return tracks, with 0 for invalid track numbers
-    expect(tracks.length).toBeGreaterThan(0);
-  });
+  const tracks = await getAllAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  assertEquals(tracks.length, 3);
+  assertEquals(tracks[0].trackNum, 1);
+  assertEquals(tracks[1].trackNum, 2);
+  assertEquals(tracks[2].trackNum, 3);
+});
+
+Deno.test("getAllAlbumTracks - should return empty array if artist/album cannot be parsed", async () => {
+  resetMocks();
+
+  const tracks = await getAllAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/invalid",
+  );
+
+  assertEquals(tracks.length, 0);
+});
+
+Deno.test("getAllAlbumTracks - should handle S3 API errors gracefully", async () => {
+  resetMocks();
+  mockBucketContentsError = new Error("S3 API Error");
+
+  const tracks = await getAllAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  assertEquals(tracks.length, 0);
+});
+
+Deno.test("getAllAlbumTracks - should sort tracks by track number", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/3__Track Three.mp3",
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+  ];
+
+  const tracks = await getAllAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  assertEquals(tracks[0].trackNum, 1);
+  assertEquals(tracks[1].trackNum, 2);
+  assertEquals(tracks[2].trackNum, 3);
+});
+
+Deno.test("getAllAlbumTracks - should handle tracks without track numbers", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/invalid__Track.mp3",
+    "Artist/Album/1__Track One.mp3",
+  ];
+
+  const tracks = await getAllAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  // Should still return tracks, with 0 for invalid track numbers
+  assertEquals(tracks.length > 0, true);
 });
