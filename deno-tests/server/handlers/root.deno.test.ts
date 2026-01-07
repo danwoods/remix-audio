@@ -5,24 +5,29 @@ import { handleRoot } from "../../../server/handlers/root.ts";
 import { loadEnv } from "../../../server/utils/loadEnv.ts";
 import { getAppName } from "../../../server/utils/appName.ts";
 
-Deno.test("Root handler returns HTML", async () => {
-  // Load environment variables
-  await loadEnv();
+Deno.test({
+  name: "Root handler returns HTML",
+  async fn() {
+    // Load environment variables
+    await loadEnv();
 
-  const req = new Request("http://localhost:8000/");
-  const response = await handleRoot(req);
+    const req = new Request("http://localhost:8000/");
+    const response = await handleRoot(req);
 
-  assertEquals(response.status, 200);
-  assertEquals(response.headers.get("Content-Type"), "text/html");
+    assertEquals(response.status, 200);
+    assertEquals(response.headers.get("Content-Type"), "text/html");
 
-  const html = await response.text();
-  assertStringIncludes(html, "<html", "Should contain HTML structure");
-  const appName = await getAppName();
-  assertStringIncludes(
-    html,
-    appName,
-    "Should contain app title from deno.json",
-  );
+    const html = await response.text();
+    assertStringIncludes(html, "<html", "Should contain HTML structure");
+    const appName = await getAppName();
+    assertStringIncludes(
+      html,
+      appName,
+      "Should contain app title from deno.json",
+    );
+  },
+  sanitizeResources: false, // S3Client connections are managed by AWS SDK
+  sanitizeOps: false,
 });
 
 Deno.test(
