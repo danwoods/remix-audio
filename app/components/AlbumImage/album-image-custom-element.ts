@@ -1,7 +1,7 @@
 /** @file Custom element for an album image. */
 
 import * as id3 from "id3js";
-import { getAlbumContents } from "../../../lib/album.ts";
+import { getFirstSong } from "../../../lib/album.ts";
 
 /**
  * Retrieves ID3 metadata tags from an audio file URL.
@@ -142,17 +142,17 @@ export class AlbumImageCustomElement extends HTMLElement {
     this.albumId = albumId;
 
     try {
-      const contents = await getAlbumContents(
+      const firstSong = await getFirstSong(
         albumUrlParts.join("/"),
         artistId,
         albumId,
       );
 
-      if (signal.aborted || !contents || contents.length === 0) {
+      if (signal.aborted || !firstSong) {
         return;
       }
 
-      const trackUrl = albumUrlParts.join("/") + "/" + contents[0];
+      const trackUrl = albumUrlParts.join("/") + "/" + firstSong;
       const dataUrl = await getAlbumArtAsDataUrl(trackUrl);
 
       if (signal.aborted || !dataUrl) {
@@ -206,6 +206,7 @@ export class AlbumImageCustomElement extends HTMLElement {
 
   connectedCallback() {
     this.updateImageClasses();
+    this.updateImageStyles();
     this.loadAlbumImage();
   }
 
@@ -224,7 +225,15 @@ export class AlbumImageCustomElement extends HTMLElement {
     const img = this.shadowRoot!.querySelector("img");
     if (img) {
       // Copy classes from custom element to img element
-      img.className = this.className;
+      img.setAttribute("class", this.getAttribute("class") || "");
+    }
+  }
+
+  private updateImageStyles() {
+    const img = this.shadowRoot!.querySelector("img");
+    if (img) {
+      // Copy styles from custom element to img element
+      img.setAttribute("style", this.getAttribute("style") || "");
     }
   }
 
@@ -256,6 +265,8 @@ export class AlbumImageCustomElement extends HTMLElement {
     } else if (name === "data-album-url") {
       // Reload image when album URL changes
       this.loadAlbumImage();
+    } else if (name === "style") {
+      this.updateImageStyles();
     }
   }
 }

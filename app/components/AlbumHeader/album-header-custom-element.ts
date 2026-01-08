@@ -3,7 +3,7 @@
 import * as id3 from "id3js";
 import { extractColors } from "extract-colors";
 import type { AlbumUrl } from "../../../lib/album.ts";
-import { getAlbumContents } from "../../../lib/album.ts";
+import { getFirstSong } from "../../../lib/album.ts";
 
 /**
  * Extracts dominant colors from an album art image URL.
@@ -54,7 +54,7 @@ const getAlbumHeaderGradient = async (url: string) => {
  * @param elm - The HTML element to apply the gradient to.
  * @param colors - An array of two hex color strings [startColor, endColor] for the gradient.
  */
-const setAlbumHeaderGradient = async (elm: HTMLElement, colors: string[]) => {
+const setAlbumHeaderGradient = (elm: HTMLElement, colors: string[]) => {
   elm.setAttribute(
     "style",
     `background: linear-gradient(to bottom, ${colors[0]}, ${colors[1]});`,
@@ -99,9 +99,9 @@ export class AlbumHeaderCustomElement extends HTMLElement {
       </header>
       `;
 
-    getAlbumContents(albumUrlParts.join("/"), artistId, albumId).then(
-      (contents) => {
-        const trackUrl = albumUrlParts.join("/") + "/" + contents[0];
+    getFirstSong(albumUrlParts.join("/"), artistId, albumId).then(
+      (firstSong) => {
+        const trackUrl = albumUrlParts.join("/") + "/" + firstSong;
 
         getAlbumHeaderGradient(trackUrl).then((colors) => {
           if (colors) {

@@ -179,8 +179,8 @@ beforeEach(() => {
   // Reset mocks before each test
   vi.clearAllMocks();
 
-  // Mock getAlbumContents to return a track file
-  vi.mocked(album.getAlbumContents).mockResolvedValue(["track1.mp3"]);
+  // Mock getFirstSong to return a track file
+  vi.mocked(album.getFirstSong).mockResolvedValue("track1.mp3");
 
   // Mock id3.fromUrl to return image data
   vi.mocked(id3.fromUrl).mockResolvedValue({
@@ -250,8 +250,8 @@ describe("AlbumImageCustomElement", () => {
   test("should handle empty contents array", async () => {
     await import("./album-image-custom-element.ts");
 
-    // Mock getAlbumContents to return empty array
-    vi.mocked(album.getAlbumContents).mockResolvedValueOnce([]);
+    // Mock getFirstSong to return empty array
+    vi.mocked(album.getFirstSong).mockResolvedValueOnce("track1.mp3");
 
     elementAttributes["data-album-url"] =
       "https://bucket.s3.region.amazonaws.com/artist1/album1";

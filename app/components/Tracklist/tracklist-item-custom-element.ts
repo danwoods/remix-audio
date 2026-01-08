@@ -47,8 +47,7 @@ export class TracklistItemCustomElement extends HTMLElement {
     audio.preload = "metadata";
 
     // Handle errors (including 416 Range Not Satisfiable)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const handleError = (_evt: Event) => {
+    const handleError = () => {
       const error = audio.error;
       console.error("Failed to load audio metadata", {
         trackName: this.trackName,
@@ -66,7 +65,7 @@ export class TracklistItemCustomElement extends HTMLElement {
       // Optionally show a fallback or retry
       const durElement = this.querySelector(".track-duration") as HTMLElement;
       if (durElement && !this.trackDuration) {
-        durElement.textContent = "--:--";
+        durElement.textContent = " ";
       }
     };
 
@@ -84,6 +83,22 @@ export class TracklistItemCustomElement extends HTMLElement {
     audio.load();
   }
 
+  private clickHandler = () => {
+    const evt = new CustomEvent(
+      "track-click",
+      {
+        bubbles: true,
+        detail: {
+          trackUrl: decodeURIComponent(
+            this.getAttribute("data-track-url") || "",
+          ),
+        },
+      },
+    );
+
+    this.dispatchEvent(evt);
+  };
+
   constructor() {
     super();
 
@@ -97,39 +112,77 @@ export class TracklistItemCustomElement extends HTMLElement {
 
     this.innerHTML = `
       <div class="track">
+      <style>
+.track {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      transition: background 0.2s;
+    }
+
+    .track:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .track-number {
+      width: 32px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .track-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .track-name {
+      font-size: 15px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-artist {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .track-duration {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-left: 16px;
+    }
+      </style>
         <span class="track-number">${this.trackNumber}</span>
         <div class="track-info">
           <div class="track-name">${this.trackName}</div>
           <div class="track-artist">${this.trackArtist}</div>
         </div>
-        <span class="track-duration">${this.trackDuration}</span>
+        <span class="track-duration">${this.trackDuration || " "}</span>
       </div>
     `;
   }
 
   connectedCallback() {
+    this.addEventListener("click", this.clickHandler);
   }
 
   disconnectedCallback() {
-    console.log("Custom element removed from page.");
-  }
-
-  connectedMoveCallback() {
-    console.log("Custom element moved with moveBefore()");
-  }
-
-  adoptedCallback() {
-    console.log("Custom element moved to new page.");
+    this.removeEventListener("click", this.clickHandler);
   }
 
   attributeChangedCallback(
-    name: string,
+    _name: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _oldValue: string | null,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _newValue: string | null,
   ) {
-    console.log(`Attribute ${name} has changed.`);
+    // console.log(`Attribute ${_name} has changed.`);
   }
 }
 

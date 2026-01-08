@@ -7,19 +7,17 @@ import { getParentDataFromTrackUrl } from "../../../util/track.ts";
 const template = document.createElement("template");
 
 template.innerHTML = `
-  <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
-    <div class="flex cursor-default w-20">
-      <album-image-custom-element data-album-url="" class="rounded z-10 size-20 inline-block"></album-image-custom-element>
-      <div class="ml-3 pt-2">
-        <p class="text-base font-bold track-name"></p>
-        <div class="flex items-center">
-          <p class="marquee pr-6 md:animate-none">
-            <span class="text-sm text-nowrap scrolling-text"></span>
-          </p>
-          <p class="md:hidden marquee2 pr-6">
-            <span class="text-sm text-nowrap scrolling-text"></span>
-          </p>
-        </div>
+  <div style="display:flex;">
+    <album-image-custom-element data-album-url="" style="width: 64px; height: 64px;"></album-image-custom-element>
+    <div class="ml-3 pt-2">
+      <p class="text-base font-bold track-name"></p>
+      <div class="flex items-center">
+        <p class="marquee pr-6 md:animate-none">
+          <span class="text-sm text-nowrap scrolling-text"></span>
+        </p>
+        <p class="md:hidden marquee2 pr-6">
+          <span class="text-sm text-nowrap scrolling-text"></span>
+        </p>
       </div>
     </div>
   </div>

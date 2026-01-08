@@ -557,9 +557,11 @@ export class PlayerControlsCustomElement extends HTMLElement {
 
     this.innerHTML = `
       <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex justify-between items-center transition-transform ${visibilityClass}">
+      <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
         <track-info-custom-element data-track-url="${
       escapeHtml(this.currentTrackUrl)
     }"></track-info-custom-element>
+    </div>
         <!-- <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
           <div class="flex cursor-default">
             ${albumArtElement}

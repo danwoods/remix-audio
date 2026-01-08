@@ -269,9 +269,6 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
-  .\!contents {
-    display: contents !important;
-  }
   .block {
     display: block;
   }
@@ -330,9 +327,6 @@
   .w-6 {
     width: calc(var(--spacing) * 6);
   }
-  .w-20 {
-    width: calc(var(--spacing) * 20);
-  }
   .w-32 {
     width: calc(var(--spacing) * 32);
   }
@@ -373,6 +367,9 @@
   }
   .cursor-pointer {
     cursor: pointer;
+  }
+  .resize {
+    resize: both;
   }
   .grid-cols-\[repeat\(5\,calc\(40\%-40px\)\)\] {
     grid-template-columns: repeat(5,calc(40% - 40px));

@@ -18,6 +18,8 @@ export async function handleAlbumHtml(
   }
 
   const files = await getUploadedFiles();
+  logger.debug("Files", { files: JSON.stringify(files, null, 2) });
+
   const album = getAlbum(files, `${artistId}/${albumId}`);
   logger.debug("Album", { album });
 
@@ -35,6 +37,10 @@ export async function handleAlbumHtml(
     albumId,
   );
   logger.debug("Album URL", { albumUrl });
+
+  const trackListHtml = tracks.map((track) => `
+    <tracklist-item-custom-element data-track-url="${track.url}" data-track-name="${track.title}" data-track-artist="${artistId}" data-track-number="${track.trackNum}"></tracklist-item-custom-element>
+  `).join("");
 
   const html = `
 <!DOCTYPE html>
@@ -170,50 +176,6 @@ export async function handleAlbumHtml(
       margin-bottom: 16px;
       color: rgba(255, 255, 255, 0.9);
     }
-
-    .track {
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 4px;
-      transition: background 0.2s;
-    }
-
-    .track:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .track-number {
-      width: 32px;
-      font-size: 14px;
-      color: rgba(255, 255, 255, 0.5);
-    }
-
-    .track-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .track-name {
-      font-size: 15px;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .track-artist {
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.5);
-    }
-
-    .track-duration {
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.5);
-      margin-left: 16px;
-    }
   </style>
 </head>
 <body>
@@ -223,41 +185,25 @@ export async function handleAlbumHtml(
 
   <section class="tracklist">
     <h2 class="tracklist-title">Tracks</h2>
-    <div id="tracklistContainer"></div>
+    <div id="tracklistContainer">${trackListHtml}</div>
   </section>
 
   <player-controls-custom-element data-album-url="${albumUrl}"></player-controls-custom-element>
 
+  <script type="module" src="/build/main.js"></script>
   <script>
-    const albumHeader = document.getElementById('albumHeader');
-    const tracklistContainer = document.getElementById('tracklistContainer');
-
-    const tracks = [${
-    tracks.map((track) =>
-      `{ name: "${track.title}", artist: "${artistId}", url: "${track.url}" }`
-    ).join(",\n")
-  }];
-
-    tracks.forEach((track, index) => {
-      const trackItemEl = document.createElement('tracklist-item-custom-element');
-
-      trackItemEl.setAttribute('data-track-name', track.name);
-      trackItemEl.setAttribute('data-track-artist', track.artist);
-      trackItemEl.setAttribute('data-track-number', index + 1);
-      trackItemEl.setAttribute('data-track-url', track.url);
-      trackItemEl.addEventListener('click', () => {
+    document.addEventListener("track-click", (event) => {
+      const customEvent = event instanceof CustomEvent ? event : null;
+      if (customEvent && customEvent.detail) {
+        const trackUrl = customEvent.detail.trackUrl;
         const playerControls = document.querySelector('player-controls-custom-element');
         if (playerControls) {
-          playerControls.setAttribute('data-current-track-url', track.url);
+          playerControls.setAttribute('data-current-track-url', trackUrl);
           playerControls.setAttribute('data-is-playing', 'true');
         }
-
-      });
-
-      tracklistContainer.appendChild(trackItemEl);
+      }
     });
   </script>
-  <script type="module" src="/build/main.js"></script>
 </body>
 </html>
 `;
