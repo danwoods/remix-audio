@@ -1,9 +1,70 @@
 /** @file Custom element for a tracklist item. */
 
 /**
- * Custom element for a track list item. Handles loading the track duration.
+ * Custom element for a track list item. Handles loading the track duration
+ * and displays track information including name, artist, track number, and duration.
+ *
+ * @customElement tracklist-item-custom-element
+ *
+ * @example
+ * ```html
+ * <tracklist-item-custom-element
+ *   data-track-name="Song Title"
+ *   data-track-artist="Artist Name"
+ *   data-track-number="1"
+ *   data-track-url="/path/to/track.mp3">
+ * </tracklist-item-custom-element>
+ * ```
+ *
+ * @example
+ * ```typescript
+ * const element = document.querySelector('tracklist-item-custom-element');
+ * element.addEventListener('track-click', (e) => {
+ *   console.log('Track clicked:', e.detail.trackUrl);
+ * });
+ * ```
+ *
+ * ## Attributes
+ *
+ * ### `data-track-name` (string, required)
+ * The name/title of the track. Displayed as the primary text in the track item.
+ *
+ * ### `data-track-artist` (string, required)
+ * The artist name for the track. Displayed below the track name.
+ *
+ * ### `data-track-number` (string, required)
+ * The track number within the album. Displayed on the left side of the track item.
+ *
+ * ### `data-track-url` (string, required)
+ * The URL to the audio file. Used to load track metadata (duration) and provided
+ * in the `track-click` event detail when the item is clicked. Should be URL-encoded.
+ *
+ * ## Events
+ *
+ * ### `track-click`
+ * Dispatched when the track item is clicked. The event bubbles up the DOM tree.
+ *
+ * **Event Detail:**
+ * ```typescript
+ * {
+ *   trackUrl: string; // The decoded track URL from data-track-url attribute
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * element.addEventListener('track-click', (event: CustomEvent) => {
+ *   const { trackUrl } = event.detail;
+ *   // Handle track selection
+ * });
+ * ```
  */
 export class TracklistItemCustomElement extends HTMLElement {
+  /**
+   * Attributes that trigger `attributeChangedCallback` when modified.
+   *
+   * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Components/Using_custom_elements#observed_attributes | MDN: Observed Attributes}
+   */
   static observedAttributes = [
     "data-track-name",
     "data-track-artist",
@@ -16,6 +77,15 @@ export class TracklistItemCustomElement extends HTMLElement {
   private trackDuration: string | null = null;
   private trackNumber: string | null = null;
 
+  /**
+   * Sets the track duration from audio metadata and updates the display.
+   *
+   * Validates the duration value and formats it as "MM:SS" before updating
+   * the duration element in the DOM.
+   *
+   * @param _evt - The event that triggered this callback (unused).
+   * @param audio - The HTMLAudioElement containing the loaded audio metadata.
+   */
   setTrackDuration(_evt: Event, audio: HTMLAudioElement) {
     // Validate duration
     if (!audio.duration || !isFinite(audio.duration) || isNaN(audio.duration)) {
@@ -35,6 +105,15 @@ export class TracklistItemCustomElement extends HTMLElement {
     }
   }
 
+  /**
+   * Loads track duration metadata from the audio file URL.
+   *
+   * Creates an HTMLAudioElement with preload set to "metadata" to efficiently
+   * load only the metadata needed for duration. Handles both successful loads
+   * and errors (including HTTP 416 Range Not Satisfiable).
+   *
+   * @param trackUrl - The URL of the audio file to load metadata from.
+   */
   private loadTrackDuration(trackUrl: string) {
     if (!trackUrl) {
       console.warn("No track URL provided for track", this.trackName);
@@ -83,6 +162,14 @@ export class TracklistItemCustomElement extends HTMLElement {
     audio.load();
   }
 
+  /**
+   * Handles click events on the track item.
+   *
+   * Dispatches a custom `track-click` event with the decoded track URL
+   * in the event detail. The event bubbles up the DOM tree.
+   *
+   * @private
+   */
   private clickHandler = () => {
     const evt = new CustomEvent(
       "track-click",
@@ -99,6 +186,12 @@ export class TracklistItemCustomElement extends HTMLElement {
     this.dispatchEvent(evt);
   };
 
+  /**
+   * Creates a new TracklistItemCustomElement instance.
+   *
+   * Initializes the element by reading attributes and setting up the internal
+   * HTML structure. Automatically begins loading track duration metadata.
+   */
   constructor() {
     super();
 
@@ -167,14 +260,40 @@ export class TracklistItemCustomElement extends HTMLElement {
     `;
   }
 
+  /**
+   * Called when the element is inserted into the DOM.
+   *
+   * Sets up the click event listener for track selection.
+   *
+   * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Components/Using_custom_elements#lifecycle_callbacks | MDN: Lifecycle Callbacks}
+   */
   connectedCallback() {
     this.addEventListener("click", this.clickHandler);
   }
 
+  /**
+   * Called when the element is removed from the DOM.
+   *
+   * Cleans up event listeners to prevent memory leaks.
+   *
+   * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Components/Using_custom_elements#lifecycle_callbacks | MDN: Lifecycle Callbacks}
+   */
   disconnectedCallback() {
     this.removeEventListener("click", this.clickHandler);
   }
 
+  /**
+   * Called when one of the element's observed attributes changes.
+   *
+   * Currently, attribute changes do not trigger any updates. This callback
+   * is present to satisfy the Custom Elements API requirements.
+   *
+   * @param _name - The name of the attribute that changed.
+   * @param _oldValue - The previous value of the attribute.
+   * @param _newValue - The new value of the attribute.
+   *
+   * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Components/Using_custom_elements#lifecycle_callbacks | MDN: Lifecycle Callbacks}
+   */
   attributeChangedCallback(
     _name: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
