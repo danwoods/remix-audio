@@ -1,7 +1,7 @@
 /**
- * @file Tests for PlayerControlsCustomElement
+ * @file Tests for PlaybarCustomElement
  *
- * This test suite provides comprehensive coverage for the PlayerControlsCustomElement
+ * This test suite provides comprehensive coverage for the PlaybarCustomElement
  * custom web component. The element manages audio playback controls including play/pause,
  * next/previous track navigation, playlist management, and track loading from S3 buckets.
  *
@@ -119,7 +119,7 @@ function createMockFn<T extends (...args: unknown[]) => unknown>(
 
 /**
  * Sets up the DOM environment with all necessary mocks.
- * This must be called before importing the PlayerControlsCustomElement module
+ * This must be called before importing the PlaybarCustomElement module
  * because icon imports require document.createElement.
  *
  * Mocks include:
@@ -467,8 +467,8 @@ ${
 setupDOMEnvironment();
 
 // Now import the module (after DOM is set up)
-const { PlayerControlsCustomElement } = await import(
-  "./player-controls-custom-element.ts"
+const { PlaybarCustomElement } = await import(
+  "./playbar-custom-element.ts"
 );
 
 // ============================================================================
@@ -476,13 +476,13 @@ const { PlayerControlsCustomElement } = await import(
 // ============================================================================
 
 /**
- * Creates a new PlayerControlsCustomElement instance with mocked dependencies.
+ * Creates a new PlaybarCustomElement instance with mocked dependencies.
  * This function:
  * - Resets all mock state
  * - Creates a new element instance
  * - Overrides querySelector and dispatchEvent to ensure proper event handling
  *
- * @returns A configured PlayerControlsCustomElement ready for testing
+ * @returns A configured PlaybarCustomElement ready for testing
  *
  * @example
  * ```ts
@@ -491,9 +491,9 @@ const { PlayerControlsCustomElement } = await import(
  * element.setAttribute("data-current-track-url", "https://...");
  * ```
  */
-function createTestElement(): InstanceType<typeof PlayerControlsCustomElement> {
+function createTestElement(): InstanceType<typeof PlaybarCustomElement> {
   resetTestState();
-  const element = new PlayerControlsCustomElement();
+  const element = new PlaybarCustomElement();
 
   // Override querySelector if needed for other tests
   const originalQuerySelector = element.querySelector.bind(element);
@@ -543,7 +543,7 @@ function createTestElement(): InstanceType<typeof PlayerControlsCustomElement> {
  * Simulates a click event on a button within the element.
  * This triggers the element's click handler by calling registered listeners.
  *
- * @param element - The PlayerControlsCustomElement instance
+ * @param element - The PlaybarCustomElement instance
  * @param selector - The data attribute selector (e.g., "data-play-toggle")
  * @param stopPropagation - Whether to stop event propagation
  *
@@ -619,17 +619,17 @@ function createMockFnWithReject<
 // TEST SUITE: ELEMENT LIFECYCLE
 // ============================================================================
 
-Deno.test("PlayerControlsCustomElement - should create element", () => {
+Deno.test("PlaybarCustomElement - should create element", () => {
   /**
    * Tests that the element can be instantiated.
    * This is a basic sanity check that the class is properly defined.
    */
   const element = createTestElement();
   assertExists(element);
-  assertEquals(element.constructor.name, "PlayerControlsCustomElement");
+  assertEquals(element.constructor.name, "PlaybarCustomElement");
 });
 
-Deno.test("PlayerControlsCustomElement - should set display and width styles on connect", () => {
+Deno.test("PlaybarCustomElement - should set display and width styles on connect", () => {
   /**
    * Tests that connectedCallback sets the required CSS styles.
    * The element should be displayed as a block element with full width.
@@ -640,7 +640,7 @@ Deno.test("PlayerControlsCustomElement - should set display and width styles on 
   assertEquals(element.style.width, "100%");
 });
 
-Deno.test("PlayerControlsCustomElement - should create audio element on connect", () => {
+Deno.test("PlaybarCustomElement - should create audio element on connect", () => {
   /**
    * Tests that connectedCallback creates an audio element.
    * The audio element should be hidden (display: none) and added to document.body.
@@ -652,7 +652,7 @@ Deno.test("PlayerControlsCustomElement - should create audio element on connect"
   assertEquals(audioElement?.style?.display, "none");
 });
 
-Deno.test("PlayerControlsCustomElement - should clean up audio element on disconnect", () => {
+Deno.test("PlaybarCustomElement - should clean up audio element on disconnect", () => {
   /**
    * Tests that disconnectedCallback properly cleans up resources.
    * This includes removing event listeners, pausing audio, and removing the audio element.
@@ -674,7 +674,7 @@ Deno.test("PlayerControlsCustomElement - should clean up audio element on discon
 // TEST SUITE: ATTRIBUTE HANDLING
 // ============================================================================
 
-Deno.test("PlayerControlsCustomElement - should update audio source when data-current-track-url changes", async () => {
+Deno.test("PlaybarCustomElement - should update audio source when data-current-track-url changes", async () => {
   /**
    * Tests that changing data-current-track-url updates the audio element's source.
    * This is the primary way to control which track is playing.
@@ -695,7 +695,7 @@ Deno.test("PlayerControlsCustomElement - should update audio source when data-cu
   assert(element.getAttribute("data-current-track-url") === trackUrl);
 });
 
-Deno.test("PlayerControlsCustomElement - should update playing state when data-is-playing changes", async () => {
+Deno.test("PlaybarCustomElement - should update playing state when data-is-playing changes", async () => {
   /**
    * Tests that changing data-is-playing to "true" starts playback.
    * The audio element's play() method should be called.
@@ -716,7 +716,7 @@ Deno.test("PlayerControlsCustomElement - should update playing state when data-i
   assert(audioPlayCalls.length > 0 || audioElement?.play !== undefined);
 });
 
-Deno.test("PlayerControlsCustomElement - should pause when data-is-playing is false", async () => {
+Deno.test("PlaybarCustomElement - should pause when data-is-playing is false", async () => {
   /**
    * Tests that changing data-is-playing to "false" pauses playback.
    * The audio element's pause() method should be called.
@@ -738,7 +738,7 @@ Deno.test("PlayerControlsCustomElement - should pause when data-is-playing is fa
   assert(audioPauseCalls.length > 0 || audioElement?.pause !== undefined);
 });
 
-Deno.test("PlayerControlsCustomElement - should not update if attribute value hasn't changed", async () => {
+Deno.test("PlaybarCustomElement - should not update if attribute value hasn't changed", async () => {
   /**
    * Tests that setting the same attribute value twice doesn't trigger unnecessary updates.
    * This prevents infinite loops and unnecessary re-renders.
@@ -762,7 +762,7 @@ Deno.test("PlayerControlsCustomElement - should not update if attribute value ha
   assert(element.getAttribute("data-current-track-url") === trackUrl);
 });
 
-Deno.test("PlayerControlsCustomElement - should hide element when no track is set", async () => {
+Deno.test("PlaybarCustomElement - should hide element when no track is set", async () => {
   /**
    * Tests that the element is hidden (translate-y-full class) when no track is set.
    * This provides a clean UI when nothing is playing.
@@ -791,7 +791,7 @@ Deno.test("PlayerControlsCustomElement - should hide element when no track is se
 // TEST SUITE: EVENT SYSTEM
 // ============================================================================
 
-Deno.test("PlayerControlsCustomElement - should dispatch change event when track changes", async () => {
+Deno.test("PlaybarCustomElement - should dispatch change event when track changes", async () => {
   /**
    * Tests that changing the current track dispatches a 'change' event.
    * The event should include the new track URL in the detail.
@@ -838,7 +838,7 @@ Deno.test("PlayerControlsCustomElement - should dispatch change event when track
   }
 });
 
-Deno.test("PlayerControlsCustomElement - should dispatch change event when playing state changes", async () => {
+Deno.test("PlaybarCustomElement - should dispatch change event when playing state changes", async () => {
   /**
    * Tests that changing the playing state dispatches a 'change' event.
    * The event should include the new playing state in the detail.
@@ -882,7 +882,7 @@ Deno.test("PlayerControlsCustomElement - should dispatch change event when playi
   }
 });
 
-Deno.test("PlayerControlsCustomElement - should call onchange handler when set", async () => {
+Deno.test("PlaybarCustomElement - should call onchange handler when set", async () => {
   /**
    * Tests that the onchange attribute handler is called when set.
    * This allows inline event handlers like onchange="handleChange".
@@ -919,7 +919,7 @@ Deno.test("PlayerControlsCustomElement - should call onchange handler when set",
 // TEST SUITE: TRACK MANAGEMENT
 // ============================================================================
 
-Deno.test("PlayerControlsCustomElement - should load remaining tracks when album URL and track URL are set", async () => {
+Deno.test("PlaybarCustomElement - should load remaining tracks when album URL and track URL are set", async () => {
   /**
    * Tests that setting both data-album-url and data-current-track-url triggers
    * loading of remaining tracks from the S3 bucket.
@@ -951,7 +951,7 @@ Deno.test("PlayerControlsCustomElement - should load remaining tracks when album
   assert(element.getAttribute("data-album-url") !== null);
 });
 
-Deno.test("PlayerControlsCustomElement - should handle errors when loading tracks gracefully", async () => {
+Deno.test("PlaybarCustomElement - should handle errors when loading tracks gracefully", async () => {
   /**
    * Tests that network errors when loading tracks are handled gracefully.
    * The element should continue to function even if track loading fails.
@@ -981,7 +981,7 @@ Deno.test("PlayerControlsCustomElement - should handle errors when loading track
 // TEST SUITE: USER INTERACTIONS
 // ============================================================================
 
-Deno.test("PlayerControlsCustomElement - should handle play toggle button click", async () => {
+Deno.test("PlaybarCustomElement - should handle play toggle button click", async () => {
   /**
    * Tests that clicking the play/pause toggle button triggers playToggle().
    * This is the main user interaction for controlling playback.
@@ -1003,7 +1003,7 @@ Deno.test("PlayerControlsCustomElement - should handle play toggle button click"
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
-Deno.test("PlayerControlsCustomElement - should handle next button click", async () => {
+Deno.test("PlaybarCustomElement - should handle next button click", async () => {
   /**
    * Tests that clicking the next button advances to the next track.
    * Requires tracks to be loaded first via data-album-url.
@@ -1033,7 +1033,7 @@ Deno.test("PlayerControlsCustomElement - should handle next button click", async
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
-Deno.test("PlayerControlsCustomElement - should handle prev button click", async () => {
+Deno.test("PlaybarCustomElement - should handle prev button click", async () => {
   /**
    * Tests that clicking the previous button goes back to the previous track.
    * Requires tracks to be loaded first via data-album-url.
@@ -1063,7 +1063,7 @@ Deno.test("PlayerControlsCustomElement - should handle prev button click", async
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
-Deno.test("PlayerControlsCustomElement - playlist is handled by playlist-custom-element", () => {
+Deno.test("PlaybarCustomElement - playlist is handled by playlist-custom-element", () => {
   /**
    * Tests that the playlist functionality is delegated to playlist-custom-element.
    * The playlist-custom-element manages its own state and click handling.
@@ -1085,7 +1085,7 @@ Deno.test("PlayerControlsCustomElement - playlist is handled by playlist-custom-
 });
 
 Deno.test({
-  name: "PlayerControlsCustomElement - should handle playlist item click",
+  name: "PlaybarCustomElement - should handle playlist item click",
   async fn() {
     /**
      * Tests that clicking a playlist item plays that track.
@@ -1126,7 +1126,7 @@ Deno.test({
   sanitizeOps: false,
 });
 
-Deno.test("PlayerControlsCustomElement - playlist dropdown is handled by playlist-custom-element", async () => {
+Deno.test("PlaybarCustomElement - playlist dropdown is handled by playlist-custom-element", async () => {
   /**
    * Tests that playlist dropdown functionality is handled by playlist-custom-element.
    * The playlist-custom-element manages its own document click listeners for closing.
@@ -1147,7 +1147,7 @@ Deno.test("PlayerControlsCustomElement - playlist dropdown is handled by playlis
   // Verify playlist-custom-element is rendered
   assert(innerHTMLValue.includes("playlist-custom-element"));
 
-  // Verify no document click listeners are added by player-controls (playlist handles its own)
+  // Verify no document click listeners are added by playbar (playlist handles its own)
   // The documentClickListeners array should be empty since we removed that functionality
   assertEquals(documentClickListeners.length, 0);
 });
@@ -1156,7 +1156,7 @@ Deno.test("PlayerControlsCustomElement - playlist dropdown is handled by playlis
 // TEST SUITE: AUDIO PLAYBACK FEATURES
 // ============================================================================
 
-Deno.test("PlayerControlsCustomElement - should handle track ended event and play next", async () => {
+Deno.test("PlaybarCustomElement - should handle track ended event and play next", async () => {
   /**
    * Tests that when a track ends, the next track automatically plays.
    * This provides seamless album playback.
@@ -1194,7 +1194,7 @@ Deno.test("PlayerControlsCustomElement - should handle track ended event and pla
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
-Deno.test("PlayerControlsCustomElement - should preload next track when within 20s of end", async () => {
+Deno.test("PlaybarCustomElement - should preload next track when within 20s of end", async () => {
   /**
    * Tests that the next track is preloaded when within 20 seconds of the current track's end.
    * This improves playback performance by reducing gaps between tracks.
@@ -1261,7 +1261,7 @@ Deno.test("PlayerControlsCustomElement - should preload next track when within 2
   globalThis.Audio = OriginalAudio;
 });
 
-Deno.test("PlayerControlsCustomElement - should handle play() errors gracefully", async () => {
+Deno.test("PlaybarCustomElement - should handle play() errors gracefully", async () => {
   /**
    * Tests that errors from audio.play() are caught and handled gracefully.
    * The element should set is-playing to false and dispatch a change event.

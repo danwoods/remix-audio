@@ -2,7 +2,7 @@ import type { Files } from "./util/files.ts";
 import type { ReactNode, SyntheticEvent } from "react";
 
 import AppBar from "./components/Layout/AppBar/index.tsx";
-import PlayerControls from "./components/Layout/PlayerControls/index.tsx";
+import PlayerControls from "./components/Layout/PlayBar/index.tsx";
 import { getRemainingAlbumTracks } from "./util/files.ts";
 import { useEffect, useRef, useState } from "react";
 import { PlayerContext } from "./context/PlayerContext.tsx";

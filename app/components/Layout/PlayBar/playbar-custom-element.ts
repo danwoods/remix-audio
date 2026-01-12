@@ -21,24 +21,24 @@ import "../../../icons/playlist/index.ts";
  * code can control playback by setting attributes and react to state changes via
  * the `change` event or `onchange` attribute.
  *
- * @customElement player-controls-custom-element
+ * @customElement playbar-custom-element
  *
  * @example
  * ```html
- * <player-controls-custom-element
+ * <playbar-custom-element
  *   data-album-url="https://bucket.s3.amazonaws.com"
  *   data-current-track-url="https://bucket.s3.amazonaws.com/artist/album/01__Track Name.mp3"
  *   data-is-playing="true"
  *   onchange="handlePlayerChange">
- * </player-controls-custom-element>
+ * </playbar-custom-element>
  * ```
  *
  * @example
  * ```javascript
- * const playerControls = document.querySelector('player-controls-custom-element');
+ * const playbar = document.querySelector('playbar-custom-element');
  *
  * // Listen for state change events
- * playerControls.addEventListener('change', (event) => {
+ * playbar.addEventListener('change', (event) => {
  *   console.log('Player state changed:', {
  *     currentTrack: event.detail.currentTrack,
  *     isPlaying: event.detail.isPlaying
@@ -46,14 +46,14 @@ import "../../../icons/playlist/index.ts";
  * });
  *
  * // Control playback by setting attributes
- * playerControls.setAttribute('data-current-track-url', 'https://.../track.mp3');
- * playerControls.setAttribute('data-is-playing', 'true');
+ * playbar.setAttribute('data-current-track-url', 'https://.../track.mp3');
+ * playbar.setAttribute('data-is-playing', 'true');
  *
  * // To pause, set is-playing to false
- * playerControls.setAttribute('data-is-playing', 'false');
+ * playbar.setAttribute('data-is-playing', 'false');
  *
  * // To stop, remove the current track URL
- * playerControls.removeAttribute('data-current-track-url');
+ * playbar.removeAttribute('data-current-track-url');
  * ```
  *
  * @attributes
@@ -96,7 +96,7 @@ import "../../../icons/playlist/index.ts";
  * All player logic is self-contained within this element. External code should
  * control playback by setting attributes, not by calling methods.
  */
-export class PlayerControlsCustomElement extends HTMLElement {
+export class PlaybarCustomElement extends HTMLElement {
   static observedAttributes = [
     "data-current-track-url",
     "data-is-playing",
@@ -562,17 +562,6 @@ export class PlayerControlsCustomElement extends HTMLElement {
       escapeHtml(this.currentTrackUrl)
     }"></track-info-custom-element>
     </div>
-        <!-- <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
-          <div class="flex cursor-default">
-            ${albumArtElement}
-            <div class="ml-3 pt-2">
-              ${trackNameHtml}
-              <div class="flex items-center">
-                ${scrollingTextHtml}
-              </div>
-            </div>
-          </div>
-        </div> -->
         <div class="basis-2/5 h-full">
           <div class="flex justify-evenly w-full cursor-pointer">
             <button class="max-sm:hidden" data-play-prev>
@@ -638,6 +627,6 @@ export class PlayerControlsCustomElement extends HTMLElement {
 }
 
 customElements.define(
-  "player-controls-custom-element",
-  PlayerControlsCustomElement,
+  "playbar-custom-element",
+  PlaybarCustomElement,
 );

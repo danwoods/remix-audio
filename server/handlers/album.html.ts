@@ -188,7 +188,7 @@ export async function handleAlbumHtml(
     <div id="tracklistContainer">${trackListHtml}</div>
   </section>
 
-  <player-controls-custom-element data-album-url="${albumUrl}"></player-controls-custom-element>
+  <playbar-custom-element data-album-url="${albumUrl}"></playbar-custom-element>
 
   <script type="module" src="/build/main.js"></script>
   <script>
@@ -196,10 +196,10 @@ export async function handleAlbumHtml(
       const customEvent = event instanceof CustomEvent ? event : null;
       if (customEvent && customEvent.detail) {
         const trackUrl = customEvent.detail.trackUrl;
-        const playerControls = document.querySelector('player-controls-custom-element');
-        if (playerControls) {
-          playerControls.setAttribute('data-current-track-url', trackUrl);
-          playerControls.setAttribute('data-is-playing', 'true');
+        const playbar = document.querySelector('playbar-custom-element');
+        if (playbar) {
+          playbar.setAttribute('data-current-track-url', trackUrl);
+          playbar.setAttribute('data-is-playing', 'true');
         }
       }
     });

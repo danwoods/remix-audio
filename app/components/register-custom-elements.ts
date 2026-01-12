@@ -4,9 +4,9 @@
 
 import "./AlbumHeader/album-header-custom-element.ts";
 import "./AlbumImage/album-image-custom-element.ts";
-import "./Layout/PlayerControls/player-controls-custom-element.ts";
-import "./Layout/PlayerControls/track-info-custom-element.ts";
-import "./Layout/PlayerControls/playlist-custom-element.ts";
+import "./Layout/PlayBar/playbar-custom-element.ts";
+import "./Layout/PlayBar/track-info-custom-element.ts";
+import "./Layout/PlayBar/playlist-custom-element.ts";
 import "./Tracklist/tracklist-item-custom-element.ts";
 import "../icons/play/index.ts";
 import "../icons/pause/index.ts";
