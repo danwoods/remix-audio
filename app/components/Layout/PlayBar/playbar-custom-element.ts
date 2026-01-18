@@ -11,6 +11,7 @@ import "../../../icons/pause/index.ts";
 import "../../../icons/prev/index.ts";
 import "../../../icons/next/index.ts";
 import "../../../icons/playlist/index.ts";
+import "./player-controls-custom-element.ts";
 
 /**
  * Custom element for player controls displayed at the bottom of the screen.
@@ -119,8 +120,6 @@ export class PlaybarCustomElement extends HTMLElement {
     trackNum: number;
   }> = [];
   private loadTracksPromise: Promise<void> | null = null;
-  private boundHandleClick: (event: Event) => void;
-  private boundHandlePlaylistSelect: (event: Event) => void;
   private audioElement: HTMLAudioElement | null = null;
   private boundTimeUpdate: (event: Event) => void;
   private boundEnded: (event: Event) => void;
@@ -129,8 +128,6 @@ export class PlaybarCustomElement extends HTMLElement {
     super();
     // Use event delegation to avoid memory leaks
     // Store bound function so we can remove it later
-    this.boundHandleClick = this.handleClick.bind(this);
-    this.boundHandlePlaylistSelect = this.handlePlaylistSelect.bind(this);
     this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
     this.boundEnded = this.handleEnded.bind(this);
   }
@@ -140,9 +137,6 @@ export class PlaybarCustomElement extends HTMLElement {
     this.style.display = "block";
     this.style.width = "100%";
 
-    this.addEventListener("click", this.boundHandleClick);
-    // Listen for 'select' events from playlist-custom-element
-    this.addEventListener("select", this.boundHandlePlaylistSelect);
     this.createAudioElement();
     this.updateAttributes();
     this.render();
@@ -150,8 +144,6 @@ export class PlaybarCustomElement extends HTMLElement {
 
   disconnectedCallback() {
     // Remove event listeners on disconnect
-    this.removeEventListener("click", this.boundHandleClick);
-    this.removeEventListener("select", this.boundHandlePlaylistSelect);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -505,7 +497,7 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private render() {
-    const { artistName, albumName, trackName } = getParentDataFromTrackUrl(
+    const { artistName, albumName } = getParentDataFromTrackUrl(
       this.currentTrackUrl,
     );
     const scrollingText = artistName && albumName
@@ -515,30 +507,8 @@ export class PlaybarCustomElement extends HTMLElement {
     // Determine visibility class
     const visibilityClass = !this.currentTrackUrl ? "translate-y-full" : "";
 
-    // Play/Pause icon SVG
-    let playPauseIcon = "";
-    if (!this.currentTrackUrl) {
-      playPauseIcon = "<play-icon></play-icon>";
-    } else if (!this.isPlaying) {
-      playPauseIcon = "<play-icon class='animate-pulse'></play-icon>";
-    } else {
-      playPauseIcon = "<pause-icon></pause-icon>";
-    }
-
-    // Album art element
-    const albumArtElement = this.albumUrl
-      ? `<album-image-custom-element data-album-url="${
-        escapeHtml(this.albumUrl)
-      }" class="rounded z-10 size-20"></album-image-custom-element>`
-      : `<img alt="album art" src="https://placehold.co/100x100?text=." class="rounded z-10 size-20" />`;
-
-    // Track name
-    const trackNameHtml = trackName
-      ? `<p class="text-base font-bold">${escapeHtml(trackName)}</p>`
-      : "";
-
     // Scrolling text
-    const scrollingTextHtml = scrollingText
+    const _scrollingTextHtml = scrollingText
       ? `
         <p class="marquee pr-6 md:animate-none">
           <span class="text-sm text-nowrap">${escapeHtml(scrollingText)}</span>
@@ -549,39 +519,27 @@ export class PlaybarCustomElement extends HTMLElement {
       `
       : "";
 
-    const playlistHtml = `<playlist-custom-element data-album-url="${
-      escapeHtml(this.albumUrl)
-    }" data-current-track-id="${
-      escapeHtml(this.currentTrackUrl)
-    }"></playlist-custom-element>`;
-
     this.innerHTML = `
-      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex justify-between items-center transition-transform ${visibilityClass}">
-      <div class="max-sm:basis-3/5 lg:basis-5/12 overflow-x-clip items-center">
-        <track-info-custom-element data-track-url="${
+      <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex items-center transition-transform ${visibilityClass}">
+        <div class="max-sm:basis-3/5 lg:basis-1/5 overflow-x-clip items-center">
+          <track-info-custom-element data-track-url="${
       escapeHtml(this.currentTrackUrl)
     }"></track-info-custom-element>
-    </div>
-        <div class="basis-2/5 h-full">
-          <div class="flex justify-evenly w-full cursor-pointer">
-            <button class="max-sm:hidden" data-play-prev>
-              <prev-icon></prev-icon>
-            </button>
-            <button class="md:px-6 cursor-pointer" data-play-toggle>
-              ${playPauseIcon}
-            </button>
-            <button class="cursor-pointer" data-play-next>
-              <next-icon></next-icon>
-            </button>
-          </div>
         </div>
-        <div class="max-sm:basis-1/5 max-sm:hidden lg:basis-5/12 items-end">
-          ${playlistHtml}
+        <div class="absolute right-0 left-0 h-full">
+        <player-controls-custom-element data-play-state="${
+      this.isPlaying ? "playing" : "paused"
+    }" data-has-previous-track="${
+      this.allAlbumTracks.length > 0 ? "true" : "false"
+    }" data-has-next-track="${
+      this.remainingTracks.length > 0 ? "true" : "false"
+    }"></player-controls-custom-element>
         </div>
       </div>
     `;
   }
 
+  /*
   private handleClick(event: Event) {
     const target = event.target as HTMLElement;
     const button = target.closest("button");
@@ -608,22 +566,7 @@ export class PlaybarCustomElement extends HTMLElement {
       return;
     }
   }
-
-  /**
-   * Handles 'select' events from playlist-custom-element.
-   * When a track is selected from the playlist, this method plays that track.
-   * @private
-   */
-  private handlePlaylistSelect(event: Event) {
-    const customEvent = event as CustomEvent<{
-      url: string;
-      title: string;
-      trackNum: number;
-    }>;
-    if (customEvent.detail?.url) {
-      this.playToggle(customEvent.detail.url);
-    }
-  }
+  */
 }
 
 customElements.define(

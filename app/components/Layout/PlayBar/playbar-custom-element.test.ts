@@ -1063,27 +1063,6 @@ Deno.test("PlaybarCustomElement - should handle prev button click", async () => 
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
-Deno.test("PlaybarCustomElement - playlist is handled by playlist-custom-element", () => {
-  /**
-   * Tests that the playlist functionality is delegated to playlist-custom-element.
-   * The playlist-custom-element manages its own state and click handling.
-   */
-  const element = createTestElement();
-  element.connectedCallback();
-
-  element.setAttribute(
-    "data-album-url",
-    "https://bucket.s3.amazonaws.com/Artist/Album",
-  );
-  element.setAttribute(
-    "data-current-track-url",
-    "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
-  );
-
-  // Verify playlist-custom-element is rendered in the HTML
-  assert(innerHTMLValue.includes("playlist-custom-element"));
-});
-
 Deno.test({
   name: "PlaybarCustomElement - should handle playlist item click",
   async fn() {
@@ -1124,32 +1103,6 @@ Deno.test({
   },
   sanitizeResources: false, // Allow timer leaks from Promise.race timeout
   sanitizeOps: false,
-});
-
-Deno.test("PlaybarCustomElement - playlist dropdown is handled by playlist-custom-element", async () => {
-  /**
-   * Tests that playlist dropdown functionality is handled by playlist-custom-element.
-   * The playlist-custom-element manages its own document click listeners for closing.
-   */
-  const element = createTestElement();
-  element.connectedCallback();
-
-  element.setAttribute(
-    "data-album-url",
-    "https://bucket.s3.amazonaws.com/Artist/Album",
-  );
-  element.setAttribute(
-    "data-current-track-url",
-    "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
-  );
-  await new Promise((resolve) => setTimeout(resolve, 10));
-
-  // Verify playlist-custom-element is rendered
-  assert(innerHTMLValue.includes("playlist-custom-element"));
-
-  // Verify no document click listeners are added by playbar (playlist handles its own)
-  // The documentClickListeners array should be empty since we removed that functionality
-  assertEquals(documentClickListeners.length, 0);
 });
 
 // ============================================================================

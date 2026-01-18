@@ -7,9 +7,27 @@ import { getParentDataFromTrackUrl } from "../../../util/track.ts";
 const template = document.createElement("template");
 
 template.innerHTML = `
-  <div style="display:flex;">
-    <album-image-custom-element data-album-url="" style="width: 64px; height: 64px;"></album-image-custom-element>
-    <div class="ml-3 pt-2">
+<style>
+  :host {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .root {
+    display: flex;
+  }
+  .album-image {
+    display: inline-block;
+    width: 96px;
+    height: 96px;
+  }
+  .text-container {
+    margin-left: 1rem;
+  }
+</style>
+  <div class="root">
+    <album-image-custom-element data-album-url="" class="album-image"></album-image-custom-element>
+    <div class="text-container">
       <p class="text-base font-bold track-name"></p>
       <div class="flex items-center">
         <p class="marquee pr-6 md:animate-none">

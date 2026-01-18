@@ -60,7 +60,7 @@ const createDataUrlFromArrayBuffer = (
  */
 const getAlbumArtAsDataUrl = async (url: string): Promise<string | null> => {
   try {
-    const tags = await getId3Tags(url);
+    const tags = await getId3Tags(encodeURI(url));
 
     if (Array.isArray(tags?.images) && tags.images.length > 0) {
       const arrayBuffer = tags.images[0].data;

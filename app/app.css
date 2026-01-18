@@ -368,9 +368,6 @@
   .cursor-pointer {
     cursor: pointer;
   }
-  .resize {
-    resize: both;
-  }
   .grid-cols-\[repeat\(5\,calc\(40\%-40px\)\)\] {
     grid-template-columns: repeat(5,calc(40% - 40px));
   }
@@ -668,6 +665,11 @@
   .lg\:min-w-60 {
     @media (width >= 64rem) {
       min-width: calc(var(--spacing) * 60);
+    }
+  }
+  .lg\:basis-1\/5 {
+    @media (width >= 64rem) {
+      flex-basis: calc(1/5 * 100%);
     }
   }
   .lg\:basis-5\/12 {
