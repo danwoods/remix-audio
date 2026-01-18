@@ -1,8 +1,8 @@
 /** @file Custom element for player controls seen at the bottom of the screen */
 
-import { getBucketContents } from "../../../../lib/s3.ts";
 import {
   escapeHtml,
+  getAllAlbumTracks,
   getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
 } from "../../../util/track.ts";
@@ -343,51 +343,18 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   /**
-   * Load all tracks in the album for prev button functionality
+   * Load all tracks in the album for prev button functionality.
+   * Filters out cover.jpeg files from the track list.
    */
   private async loadAllAlbumTracks() {
     if (!this.albumUrl || !this.currentTrackUrl) {
       this.allAlbumTracks = [];
       return;
     }
-
-    try {
-      const { artistName, albumName } = getParentDataFromTrackUrl(
-        this.currentTrackUrl,
-      );
-      if (!artistName || !albumName) {
-        this.allAlbumTracks = [];
-        return;
-      }
-
-      // Extract base bucket URL from albumUrl
-      const urlObj = new URL(this.albumUrl);
-      const bucketUrl = `${urlObj.protocol}//${urlObj.host}`;
-      const prefix = `${artistName}/${albumName}/`;
-
-      const contents = (await getBucketContents(bucketUrl, prefix)).filter(
-        (key): key is string => key !== null && key !== undefined,
-      );
-
-      this.allAlbumTracks = contents
-        .map((key) => {
-          const filename = key.split("/").pop() || key;
-          const trackPieces = filename.split("__");
-          const trackNum = parseInt(trackPieces[0], 10) || 0;
-          const title = trackPieces[1] || filename;
-          const fullUrl = `${bucketUrl}/${key}`;
-
-          return {
-            url: fullUrl,
-            title,
-            trackNum,
-          };
-        })
-        .sort((a, b) => a.trackNum - b.trackNum);
-    } catch (error) {
-      console.error("Failed to load all album tracks:", error);
-      this.allAlbumTracks = [];
-    }
+    this.allAlbumTracks =
+      (await getAllAlbumTracks(this.albumUrl, this.currentTrackUrl)).filter((
+        track,
+      ) => track.title !== "cover.jpeg");
   }
 
   /**
@@ -519,6 +486,20 @@ export class PlaybarCustomElement extends HTMLElement {
       `
       : "";
 
+    // Determine if there's a previous track (matching playPrev() logic)
+    let hasPreviousTrack = false;
+    if (this.currentTrackUrl && this.allAlbumTracks.length > 0) {
+      const currentTrackPieces = this.currentTrackUrl.split("/");
+      const currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
+      const currentTrackIndex = this.allAlbumTracks.findIndex((track) => {
+        const trackPieces = track.url.split("/");
+        const trackKey = trackPieces[trackPieces.length - 1];
+        return trackKey === currentTrackKey;
+      });
+
+      hasPreviousTrack = currentTrackIndex > 0;
+    }
+
     this.innerHTML = `
       <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex items-center transition-transform ${visibilityClass}">
         <div class="max-sm:basis-3/5 lg:basis-1/5 overflow-x-clip items-center">
@@ -530,7 +511,7 @@ export class PlaybarCustomElement extends HTMLElement {
         <player-controls-custom-element data-play-state="${
       this.isPlaying ? "playing" : "paused"
     }" data-has-previous-track="${
-      this.allAlbumTracks.length > 0 ? "true" : "false"
+      hasPreviousTrack ? "true" : "false"
     }" data-has-next-track="${
       this.remainingTracks.length > 0 ? "true" : "false"
     }"></player-controls-custom-element>

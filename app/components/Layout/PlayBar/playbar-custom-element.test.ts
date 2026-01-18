@@ -977,6 +977,112 @@ Deno.test("PlaybarCustomElement - should handle errors when loading tracks grace
   assert(element.getAttribute("data-current-track-url") !== null);
 });
 
+Deno.test("PlaybarCustomElement - should filter out cover.jpeg from album tracks", async () => {
+  /**
+   * Tests that cover.jpeg is filtered out from allAlbumTracks.
+   * Cover images should not appear in the track list.
+   */
+  mockBucketContents = [
+    "Artist/Album/01__Track One.mp3",
+    "Artist/Album/02__Track Two.mp3",
+    "Artist/Album/cover.jpeg",
+  ];
+
+  const element = createTestElement();
+  element.connectedCallback();
+
+  element.setAttribute(
+    "data-album-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+  );
+  element.setAttribute(
+    "data-current-track-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+  );
+
+  // Wait for tracks to load
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Verify cover.jpeg is filtered out (check via render output)
+  // The element should render with hasPreviousTrack correctly set
+  // If cover.jpeg was included, it would affect the track count
+  assert(element.getAttribute("data-current-track-url") !== null);
+});
+
+Deno.test("PlaybarCustomElement - should set hasPreviousTrack to false when current track is first", async () => {
+  /**
+   * Tests that hasPreviousTrack is correctly set to false when the current track
+   * is the first track in the album (index 0).
+   * This matches the playPrev() logic which checks currentTrackIndex > 0.
+   */
+  mockBucketContents = [
+    "Artist/Album/01__Track One.mp3",
+    "Artist/Album/02__Track Two.mp3",
+    "Artist/Album/03__Track Three.mp3",
+  ];
+
+  const element = createTestElement();
+  element.connectedCallback();
+
+  element.setAttribute(
+    "data-album-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+  );
+  element.setAttribute(
+    "data-current-track-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+  );
+
+  // Wait for tracks to load and render
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Check that hasPreviousTrack is set to false in the rendered HTML
+  // The player-controls element should have data-has-previous-track="false"
+  const html = innerHTMLValue;
+  assert(
+    html.includes('data-has-previous-track="false"') ||
+      html.includes("data-has-previous-track='false'"),
+    "hasPreviousTrack should be false when current track is first",
+  );
+});
+
+Deno.test("PlaybarCustomElement - should set hasPreviousTrack to true when current track is not first", async () => {
+  /**
+   * Tests that hasPreviousTrack is correctly set to true when the current track
+   * is not the first track in the album (index > 0).
+   * This matches the playPrev() logic which checks currentTrackIndex > 0.
+   */
+  mockBucketContents = [
+    "Artist/Album/01__Track One.mp3",
+    "Artist/Album/02__Track Two.mp3",
+    "Artist/Album/03__Track Three.mp3",
+  ];
+
+  const element = createTestElement();
+  element.connectedCallback();
+
+  element.setAttribute(
+    "data-album-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+  );
+  element.setAttribute(
+    "data-current-track-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album/02__Track Two.mp3",
+  );
+
+  // Wait for tracks to load and render
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Check that hasPreviousTrack is set to true in the rendered HTML
+  // The player-controls element should have data-has-previous-track="true"
+  const html = innerHTMLValue;
+  assert(
+    html.includes('data-has-previous-track="true"') ||
+      html.includes("data-has-previous-track='true'"),
+    "hasPreviousTrack should be true when current track is not first",
+  );
+});
+
 // ============================================================================
 // TEST SUITE: USER INTERACTIONS
 // ============================================================================

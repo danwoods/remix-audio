@@ -1,6 +1,11 @@
 /** @file Tests for track utility functions */
 
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import {
   escapeHtml,
   getAllAlbumTracks,
@@ -346,4 +351,23 @@ Deno.test("getAllAlbumTracks - should handle tracks without track numbers", asyn
 
   // Should still return tracks, with 0 for invalid track numbers
   assertEquals(tracks.length > 0, true);
+});
+
+Deno.test("getAllAlbumTracks - should include cover.jpeg in results", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+    "Artist/Album/cover.jpeg",
+  ];
+
+  const tracks = await getAllAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  // Should include cover.jpeg (filtering happens in consuming code)
+  assertEquals(tracks.length, 3);
+  const coverTrack = tracks.find((t) => t.title === "cover.jpeg");
+  assertExists(coverTrack);
 });

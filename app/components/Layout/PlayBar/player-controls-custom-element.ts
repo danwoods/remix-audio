@@ -25,6 +25,10 @@ template.innerHTML = `
       background: none;
       border: none;
     }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
     .root {
       display: flex;
       justify-content: center;
