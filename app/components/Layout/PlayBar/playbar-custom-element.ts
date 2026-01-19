@@ -123,6 +123,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private audioElement: HTMLAudioElement | null = null;
   private boundTimeUpdate: (event: Event) => void;
   private boundEnded: (event: Event) => void;
+  private boundHandlePlayToggle: (event: Event) => void;
 
   constructor() {
     super();
@@ -130,6 +131,7 @@ export class PlaybarCustomElement extends HTMLElement {
     // Store bound function so we can remove it later
     this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
     this.boundEnded = this.handleEnded.bind(this);
+    this.boundHandlePlayToggle = this.handlePlayToggle.bind(this);
   }
 
   connectedCallback() {
@@ -140,10 +142,13 @@ export class PlaybarCustomElement extends HTMLElement {
     this.createAudioElement();
     this.updateAttributes();
     this.render();
+    // Listen for play-toggle event from player-controls-custom-element
+    this.addEventListener("play-toggle", this.boundHandlePlayToggle);
   }
 
   disconnectedCallback() {
     // Remove event listeners on disconnect
+    this.removeEventListener("play-toggle", this.boundHandlePlayToggle);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -162,6 +167,7 @@ export class PlaybarCustomElement extends HTMLElement {
     _oldValue: string | null,
     _newValue: string | null,
   ) {
+    console.log("attributeChangedCallback", name, _oldValue, _newValue);
     if (name === "data-current-track-url") {
       // Only update if different to avoid unnecessary re-renders
       if (this.currentTrackUrl !== _newValue) {
@@ -204,6 +210,7 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private async updateAttributes() {
+    console.log("updateAttributes");
     this.currentTrackUrl = this.getAttribute("data-current-track-url");
     this.isPlaying = this.getAttribute("data-is-playing") === "true";
     this.albumUrl = this.getAttribute("data-album-url");
@@ -211,6 +218,7 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private createAudioElement() {
+    console.log("createAudioElement");
     // Create audio element if it doesn't exist
     if (!this.audioElement) {
       this.audioElement = document.createElement("audio");
@@ -225,6 +233,7 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private updateAudioSource() {
+    console.log("updateAudioSource");
     if (!this.audioElement) return;
 
     if (this.currentTrackUrl) {
@@ -253,6 +262,7 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private updateAudioPlayback() {
+    console.log("updateAudioPlayback");
     if (!this.audioElement || !this.audioElement.src) return;
 
     if (this.isPlaying && this.currentTrackUrl) {
@@ -290,7 +300,26 @@ export class PlaybarCustomElement extends HTMLElement {
     this.playNext();
   }
 
+  /**
+   * Handles the play-toggle event from player-controls-custom-element.
+   * Toggles play/pause for the current track, or stops playback if no track is set.
+   *
+   * @private
+   * @param event - The play-toggle custom event
+   */
+  private async handlePlayToggle(event: Event) {
+    console.log("qwdcade", this.getAttribute("data-current-track-url"));
+    event.stopPropagation();
+    // Toggle play/pause for the current track
+    await this.playToggle(
+      this.getAttribute("data-current-track-url") || undefined,
+    );
+
+    this.render();
+  }
+
   private async loadRemainingTracks() {
+    console.log("loadRemainingTracks");
     // If already loading, wait for it with a timeout
     if (this.loadTracksPromise) {
       try {
@@ -366,6 +395,7 @@ export class PlaybarCustomElement extends HTMLElement {
    * 4. If no track is passed in, it will stop playback
    */
   private async playToggle(trackUrl?: string) {
+    console.log("playToggle", trackUrl, this.currentTrackUrl, this.isPlaying);
     if (trackUrl) {
       if (trackUrl !== this.currentTrackUrl) {
         this.currentTrackUrl = trackUrl;
@@ -379,12 +409,14 @@ export class PlaybarCustomElement extends HTMLElement {
       } else if (this.isPlaying) {
         this.pause();
       } else {
+        // Same track, not playing - resume it
         this.isPlaying = true;
         this.setAttribute("data-is-playing", "true");
         this.updateAudioPlayback();
         this.dispatchChangeEvent();
       }
     } else {
+      // No track URL - stop playback
       this.currentTrackUrl = null;
       this.removeAttribute("data-current-track-url");
       this.pause();
