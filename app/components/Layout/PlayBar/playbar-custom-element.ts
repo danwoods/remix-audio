@@ -125,6 +125,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private boundEnded: (event: Event) => void;
   private boundHandlePlayToggle: (event: Event) => void;
   private boundHandlePlayNext: (event: Event) => void;
+  private boundHandlePlayPrev: (event: Event) => void;
 
   constructor() {
     super();
@@ -134,6 +135,7 @@ export class PlaybarCustomElement extends HTMLElement {
     this.boundEnded = this.handleEnded.bind(this);
     this.boundHandlePlayToggle = this.handlePlayToggle.bind(this);
     this.boundHandlePlayNext = this.handlePlayNext.bind(this);
+    this.boundHandlePlayPrev = this.handlePlayPrev.bind(this);
   }
 
   connectedCallback() {
@@ -148,12 +150,15 @@ export class PlaybarCustomElement extends HTMLElement {
     this.addEventListener("play-toggle", this.boundHandlePlayToggle);
     // Listen for play-next event from player-controls-custom-element
     this.addEventListener("play-next", this.boundHandlePlayNext);
+    // Listen for play-prev event from player-controls-custom-element
+    this.addEventListener("play-prev", this.boundHandlePlayPrev);
   }
 
   disconnectedCallback() {
     // Remove event listeners on disconnect
     this.removeEventListener("play-toggle", this.boundHandlePlayToggle);
     this.removeEventListener("play-next", this.boundHandlePlayNext);
+    this.removeEventListener("play-prev", this.boundHandlePlayPrev);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -336,6 +341,19 @@ export class PlaybarCustomElement extends HTMLElement {
     this.render();
   }
 
+  /**
+   * Handles the play-prev event from player-controls-custom-element.
+   * Plays the previous track in the album if available.
+   *
+   * @private
+   * @param event - The play-prev custom event
+   */
+  private handlePlayPrev(event: Event) {
+    event.stopPropagation();
+    this.playPrev();
+    this.render();
+  }
+
   private async loadRemainingTracks() {
     console.log("loadRemainingTracks");
     // If already loading, wait for it with a timeout
@@ -451,12 +469,8 @@ export class PlaybarCustomElement extends HTMLElement {
 
   /** Play next track */
   private playNext() {
-    console.log(
-      `playNext: ${this.currentTrackUrl}, ${this.remainingTracks.length}`,
-    );
     if (this.currentTrackUrl && this.remainingTracks.length > 0) {
       const [nextTrack] = this.remainingTracks;
-      console.log("nextTrack", nextTrack);
       if (nextTrack) {
         this.playToggle(nextTrack.url);
       }
