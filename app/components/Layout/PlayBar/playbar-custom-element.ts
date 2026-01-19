@@ -124,6 +124,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private boundTimeUpdate: (event: Event) => void;
   private boundEnded: (event: Event) => void;
   private boundHandlePlayToggle: (event: Event) => void;
+  private boundHandlePlayNext: (event: Event) => void;
 
   constructor() {
     super();
@@ -132,6 +133,7 @@ export class PlaybarCustomElement extends HTMLElement {
     this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
     this.boundEnded = this.handleEnded.bind(this);
     this.boundHandlePlayToggle = this.handlePlayToggle.bind(this);
+    this.boundHandlePlayNext = this.handlePlayNext.bind(this);
   }
 
   connectedCallback() {
@@ -144,11 +146,14 @@ export class PlaybarCustomElement extends HTMLElement {
     this.render();
     // Listen for play-toggle event from player-controls-custom-element
     this.addEventListener("play-toggle", this.boundHandlePlayToggle);
+    // Listen for play-next event from player-controls-custom-element
+    this.addEventListener("play-next", this.boundHandlePlayNext);
   }
 
   disconnectedCallback() {
     // Remove event listeners on disconnect
     this.removeEventListener("play-toggle", this.boundHandlePlayToggle);
+    this.removeEventListener("play-next", this.boundHandlePlayNext);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -318,6 +323,19 @@ export class PlaybarCustomElement extends HTMLElement {
     this.render();
   }
 
+  /**
+   * Handles the play-next event from player-controls-custom-element.
+   * Plays the next track in the album if available.
+   *
+   * @private
+   * @param event - The play-next custom event
+   */
+  private handlePlayNext(event: Event) {
+    event.stopPropagation();
+    this.playNext();
+    this.render();
+  }
+
   private async loadRemainingTracks() {
     console.log("loadRemainingTracks");
     // If already loading, wait for it with a timeout
@@ -433,8 +451,12 @@ export class PlaybarCustomElement extends HTMLElement {
 
   /** Play next track */
   private playNext() {
+    console.log(
+      `playNext: ${this.currentTrackUrl}, ${this.remainingTracks.length}`,
+    );
     if (this.currentTrackUrl && this.remainingTracks.length > 0) {
       const [nextTrack] = this.remainingTracks;
+      console.log("nextTrack", nextTrack);
       if (nextTrack) {
         this.playToggle(nextTrack.url);
       }

@@ -1,11 +1,6 @@
 /** @file Tests for track utility functions */
 
-import {
-  assertEquals,
-  assertExists,
-  assertRejects,
-  assertThrows,
-} from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import {
   escapeHtml,
   getAllAlbumTracks,
@@ -353,7 +348,7 @@ Deno.test("getAllAlbumTracks - should handle tracks without track numbers", asyn
   assertEquals(tracks.length > 0, true);
 });
 
-Deno.test("getAllAlbumTracks - should include cover.jpeg in results", async () => {
+Deno.test("getAllAlbumTracks - should filter out cover.jpeg from results", async () => {
   resetMocks();
   mockBucketContents = [
     "Artist/Album/1__Track One.mp3",
@@ -366,8 +361,30 @@ Deno.test("getAllAlbumTracks - should include cover.jpeg in results", async () =
     "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
   );
 
-  // Should include cover.jpeg (filtering happens in consuming code)
-  assertEquals(tracks.length, 3);
+  // Should filter out cover.jpeg
+  assertEquals(tracks.length, 2);
   const coverTrack = tracks.find((t) => t.title === "cover.jpeg");
-  assertExists(coverTrack);
+  assertEquals(coverTrack, undefined);
+});
+
+Deno.test("getRemainingAlbumTracks - should filter out cover.jpeg from results", async () => {
+  resetMocks();
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/2__Track Two.mp3",
+    "Artist/Album/cover.jpeg",
+    "Artist/Album/3__Track Three.mp3",
+  ];
+
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/1__Track One.mp3",
+  );
+
+  // Should filter out cover.jpeg, only return tracks after current track
+  assertEquals(tracks.length, 2);
+  assertEquals(tracks[0].title, "Track Two.mp3");
+  assertEquals(tracks[1].title, "Track Three.mp3");
+  const coverTrack = tracks.find((t) => t.title === "cover.jpeg");
+  assertEquals(coverTrack, undefined);
 });

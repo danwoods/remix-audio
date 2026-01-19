@@ -127,6 +127,9 @@ export type TrackInfo = {
  * @remarks
  * This function requires DOM APIs (DOMParser) and network access, so it cannot be tested
  * in Deno's documentation test environment. See the test file for executable examples.
+ *
+ * Note: This function automatically filters out cover image files (cover.jpeg) from
+ * the returned track list.
  */
 export const getRemainingAlbumTracks = async (
   albumUrl: string,
@@ -206,7 +209,7 @@ export const getRemainingAlbumTracks = async (
   }
 
   const remainingKeys = contents.slice(currentTrackIndex + 1);
-  const tracks = remainingKeys.map((key) => {
+  const tracks: Array<TrackInfo> = remainingKeys.map((key) => {
     // Extract filename from full key path
     const filename = key.split("/").pop() || key;
     const trackPieces = filename.split("__");
@@ -221,7 +224,9 @@ export const getRemainingAlbumTracks = async (
     };
   });
 
-  return tracks.sort((a, b) => a.trackNum - b.trackNum);
+  return tracks.sort((a, b) => a.trackNum - b.trackNum).filter(
+    filterOutCoverJpeg,
+  );
 };
 
 /**
@@ -244,6 +249,9 @@ export const getRemainingAlbumTracks = async (
  * @remarks
  * This function requires DOM APIs (DOMParser) and network access, so it cannot be tested
  * in Deno's documentation test environment. See the test file for executable examples.
+ *
+ * Note: This function automatically filters out cover image files (cover.jpeg) from
+ * the returned track list.
  */
 export const getAllAlbumTracks = async (
   albumUrl: string,
@@ -286,11 +294,22 @@ export const getAllAlbumTracks = async (
           trackNum,
         };
       })
-      .sort((a, b) => a.trackNum - b.trackNum);
+      .sort((a, b) => a.trackNum - b.trackNum)
+      .filter(filterOutCoverJpeg);
 
     return tracks;
   } catch (error) {
     console.error("Failed to load all album tracks:", error);
     return [];
   }
+};
+
+/**
+ * Filter out cover.jpeg tracks
+ *
+ * @param track - The track information
+ * @returns True if the track is not a cover.jpeg, false otherwise
+ */
+const filterOutCoverJpeg = (track: TrackInfo): boolean => {
+  return track.title !== "cover.jpeg";
 };
