@@ -14,6 +14,7 @@ template.innerHTML = `
     height: 100%;
   }
   .root {
+    align-items: center;
     display: flex;
   }
   .album-image {
