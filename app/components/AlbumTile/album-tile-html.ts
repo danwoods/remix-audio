@@ -1,5 +1,4 @@
 import type { Files } from "../../util/files.ts";
-import albumCoverHtml from "../AlbumCover/album-cover-html.ts";
 import { getAlbum } from "../../util/files.ts";
 
 /**
@@ -54,10 +53,11 @@ export default function albumTileHtml(
   const albumObject = getAlbum(files, albumId);
   const srcArr = albumObject.tracks[0].url.split("/");
   srcArr.pop();
-  const src = [...srcArr, "cover.jpeg"].join("/");
 
   return `<a href="${escapeHtml(href)}">
-  ${albumCoverHtml({ albumId, className: "rounded w-full", src })}
+  <album-image-custom-element style="width: 100%; border-radius: 4px; aspect-ratio: 1/1; display: inline-block;" data-album-url="${
+    escapeHtml(srcArr.join("/"))
+  }"></album-image-custom-element>
   <div class="pt-1 md:pt-2">
     <p class="text-base font-bold line-clamp-1">${escapedAlbumName}</p>
     <p class="text-sm line-clamp-1">by ${escapedArtistName}</p>
