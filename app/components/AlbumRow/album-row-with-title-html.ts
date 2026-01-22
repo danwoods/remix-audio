@@ -10,13 +10,11 @@ export interface AlbumRowWithTitleProps {
 }
 
 /** Single row on homepage */
-export default async function albumRowWithTitleHtml(
+export default function albumRowWithTitleHtml(
   props: AlbumRowWithTitleProps,
-): Promise<string> {
+): string {
   const { albumIds, files, title } = props;
 
-  const children = await Promise.all(
-    albumIds.map((a) => albumTileHtml({ albumId: a.id, files })),
-  );
+  const children = albumIds.map((a) => albumTileHtml({ albumId: a.id, files }));
   return horizontalRowWithTitleHtml({ title, children });
 }

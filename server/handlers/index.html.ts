@@ -37,17 +37,17 @@ export async function handleIndexHtml(
       assets: { css: "", js: "" },
     },
     [
-      await albumRowWithTitleHtml({
+      albumRowWithTitleHtml({
         albumIds: recentlyListenedToAlbumIds,
         files: files,
         title: "Continue Listening",
       }),
-      await albumRowWithTitleHtml({
+      albumRowWithTitleHtml({
         albumIds: recentlyUploadedAlbumIds,
         files: files,
         title: "Latest",
       }),
-      await albumRowWithTitleHtml({
+      albumRowWithTitleHtml({
         albumIds: mostListenedToAlbumIds,
         files: files,
         title: "Favorites",

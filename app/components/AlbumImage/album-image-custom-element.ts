@@ -76,6 +76,50 @@ const getAlbumArtAsDataUrl = async (url: string): Promise<string | null> => {
   }
 };
 
+// CACHING ////////////////////////////////////////////////////////////////////
+
+/** Cache of album art promises, keyed by album URL (not track URL) since album art is the same for all tracks in an album. */
+const albumArtCache = new Map<string, Promise<string | null>>();
+
+/**
+ * Retrieves album art from an audio file and converts it to a data URL.
+ * Cached by album URL to prevent re-fetching when tracks change within the same album.
+ *
+ * @param albumUrl - The full album URL (e.g., "https://bucket.s3.region.amazonaws.com/artist/album").
+ * @param artistId - The artist ID.
+ * @param albumId - The album ID.
+ * @returns A promise that resolves to a data URL string of the album art, or null if no album art is found.
+ */
+const getAlbumArtAsDataUrlCached = async (
+  albumUrl: string,
+  artistId: string,
+  albumId: string,
+): Promise<string | null> => {
+  // Cache by album URL, not track URL, since album art is the same for all tracks
+  // Use the full albumUrl as the cache key
+  if (!albumArtCache.has(albumUrl)) {
+    // Get first song to extract album art from
+    const albumUrlParts = albumUrl.split("/");
+    const baseUrl = albumUrlParts.slice(0, -2).join("/"); // Remove artist and album from end
+    const firstSong = await getFirstSong(
+      baseUrl,
+      artistId,
+      albumId,
+    );
+
+    if (!firstSong) {
+      return null;
+    }
+
+    // firstSong already contains the full path from bucket root (e.g., "artist/album/track1.mp3")
+    // so just prepend the base URL
+    const trackUrl = `${baseUrl}/${firstSong}`;
+    albumArtCache.set(albumUrl, getAlbumArtAsDataUrl(trackUrl));
+  }
+
+  return albumArtCache.get(albumUrl)!;
+};
+
 // TEMPLATE ///////////////////////////////////////////////////////////////////
 
 const template = document.createElement("template");
@@ -102,6 +146,7 @@ export class AlbumImageCustomElement extends HTMLElement {
 
   private artistId: string | null = null;
   private albumId: string | null = null;
+  private currentAlbumUrl: string | null = null;
   private loadImageAbortController: AbortController | null = null;
 
   constructor() {
@@ -117,13 +162,6 @@ export class AlbumImageCustomElement extends HTMLElement {
   }
 
   private async loadAlbumImage() {
-    // Abort any pending image load
-    if (this.loadImageAbortController) {
-      this.loadImageAbortController.abort();
-    }
-    this.loadImageAbortController = new AbortController();
-    const signal = this.loadImageAbortController.signal;
-
     const albumUrl = this.getAttribute("data-album-url") || "";
     if (!albumUrl) {
       return;
@@ -137,23 +175,33 @@ export class AlbumImageCustomElement extends HTMLElement {
       return;
     }
 
+    // If we're already loading/loaded the same album, don't reload
+    // This prevents the image from popping in/out when tracks change within the same album
+    if (
+      this.currentAlbumUrl === albumUrl && this.artistId === artistId &&
+      this.albumId === albumId
+    ) {
+      return;
+    }
+
+    // Abort any pending image load for a different album
+    if (this.loadImageAbortController) {
+      this.loadImageAbortController.abort();
+    }
+    this.loadImageAbortController = new AbortController();
+    const signal = this.loadImageAbortController.signal;
+
     // Store for use in event handlers
     this.artistId = artistId;
     this.albumId = albumId;
+    this.currentAlbumUrl = albumUrl;
 
     try {
-      const firstSong = await getFirstSong(
-        albumUrlParts.join("/"),
+      const dataUrl = await getAlbumArtAsDataUrlCached(
+        albumUrl,
         artistId,
         albumId,
       );
-
-      if (signal.aborted || !firstSong) {
-        return;
-      }
-
-      const trackUrl = albumUrlParts.join("/") + "/" + firstSong;
-      const dataUrl = await getAlbumArtAsDataUrl(trackUrl);
 
       if (signal.aborted || !dataUrl) {
         return;

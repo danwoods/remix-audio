@@ -2,7 +2,11 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive plan to migrate the Remix-based audio streaming application to a Deno-based server architecture. The application currently uses Remix's file-based routing, server-side rendering, and file upload handling. The migration will leverage Deno's native capabilities and modern web standards while maintaining the existing React frontend.
+This document outlines a comprehensive plan to migrate the Remix-based audio
+streaming application to a Deno-based server architecture. The application
+currently uses Remix's file-based routing, server-side rendering, and file
+upload handling. The migration will leverage Deno's native capabilities and
+modern web standards while maintaining the existing React frontend.
 
 ## Current Architecture Overview
 
@@ -144,7 +148,8 @@ app/
 
 - Replace Remix `action` with POST route handler
 - Replace `useFetcher` in `FilePicker.tsx` with standard form submission:
-  - Option A: Use standard HTML form with `action` attribute pointing to upload endpoint
+  - Option A: Use standard HTML form with `action` attribute pointing to upload
+    endpoint
   - Option B: Use `fetch` API with `FormData` for programmatic submission
   - Handle loading states manually (currently handled by `fetcher.state`)
 - Use Deno's native `Request` API for multipart form parsing
@@ -152,7 +157,8 @@ app/
   - Use `multipart` from `std/media_types` or
   - Use `form-data` library compatible with Deno
   - Parse `multipart/form-data` manually using Web Streams API
-- Replace `composeUploadHandlers` and `createMemoryUploadHandler` with custom upload logic
+- Replace `composeUploadHandlers` and `createMemoryUploadHandler` with custom
+  upload logic
 - Maintain streaming upload to S3 using Web Streams API
 - Return appropriate redirect responses after upload
 
@@ -177,7 +183,8 @@ app/
 - Convert `loader` to route handler function
 - Convert `action` to POST route handler
 - Update `useLoaderData` usage - pass data as props from server
-- Replace `Links`, `Meta`, `Scripts`, `ScrollRestoration` with custom implementation:
+- Replace `Links`, `Meta`, `Scripts`, `ScrollRestoration` with custom
+  implementation:
   - `Links` → Manual `<link>` tags in HTML template
   - `Meta` → Manual `<meta>` tags in HTML template
   - `Scripts` → Manual `<script>` tags for client bundle
@@ -187,7 +194,7 @@ app/
 **Migration Steps:**
 
 1. Create `server/routes.ts` for route definitions
-2. Create `server/handlers/root.ts` for root route handler
+2. Create `server/handlers/index.html.ts` for root route handler
 3. Move loader logic to GET handler
 4. Move action logic to POST handler
 5. Create `server/ssr.tsx` for SSR rendering logic
@@ -204,15 +211,19 @@ app/
 - Update `useLoaderData` to receive data via props
 - Component logic remains mostly the same
 
-**`app/routes/artists.$artistId.albums.$albumId_.tsx` → `server/handlers/artists/[artistId]/albums/[albumId].ts` + `app/pages/artists/[artistId]/albums/[albumId].tsx`**
+**`app/routes/artists.$artistId.albums.$albumId_.tsx` →
+`server/handlers/artists/[artistId]/albums/[albumId].ts` +
+`app/pages/artists/[artistId]/albums/[albumId].tsx`**
 
-- Convert dynamic route syntax from Remix to Deno route pattern (`/artists/:artistId/albums/:albumId`)
+- Convert dynamic route syntax from Remix to Deno route pattern
+  (`/artists/:artistId/albums/:albumId`)
 - Convert `loader` to route handler function
 - Extract route params from URL in handler
 - Update `useLoaderData` and `useOutletContext` usage:
   - Replace `useLoaderData` with props
   - Replace `useOutletContext` with React Context or props drilling
-  - Context contains: `{ isPlaying: boolean, playToggle: (track?: { url: string }) => void, currentTrack: string | null }`
+  - Context contains:
+    `{ isPlaying: boolean, playToggle: (track?: { url: string }) => void, currentTrack: string | null }`
 - Component logic remains mostly the same
 
 #### 3.3 Server Utilities (`app/util/s3.server.ts`)
@@ -254,7 +265,8 @@ const stream = new ReadableStream({
 - Verify `music-metadata` compatibility with Deno
 - Update `Buffer` usage to `Uint8Array` (found at line 110):
   - Line 110: `Buffer.from(imageMetadata.data).toString("base64")`
-  - Replace with: Convert `Uint8Array` to base64 using `btoa(String.fromCharCode(...array))` or Deno's built-in encoding
+  - Replace with: Convert `Uint8Array` to base64 using
+    `btoa(String.fromCharCode(...array))` or Deno's built-in encoding
   ```typescript
   // Old: Buffer.from(imageMetadata.data).toString("base64")
   // New: btoa(String.fromCharCode(...new Uint8Array(imageMetadata.data)))
@@ -264,7 +276,8 @@ const stream = new ReadableStream({
   - May need `deno-canvas` or alternative
   - Or use Deno's native image processing capabilities
 - Update image conversion logic for Deno environment
-- Note: `extractCoverImage` function uses browser `Image` API - may need server-side alternative
+- Note: `extractCoverImage` function uses browser `Image` API - may need
+  server-side alternative
 
 #### 3.5 File Utilities (`app/util/files.ts`)
 
@@ -285,21 +298,24 @@ const stream = new ReadableStream({
   - Option B: Use browser History API with custom router
   - Option C: Use full-page navigation (simpler, less SPA-like)
 - Update Remix-specific hooks found in codebase:
-  - **`useLoaderData`** (used in `root.tsx`, `_index.tsx`, `artists.$artistId.albums.$albumId_.tsx`)
-    → Props passed from server-rendered data
-  - **`useOutletContext`** (used in `artists.$artistId.albums.$albumId_.tsx`)
-    → React Context API or props drilling (context contains: `isPlaying`, `playToggle`, `currentTrack`)
-  - **`useFetcher`** (used in `FilePicker.tsx` for file uploads)
-    → Use `fetch` API directly or create custom hook for form submissions
-  - **`Link`** (used in `AppBar`, `Search`, `AlbumTile`)
-    → React Router's `Link` or custom navigation component
-  - **`useLocation`** (used in `AppBar` for pathname)
-    → React Router's `useLocation` or browser `window.location`
-  - **`Outlet`** (used in `root.tsx`)
-    → Render child route components directly based on current route
+  - **`useLoaderData`** (used in `root.tsx`, `_index.tsx`,
+    `artists.$artistId.albums.$albumId_.tsx`) → Props passed from
+    server-rendered data
+  - **`useOutletContext`** (used in `artists.$artistId.albums.$albumId_.tsx`) →
+    React Context API or props drilling (context contains: `isPlaying`,
+    `playToggle`, `currentTrack`)
+  - **`useFetcher`** (used in `FilePicker.tsx` for file uploads) → Use `fetch`
+    API directly or create custom hook for form submissions
+  - **`Link`** (used in `AppBar`, `Search`, `AlbumTile`) → React Router's `Link`
+    or custom navigation component
+  - **`useLocation`** (used in `AppBar` for pathname) → React Router's
+    `useLocation` or browser `window.location`
+  - **`Outlet`** (used in `root.tsx`) → Render child route components directly
+    based on current route
 - Implement client-side hydration to restore React state
 - Handle client-side navigation and data fetching if using SPA approach
-- **File Upload**: Replace `useFetcher().Form` with standard HTML form + fetch API or custom form submission handler
+- **File Upload**: Replace `useFetcher().Form` with standard HTML form + fetch
+  API or custom form submission handler
 
 #### 4.2 Asset Management
 
@@ -458,7 +474,8 @@ const stream = new ReadableStream({
 - Use Deno-native AWS client library
 - Use AWS REST API directly
 
-**Action**: Verify `@aws-sdk/client-s3` works with Deno's npm compatibility layer
+**Action**: Verify `@aws-sdk/client-s3` works with Deno's npm compatibility
+layer
 
 ### 3. Canvas/Image Processing
 
@@ -488,7 +505,8 @@ const stream = new ReadableStream({
 - **Custom History API**: Lightweight, manual implementation
 - **Full-page navigation**: Simplest, traditional web app approach
 
-**Recommendation**: Start with full-page navigation, add React Router if SPA features needed
+**Recommendation**: Start with full-page navigation, add React Router if SPA
+features needed
 
 **Action**: Decide on SPA vs traditional navigation based on requirements
 
@@ -539,7 +557,8 @@ const stream = new ReadableStream({
 
 **Total Estimated Time**: 19-27 days
 
-**Note**: Using plain Deno adds 4-6 days compared to using Fresh due to custom router and SSR implementation.
+**Note**: Using plain Deno adds 4-6 days compared to using Fresh due to custom
+router and SSR implementation.
 
 ## Resources and References
 
@@ -641,8 +660,8 @@ interface Route {
 }
 
 const routes: Route[] = [
-  { pattern: "/", handler: handleIndex },
-  { pattern: "/artists/:artistId/albums/:albumId", handler: handleAlbum },
+  { pattern: "/", handler: handleIndexHtml },
+  { pattern: "/artists/:artistId/albums/:albumId", handler: handleAlbumHtml },
   { pattern: "/upload", handler: handleUpload, method: "POST" },
 ];
 
@@ -673,7 +692,7 @@ import { App } from "../app/root.tsx";
 
 export async function renderPage(
   Component: React.ComponentType<any>,
-  props: any
+  props: any,
 ): Promise<string> {
   const appHtml = renderToString(<Component {...props} />);
   const dataJson = JSON.stringify(props).replace(/</g, "\\u003c");
@@ -718,7 +737,7 @@ if (root) {
 const fetcher = useFetcher();
 <fetcher.Form method="post" encType="multipart/form-data">
   <input type="file" name="files" multiple />
-</fetcher.Form>
+</fetcher.Form>;
 
 // Deno: FilePicker.tsx
 const [isSubmitting, setIsSubmitting] = useState(false);
@@ -747,7 +766,7 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
   <button type="submit" disabled={isSubmitting}>
     {isSubmitting ? "Uploading..." : "Upload"}
   </button>
-</form>
+</form>;
 ```
 
 ### Node.js Stream → Web Stream
@@ -770,6 +789,6 @@ const stream = new ReadableStream({
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2024  
+**Document Version**: 1.0\
+**Last Updated**: 2024\
 **Status**: Ready for Implementation

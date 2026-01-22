@@ -1,8 +1,6 @@
 /** @file Main Deno server entry point */
 import { Router } from "./router.ts";
-import { handleAlbum } from "./handlers/album.ts";
 import { handleUpload } from "./handlers/upload.ts";
-import { handleRoot } from "./handlers/root.ts";
 import { handleIndexHtml } from "./handlers/index.html.ts";
 import { loadEnv } from "./utils/loadEnv.ts";
 import { handleAlbumHtml } from "./handlers/album.html.ts";
@@ -13,17 +11,11 @@ await loadEnv();
 const router = new Router();
 
 // Register routes
-router.add({ pattern: "/", handler: handleRoot, method: "GET" });
-router.add({ pattern: "/index.html", handler: handleIndexHtml, method: "GET" });
+router.add({ pattern: "/", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/", handler: handleUpload, method: "POST" });
 router.add({
-  pattern: "/artists/:artistId/albums/:albumId/html",
-  handler: handleAlbumHtml,
-  method: "GET",
-});
-router.add({
   pattern: "/artists/:artistId/albums/:albumId",
-  handler: handleAlbum,
+  handler: handleAlbumHtml,
   method: "GET",
 });
 

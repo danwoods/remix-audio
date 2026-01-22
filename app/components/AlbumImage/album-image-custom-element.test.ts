@@ -286,4 +286,49 @@ describe("AlbumImageCustomElement", () => {
     // Should not have set src (no album art)
     expect(imgSrcAttribute).toBe("");
   });
+
+  test("should cache album art requests for the same album URL and not reload when album URL hasn't changed", async () => {
+    await import("./album-image-custom-element.ts");
+
+    // Mock id3.fromUrl to track how many times it's called
+    const mockId3 = vi.mocked(id3.fromUrl);
+    mockId3.mockResolvedValue({
+      images: [
+        {
+          data: new Uint8Array([1, 2, 3]),
+          mime: "image/jpeg",
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof id3.fromUrl>>);
+
+    // Mock getFirstSong to return the full S3 key path
+    vi.mocked(album.getFirstSong).mockResolvedValue(
+      "artist1/album1/track1.mp3",
+    );
+
+    const albumUrl = "https://bucket.s3.region.amazonaws.com/artist1/album1";
+
+    // Create first element - should trigger one ID3 call
+    elementAttributes["data-album-url"] = albumUrl;
+    const element1 = document.createElement("album-image-custom-element");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const firstCallCount = mockId3.mock.calls.length;
+    expect(firstCallCount).toBeGreaterThan(0);
+
+    // Set the same album URL again - should NOT reload (early return check)
+    element1.setAttribute("data-album-url", albumUrl);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Should still be the same number of calls (no reload for same album)
+    expect(mockId3.mock.calls.length).toBe(firstCallCount);
+
+    // Create second element with same album URL - should use cache, no additional ID3 call
+    const _element2 = document.createElement("album-image-custom-element");
+    elementAttributes["data-album-url"] = albumUrl;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Should still be the same number of calls (cached)
+    expect(mockId3.mock.calls.length).toBe(firstCallCount);
+  });
 });

@@ -1,6 +1,7 @@
 # Deno Tests
 
-This directory contains tests for the Deno server migration, using Deno's native test framework.
+This directory contains tests for the Deno server migration, using Deno's native
+test framework.
 
 ## Test Structure
 
@@ -11,8 +12,6 @@ deno-tests/
 │       └── files.deno.test.ts          # Tests for file utility functions
 ├── server/
 │   ├── handlers/
-│   │   ├── album.deno.test.ts           # Tests for album route handler
-│   │   ├── root.deno.test.ts            # Tests for root route handler
 │   │   └── upload.deno.test.ts          # Tests for upload route handler
 │   ├── router.deno.test.ts              # Tests for custom router
 │   ├── ssr.deno.test.ts                 # Tests for SSR rendering
@@ -84,15 +83,13 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
    - Script tag escaping
 
 6. **Handler Tests**
-   - **Root Handler** (`server/handlers/root.deno.test.ts`)
-     - HTML response validation
-     - Preconnect link inclusion
    - **Upload Handler** (`server/handlers/upload.deno.test.ts`)
      - No files error handling
      - FormData file acceptance
      - Multiple file handling
-   - **Album Handler** (`server/handlers/album.deno.test.ts`)
-     - Album page rendering (requires AWS credentials)
+   - **Note**: Root and Album handler tests were removed after handlers were
+     refactored to use plain HTML rendering (`index.html.ts` and
+     `album.html.ts`)
 
 ## Test Philosophy
 

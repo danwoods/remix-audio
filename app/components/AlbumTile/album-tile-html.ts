@@ -38,15 +38,15 @@ function escapeHtml(unsafe: string): string {
  * });
  * ```
  */
-export default async function albumTileHtml(
+export default function albumTileHtml(
   props: AlbumTileProps,
-): Promise<string> {
+): string {
   const { albumId, files } = props;
   const [artistName, albumName] = albumId.split("/");
 
   const encodedArtistName = encodeURIComponent(artistName);
   const encodedAlbumName = encodeURIComponent(albumName);
-  const href = `/artists/${encodedArtistName}/albums/${encodedAlbumName}/html`;
+  const href = `/artists/${encodedArtistName}/albums/${encodedAlbumName}`;
 
   const escapedArtistName = escapeHtml(artistName);
   const escapedAlbumName = escapeHtml(albumName);
