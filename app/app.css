@@ -365,9 +365,6 @@
   .cursor-default {
     cursor: default;
   }
-  .cursor-pointer {
-    cursor: pointer;
-  }
   .grid-cols-\[repeat\(5\,calc\(40\%-40px\)\)\] {
     grid-template-columns: repeat(5,calc(40% - 40px));
   }
@@ -655,6 +652,11 @@
     @media (width >= 48rem) {
       font-size: var(--text-xl);
       line-height: var(--tw-leading, var(--text-xl--line-height));
+    }
+  }
+  .lg\:absolute {
+    @media (width >= 64rem) {
+      position: absolute;
     }
   }
   .lg\:h-72 {

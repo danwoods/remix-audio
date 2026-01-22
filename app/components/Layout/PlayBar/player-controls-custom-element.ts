@@ -5,6 +5,11 @@ import "../../../icons/pause/index.ts";
 import "../../../icons/prev/index.ts";
 import "../../../icons/next/index.ts";
 
+import styles from "../../../styles.json" with { type: "json" };
+import { assert } from "@std/assert";
+
+assert(styles.breakpoints.sm, "Breakpoint 'sm' is required");
+
 type PlayState = "playing" | "paused" | undefined;
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
@@ -18,34 +23,40 @@ template.innerHTML = `
       height: 100%;
     }
     button {
-      width: 2.5rem;
-      height: 2.5rem;
-      cursor: pointer;
-      color: #fff;
       background: none;
       border: none;
+      color: #fff;
+      cursor: pointer;
+      height: 2.5rem;
+      width: 2.5rem;
     }
     button:disabled {
       opacity: 0.5;
       cursor: default;
     }
+    button[data-play-prev] {
+      display: none;
+      @media only screen and (min-width: ${styles.breakpoints.sm}){
+        display: block;
+      }
+    }
     .root {
-      display: flex;
-      justify-content: center;
-      gap: 0.5rem;
       align-items: center;
-      width: 100%;
+      display: flex;
+      gap: 0.5rem;
       height: 100%;
+      justify-content: center;
+      width: 100%;
     }
   </style>
   <div class="root">
-    <button class="max-sm:hidden" data-play-prev>
+    <button data-play-prev>
       <prev-icon class="size-6"></prev-icon>
     </button>
-    <button class="md:px-6 cursor-pointer" data-play-toggle>
+    <button data-play-toggle>
       <play-icon></play-icon>
     </button>
-    <button class="cursor-pointer" data-play-next>
+    <button data-play-next>
       <next-icon></next-icon>
     </button>
   </div>
