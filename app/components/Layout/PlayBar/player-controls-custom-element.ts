@@ -46,7 +46,8 @@ template.innerHTML = `
       gap: 0.5rem;
       height: 100%;
       justify-content: center;
-      width: 100%;
+      padding-left: 1rem;
+      padding-right: 1rem;
     }
   </style>
   <div class="root">

@@ -1,0 +1,8 @@
+{
+  "breakpoints": {
+    "sm": "50rem",
+    "md": "64rem",
+    "lg": "80rem",
+    "xl": "96rem"
+  }
+}

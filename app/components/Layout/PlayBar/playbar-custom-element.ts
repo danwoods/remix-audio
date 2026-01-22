@@ -571,10 +571,18 @@ export class PlaybarCustomElement extends HTMLElement {
     this.innerHTML = `
       <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex justify-between transition-transform ${visibilityClass}">
         <div class="max-sm:basis-3/5 lg:basis-1/5 overflow-x-clip items-center">
-          <track-info-custom-element data-track-url="${escapeHtml(this.currentTrackUrl)}"></track-info-custom-element>
+          <track-info-custom-element data-track-url="${
+      escapeHtml(this.currentTrackUrl)
+    }"></track-info-custom-element>
         </div>
-        <div class="lg:absolute right-0 left-0 h-full pr-6">
-          <player-controls-custom-element data-play-state="${this.isPlaying ? "playing" : "paused"}" data-has-previous-track="${hasPreviousTrack ? "true" : "false"}" data-has-next-track="${this.remainingTracks.length > 0 ? "true" : "false"}"></player-controls-custom-element>
+        <div class="lg:absolute right-0 left-0 h-full">
+          <player-controls-custom-element data-play-state="${
+      this.isPlaying ? "playing" : "paused"
+    }" data-has-previous-track="${
+      hasPreviousTrack ? "true" : "false"
+    }" data-has-next-track="${
+      this.remainingTracks.length > 0 ? "true" : "false"
+    }"></player-controls-custom-element>
         </div>
       </div>
     `;
