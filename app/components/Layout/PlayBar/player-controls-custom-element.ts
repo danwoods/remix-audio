@@ -5,11 +5,6 @@ import "../../../icons/pause/index.ts";
 import "../../../icons/prev/index.ts";
 import "../../../icons/next/index.ts";
 
-import styles from "../../../styles.json" with { type: "json" };
-import { assert } from "@std/assert";
-
-assert(styles.breakpoints.sm, "Breakpoint 'sm' is required");
-
 type PlayState = "playing" | "paused" | undefined;
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
@@ -36,7 +31,9 @@ template.innerHTML = `
     }
     button[data-play-prev] {
       display: none;
-      @media only screen and (min-width: ${styles.breakpoints.sm}){
+      /* Note: CSS variables cannot be used in media queries, so we use the literal value */
+      /* This matches --breakpoint-sm: 50rem defined in entry.css */
+      @media only screen and (min-width: 50rem) {
         display: block;
       }
     }

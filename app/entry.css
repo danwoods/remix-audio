@@ -1,3 +1,12 @@
+/* Custom CSS variables for breakpoints and other shared values */
+/* These are available in both regular DOM and shadow DOM */
+:root, :host {
+  --breakpoint-sm: 50rem;
+  --breakpoint-md: 64rem;
+  --breakpoint-lg: 80rem;
+  --breakpoint-xl: 96rem;
+}
+
 @import "tailwindcss";
 @source "./app/**/*.ts";
 @source "./app/**/*.tsx";
