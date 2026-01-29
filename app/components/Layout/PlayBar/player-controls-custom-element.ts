@@ -22,12 +22,18 @@ template.innerHTML = `
       border: none;
       color: #fff;
       cursor: pointer;
-      height: 2.5rem;
-      width: 2.5rem;
+      height: var(--playbar-control-size, 2.5rem);
+      width: var(--playbar-control-size, 2.5rem);
     }
     button:disabled {
       opacity: 0.5;
       cursor: default;
+    }
+    button play-icon, button pause-icon, button prev-icon, button next-icon {
+      display: block;
+      width: calc(var(--playbar-control-size, 2.5rem) * 0.6);
+      height: calc(var(--playbar-control-size, 2.5rem) * 0.6);
+      margin: auto;
     }
     button[data-play-prev] {
       display: none;
@@ -40,16 +46,16 @@ template.innerHTML = `
     .root {
       align-items: center;
       display: flex;
-      gap: 0.5rem;
+      gap: var(--playbar-gap, 0.5rem);
       height: 100%;
       justify-content: center;
-      padding-left: 1rem;
-      padding-right: 1rem;
+      padding-left: var(--playbar-padding, 1rem);
+      padding-right: var(--playbar-padding, 1rem);
     }
   </style>
   <div class="root">
     <button data-play-prev>
-      <prev-icon class="size-6"></prev-icon>
+      <prev-icon></prev-icon>
     </button>
     <button data-play-toggle>
       <play-icon></play-icon>

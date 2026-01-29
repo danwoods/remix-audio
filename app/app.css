@@ -5,6 +5,20 @@
   --breakpoint-md: 64rem;
   --breakpoint-lg: 80rem;
   --breakpoint-xl: 96rem;
+  --font-size-primary: 0.875rem;
+  --font-size-secondary: 0.75rem;
+}
+@media only screen and (min-width: 50rem) {
+  :root, :host {
+    --font-size-primary: 1rem;
+    --font-size-secondary: 0.8125rem;
+  }
+}
+@media only screen and (min-width: 64rem) {
+  :root, :host {
+    --font-size-primary: 1.125rem;
+    --font-size-secondary: 0.875rem;
+  }
 }
 @layer theme, base, components, utilities;
 @layer theme {
@@ -316,9 +330,6 @@
     width: calc(var(--spacing) * 20);
     height: calc(var(--spacing) * 20);
   }
-  .h-24 {
-    height: calc(var(--spacing) * 24);
-  }
   .h-32 {
     height: calc(var(--spacing) * 32);
   }
@@ -343,14 +354,17 @@
   .w-full {
     width: 100%;
   }
-  .max-w-\[calc\(100\%-112px\)\] {
-    max-width: calc(100% - 112px);
+  .min-w-0 {
+    min-width: calc(var(--spacing) * 0);
   }
   .flex-1 {
     flex: 1;
   }
   .flex-shrink {
     flex-shrink: 1;
+  }
+  .flex-shrink-0 {
+    flex-shrink: 0;
   }
   .shrink {
     flex-shrink: 1;
@@ -621,11 +635,6 @@
   .md\:h-60 {
     @media (width >= 48rem) {
       height: calc(var(--spacing) * 60);
-    }
-  }
-  .md\:max-w-\[calc\(100\%-168px\)\] {
-    @media (width >= 48rem) {
-      max-width: calc(100% - 168px);
     }
   }
   .md\:min-w-48 {

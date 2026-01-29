@@ -5,6 +5,24 @@
   --breakpoint-md: 64rem;
   --breakpoint-lg: 80rem;
   --breakpoint-xl: 96rem;
+
+  /* Typography: responsive font sizes (inherited into shadow DOM) */
+  --font-size-primary: 0.875rem;
+  --font-size-secondary: 0.75rem;
+}
+
+@media only screen and (min-width: 50rem) {
+  :root, :host {
+    --font-size-primary: 1rem;
+    --font-size-secondary: 0.8125rem;
+  }
+}
+
+@media only screen and (min-width: 64rem) {
+  :root, :host {
+    --font-size-primary: 1.125rem;
+    --font-size-secondary: 0.875rem;
+  }
 }
 
 @import "tailwindcss";

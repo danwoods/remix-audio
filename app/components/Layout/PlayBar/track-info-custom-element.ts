@@ -20,12 +20,20 @@ template.innerHTML = `
     }
     .album-image {
       display: inline-block;
-      min-width: 96px;
-      height: 96px;
+      min-width: var(--playbar-album-size, 96px);
+      height: var(--playbar-album-size, 96px);
+      flex-shrink: 0;
     }
     .text-container {
-      margin-left: 1rem;
+      margin-left: var(--playbar-gap, 1rem);
       overflow: hidden;
+      min-width: 0;
+    }
+    scrolling-text.primary {
+      font-size: var(--font-size-primary, 1rem);
+    }
+    scrolling-text.secondary {
+      font-size: var(--font-size-secondary, 0.875rem);
     }
   </style>
   <div class="root">
