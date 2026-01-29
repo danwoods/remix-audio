@@ -388,3 +388,24 @@ Deno.test("getRemainingAlbumTracks - should filter out cover.jpeg from results",
   const coverTrack = tracks.find((t) => t.title === "cover.jpeg");
   assertEquals(coverTrack, undefined);
 });
+
+Deno.test("getRemainingAlbumTracks - should use track-number order not S3 listing order", async () => {
+  resetMocks();
+  // S3 returns keys in arbitrary order (e.g. alphabetical: 10 before 9)
+  mockBucketContents = [
+    "Artist/Album/1__Track One.mp3",
+    "Artist/Album/10__Track Ten.mp3",
+    "Artist/Album/2__Track Two.mp3",
+    "Artist/Album/9__Green Onions.mp3",
+  ];
+
+  const tracks = await getRemainingAlbumTracks(
+    "https://bucket.s3.amazonaws.com/Artist/Album",
+    "https://bucket.s3.amazonaws.com/Artist/Album/9__Green Onions.mp3",
+  );
+
+  // Should return track 10 as remaining (by track number), not empty due to S3 order
+  assertEquals(tracks.length, 1);
+  assertEquals(tracks[0].trackNum, 10);
+  assertEquals(tracks[0].title, "Track Ten.mp3");
+});

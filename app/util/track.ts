@@ -208,25 +208,38 @@ export const getRemainingAlbumTracks = async (
     return [];
   }
 
-  const remainingKeys = contents.slice(currentTrackIndex + 1);
-  const tracks: Array<TrackInfo> = remainingKeys.map((key) => {
-    // Extract filename from full key path
-    const filename = key.split("/").pop() || key;
-    const trackPieces = filename.split("__");
-    const trackNum = parseInt(trackPieces[0], 10) || 0;
-    const title = trackPieces[1] || filename;
-    const fullUrl = `${bucketUrl}/${key}`;
+  // Build all tracks from contents, filter cover, sort by track number.
+  // Use track-number order for "remaining", not S3 listing order (e.g. "10__" can come before "9__" alphabetically).
+  const allTracks: Array<TrackInfo> = contents
+    .map((key) => {
+      const filename = key.split("/").pop() || key;
+      const trackPieces = filename.split("__");
+      const trackNum = parseInt(trackPieces[0], 10) || 0;
+      const title = trackPieces[1] || filename;
+      const fullUrl = `${bucketUrl}/${key}`;
+      return { url: fullUrl, title, trackNum };
+    })
+    .filter(filterOutCoverJpeg)
+    .sort((a, b) => a.trackNum - b.trackNum);
 
-    return {
-      url: fullUrl,
-      title,
-      trackNum,
-    };
+  // Match current track in allTracks using same rules as original findIndex:
+  // exact path, without extension, normalized underscores, URL decoding
+  const currentUrlPath = currentTrackUrl.split("/").pop() || "";
+  const normalizeUnderscores = (str: string) =>
+    str.replace(/__/g, "\0").replace(/_/g, "__").replace(/\0/g, "__");
+  const currentIndexInSorted = allTracks.findIndex((t) => {
+    const tPath = t.url.split("/").pop() || "";
+    const tPathNoExt = tPath.replace(/\.[^.]+$/, "");
+    return tPath === currentUrlPath ||
+      tPath === currentTrackKey ||
+      tPathNoExt === currentTrackKeyNoExt ||
+      normalizeUnderscores(tPathNoExt) ===
+        normalizeUnderscores(currentTrackKeyNoExt) ||
+      decodeURIComponent(tPath) === currentUrlPath ||
+      tPath === encodeURIComponent(currentTrackKey);
   });
-
-  return tracks.sort((a, b) => a.trackNum - b.trackNum).filter(
-    filterOutCoverJpeg,
-  );
+  if (currentIndexInSorted === -1) return [];
+  return allTracks.slice(currentIndexInSorted + 1);
 };
 
 /**
