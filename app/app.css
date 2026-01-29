@@ -343,6 +343,9 @@
   .w-full {
     width: 100%;
   }
+  .max-w-\[calc\(100\%-112px\)\] {
+    max-width: calc(100% - 112px);
+  }
   .flex-1 {
     flex: 1;
   }
@@ -366,11 +369,17 @@
     --tw-translate-y: 100%;
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
+  .transform {
+    transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
+  }
   .animate-pulse {
     animation: var(--animate-pulse);
   }
   .cursor-default {
     cursor: default;
+  }
+  .resize {
+    resize: both;
   }
   .grid-cols-\[repeat\(5\,calc\(40\%-40px\)\)\] {
     grid-template-columns: repeat(5,calc(40% - 40px));
@@ -614,6 +623,11 @@
       height: calc(var(--spacing) * 60);
     }
   }
+  .md\:max-w-\[calc\(100\%-168px\)\] {
+    @media (width >= 48rem) {
+      max-width: calc(100% - 168px);
+    }
+  }
   .md\:min-w-48 {
     @media (width >= 48rem) {
       min-width: calc(var(--spacing) * 48);
@@ -659,11 +673,6 @@
     @media (width >= 48rem) {
       font-size: var(--text-xl);
       line-height: var(--tw-leading, var(--text-xl--line-height));
-    }
-  }
-  .lg\:absolute {
-    @media (width >= 64rem) {
-      position: absolute;
     }
   }
   .lg\:h-72 {
@@ -718,6 +727,26 @@
   syntax: "*";
   inherits: false;
   initial-value: 0;
+}
+@property --tw-rotate-x {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-rotate-y {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-rotate-z {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-skew-x {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-skew-y {
+  syntax: "*";
+  inherits: false;
 }
 @property --tw-divide-y-reverse {
   syntax: "*";
@@ -862,6 +891,11 @@
       --tw-translate-x: 0;
       --tw-translate-y: 0;
       --tw-translate-z: 0;
+      --tw-rotate-x: initial;
+      --tw-rotate-y: initial;
+      --tw-rotate-z: initial;
+      --tw-skew-x: initial;
+      --tw-skew-y: initial;
       --tw-divide-y-reverse: 0;
       --tw-border-style: solid;
       --tw-font-weight: initial;

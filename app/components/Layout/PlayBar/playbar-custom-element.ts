@@ -3,7 +3,6 @@
 import {
   escapeHtml,
   getAllAlbumTracks,
-  getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
 } from "../../../util/track.ts";
 import "../../../icons/play/index.ts";
@@ -532,27 +531,8 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private render() {
-    const { artistName, albumName } = getParentDataFromTrackUrl(
-      this.currentTrackUrl,
-    );
-    const scrollingText = artistName && albumName
-      ? `${albumName}, ${artistName}`
-      : null;
-
     // Determine visibility class
     const visibilityClass = !this.currentTrackUrl ? "translate-y-full" : "";
-
-    // Scrolling text
-    const _scrollingTextHtml = scrollingText
-      ? `
-        <p class="marquee pr-6 md:animate-none">
-          <span class="text-sm text-nowrap">${escapeHtml(scrollingText)}</span>
-        </p>
-        <p class="md:hidden marquee2 pr-6">
-          <span class="text-sm text-nowrap">${escapeHtml(scrollingText)}</span>
-        </p>
-      `
-      : "";
 
     // Determine if there's a previous track (matching playPrev() logic)
     let hasPreviousTrack = false;
@@ -570,12 +550,12 @@ export class PlaybarCustomElement extends HTMLElement {
 
     this.innerHTML = `
       <div class="fixed bottom-0 left-0 right-0 w-full p-4 bg-black z-10 h-24 flex justify-between transition-transform ${visibilityClass}">
-        <div class="max-sm:basis-3/5 lg:basis-1/5 overflow-x-clip items-center">
+        <div class="max-sm:basis-3/5 lg:basis-1/5 overflow-x-clip items-center max-w-[calc(100%-112px)] md:max-w-[calc(100%-168px)]">
           <track-info-custom-element data-track-url="${
       escapeHtml(this.currentTrackUrl)
     }"></track-info-custom-element>
         </div>
-        <div class="lg:absolute right-0 left-0 h-full">
+        <div class="h-full">
           <player-controls-custom-element data-play-state="${
       this.isPlaying ? "playing" : "paused"
     }" data-has-previous-track="${

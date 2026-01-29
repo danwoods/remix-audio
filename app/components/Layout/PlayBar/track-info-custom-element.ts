@@ -1,6 +1,7 @@
 /** @file Custom element for track info seen at the bottom of the screen */
 
 import { getParentDataFromTrackUrl } from "../../../util/track.ts";
+import "../../../components/ScrollingText/index.ts";
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
 
@@ -19,24 +20,20 @@ template.innerHTML = `
     }
     .album-image {
       display: inline-block;
-      width: 96px;
+      min-width: 96px;
       height: 96px;
     }
     .text-container {
       margin-left: 1rem;
+      overflow: hidden;
     }
   </style>
   <div class="root">
     <album-image-custom-element data-album-url="" class="album-image"></album-image-custom-element>
     <div class="text-container">
-      <p class="text-base font-bold track-name"></p>
+      <scrolling-text class="primary"></scrolling-text>
       <div class="flex items-center">
-        <p class="marquee pr-6 md:animate-none">
-          <span class="text-sm text-nowrap scrolling-text"></span>
-        </p>
-        <p class="md:hidden marquee2 pr-6">
-          <span class="text-sm text-nowrap scrolling-text"></span>
-        </p>
+        <scrolling-text class="secondary"></scrolling-text>
       </div>
     </div>
   </div>
@@ -77,6 +74,7 @@ export class TrackInfoCustomElement extends HTMLElement {
       getParentDataFromTrackUrl(
         this.trackUrl,
       );
+
     const scrollingText = artistName && albumName
       ? `${albumName}, ${artistName}`
       : null;
@@ -85,9 +83,10 @@ export class TrackInfoCustomElement extends HTMLElement {
       "data-album-url",
       albumUrl || "",
     );
-    this.shadowRoot!.querySelector(".track-name")!.textContent = trackName;
-    this.shadowRoot!.querySelector(".scrolling-text")!.textContent =
-      scrollingText;
+    this.shadowRoot!.querySelector("scrolling-text.primary")!.textContent =
+      trackName;
+    this.shadowRoot!.querySelector("scrolling-text.secondary")!.textContent =
+      scrollingText ?? "";
   }
 }
 
