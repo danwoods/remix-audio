@@ -65,14 +65,6 @@ export async function handleAlbumHtml(
       min-height: 200vh;
     }
 
-    .page-title {
-      padding: 20px 24px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #fff;
-      background: #121212;
-    }
-
     .album-header {
       position: sticky;
       top: 0;
@@ -178,9 +170,7 @@ export async function handleAlbumHtml(
     }
   </style>
 </head>
-<body>
-  <div class="page-title">${pkg.name}</div>
-  
+<body> 
   <album-header-custom-element data-album-url="${albumUrl}"></album-header-custom-element>
 
   <section class="tracklist">

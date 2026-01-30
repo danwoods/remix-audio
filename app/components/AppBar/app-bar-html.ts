@@ -61,10 +61,10 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   const classAttr = ` class="${escapeHtml(allClasses)}"`;
 
   return `<div${classAttr}>
-  <div class="flex-1">${escapedStartContent}</div>
-  <div class="flex-1 flex justify-center">
+  <!-- <div class="flex-1">${escapedStartContent}</div> -->
+  <div class="flex-1 flex justify-center lg:justify-start">
     <a href="/" class="text-xl font-bold">${escapedAppName}</a>
   </div>
-  <div class="flex-1 flex justify-end">${escapedEndContent}</div>
+  <!-- <div class="flex-1 flex justify-end">${escapedEndContent}</div> -->
 </div>`;
 }
