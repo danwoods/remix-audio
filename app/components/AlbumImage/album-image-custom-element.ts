@@ -1,7 +1,13 @@
-/** @file Custom element for an album image. */
+/** @file Custom element for an album image.
+ *
+ * Renders album art from ID3 cover data. Uses the shared {@link createDataUrlFromBytes}
+ * from `app/util/data-url.ts` to encode bytes as data URLs for img src (same encoding
+ * logic as the server's album cover handler, which decodes via {@link decodeDataUrl}).
+ */
 
 import * as id3 from "id3js";
 import { getFirstSong } from "../../../lib/album.ts";
+import { createDataUrlFromBytes } from "../../util/data-url.ts";
 
 /**
  * Retrieves ID3 metadata tags from an audio file URL.
@@ -15,45 +21,8 @@ const getId3Tags = async (url: string) => {
 };
 
 /**
- * Converts a Uint8Array to a base64 data URL using efficient chunking.
- *
- * Uses chunking to avoid stack overflow when processing large arrays.
- *
- * @param data - The binary data as a Uint8Array.
- * @param mimeType - The MIME type of the data (e.g., "image/jpeg", "image/png").
- * @returns A data URL string in the format `data:{mimeType};base64,{base64}`.
- */
-const createDataUrlFromArrayBuffer = (
-  data: Uint8Array,
-  mimeType: string,
-): string => {
-  // Convert to base64 - use efficient chunking to avoid stack overflow
-  const uint8Array = new Uint8Array(data);
-  const chunkSize = 0x8000; // 32KB chunks
-  const chunks: string[] = [];
-
-  for (let i = 0; i < uint8Array.length; i += chunkSize) {
-    const chunk = uint8Array.subarray(
-      i,
-      Math.min(i + chunkSize, uint8Array.length),
-    );
-    // Build string for this chunk without spreading
-    let chunkStr = "";
-    for (let j = 0; j < chunk.length; j++) {
-      chunkStr += String.fromCharCode(chunk[j]);
-    }
-    chunks.push(chunkStr);
-  }
-
-  const binaryString = chunks.join("");
-  const base64 = btoa(binaryString);
-  const dataUrl = `data:${mimeType};base64,${base64}`;
-
-  return dataUrl;
-};
-
-/**
  * Extracts album art from an audio file and converts it to a data URL.
+ * Encoding is done via {@link createDataUrlFromBytes} (shared with server).
  *
  * @param url - The URL of the audio file containing the album art.
  * @returns A promise that resolves to a data URL string of the album art, or null if no album art is found.
@@ -66,7 +35,7 @@ const getAlbumArtAsDataUrl = async (url: string): Promise<string | null> => {
       const arrayBuffer = tags.images[0].data;
       const mimeType = tags.images[0].mime || "image/jpeg";
 
-      return createDataUrlFromArrayBuffer(arrayBuffer, mimeType);
+      return createDataUrlFromBytes(arrayBuffer, mimeType);
     }
 
     return null;

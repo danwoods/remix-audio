@@ -1,6 +1,7 @@
 # Deno Server Setup
 
-This document describes how to run the Deno-based server for the remix-audio application.
+This document describes how to run the Deno-based server for the remix-audio
+application.
 
 ## Prerequisites
 
@@ -100,6 +101,8 @@ deno test server/router.test.ts --allow-read
 - `GET /` - Homepage
 - `POST /` - File upload
 - `GET /artists/:artistId/albums/:albumId` - Album detail page
+- `GET /artists/:artistId/albums/:albumId/cover` - Album cover image (extracted
+  from ID3 tags of first track)
 
 ## Notes
 

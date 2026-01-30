@@ -56,6 +56,44 @@ Deno.test("Router returns 404 for unmatched routes", async () => {
   assertEquals(response.status, 404);
 });
 
+Deno.test("Router matches cover route before album route", async () => {
+  const router = new Router();
+  let coverCalled = false;
+  let albumCalled = false;
+
+  router.add({
+    pattern: "/artists/:artistId/albums/:albumId/cover",
+    handler: (_req, _params) => {
+      coverCalled = true;
+      return new Response("cover", {
+        headers: { "Content-Type": "image/jpeg" },
+      });
+    },
+  });
+  router.add({
+    pattern: "/artists/:artistId/albums/:albumId",
+    handler: () => {
+      albumCalled = true;
+      return new Response("album");
+    },
+  });
+
+  const coverReq = new Request(
+    "http://localhost:8000/artists/A/albums/B/cover",
+  );
+  const coverRes = await router.handle(coverReq);
+  assertEquals(coverRes.status, 200);
+  assertEquals(await coverRes.text(), "cover");
+  assertEquals(coverCalled, true);
+  assertEquals(albumCalled, false);
+
+  const albumReq = new Request("http://localhost:8000/artists/A/albums/B");
+  const albumRes = await router.handle(albumReq);
+  assertEquals(albumRes.status, 200);
+  assertEquals(await albumRes.text(), "album");
+  assertEquals(albumCalled, true);
+});
+
 Deno.test("Router respects HTTP methods", async () => {
   const router = new Router();
   let getCalled = false;

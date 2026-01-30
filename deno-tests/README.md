@@ -9,9 +9,11 @@ test framework.
 deno-tests/
 ├── app/
 │   └── util/
-│       └── files.deno.test.ts          # Tests for file utility functions
+│       ├── data-url.deno.test.ts        # Tests for data URL encode/decode (shared client/server)
+│       └── files.deno.test.ts           # Tests for file utility functions
 ├── server/
 │   ├── handlers/
+│   │   ├── album.cover.deno.test.ts    # Tests for album cover route handler
 │   │   └── upload.deno.test.ts          # Tests for upload route handler
 │   ├── router.deno.test.ts              # Tests for custom router
 │   ├── ssr.deno.test.ts                 # Tests for SSR rendering
@@ -50,9 +52,18 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
    - Static route matching
    - Dynamic route matching with parameters
    - 404 handling for unmatched routes
+   - Cover route matched before album route (more specific path first)
    - HTTP method filtering
 
-2. **Files Utility Tests** (`app/util/files.deno.test.ts`)
+2. **Data URL Utility Tests** (`app/util/data-url.deno.test.ts`)
+
+   - `createDataUrlFromBytes()` - Encode bytes to data URL (round-trip with
+     decode)
+   - `createDataUrlFromBytes()` with ArrayBuffer input
+   - `decodeDataUrl()` - Decode data URL to body and contentType (covered via
+     round-trip and album.cover tests)
+
+3. **Files Utility Tests** (`app/util/files.deno.test.ts`)
 
    - `getArtist()` - Get artist data
    - `sortTracksByTrackNumber()` - Track sorting
@@ -62,19 +73,19 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
    - `getAlbumIdsByRecent()` - Recent albums sorting
    - `search()` - Search functionality (artists, albums, tracks)
 
-3. **Manifest Utility Tests** (`server/utils/manifest.deno.test.ts`)
+4. **Manifest Utility Tests** (`server/utils/manifest.deno.test.ts`)
 
    - Asset filename resolution
    - Client assets retrieval
    - Fallback behavior
 
-4. **LoadEnv Utility Tests** (`server/utils/loadEnv.deno.test.ts`)
+5. **LoadEnv Utility Tests** (`server/utils/loadEnv.deno.test.ts`)
 
    - Missing .env file handling
    - Environment variable parsing
    - Existing variable preservation
 
-5. **SSR Tests** (`server/ssr.deno.test.ts`)
+6. **SSR Tests** (`server/ssr.deno.test.ts`)
 
    - HTML structure validation
    - Initial data script inclusion
@@ -82,7 +93,11 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
    - Head links support
    - Script tag escaping
 
-6. **Handler Tests**
+7. **Handler Tests**
+   - **Album Cover Handler** (`server/handlers/album.cover.deno.test.ts`)
+     - 400 when artistId or albumId is missing
+     - `decodeDataUrl()` behavior (valid and invalid data URLs)
+     - `getKeyFromTrackUrl()` S3 key extraction from track URL
    - **Upload Handler** (`server/handlers/upload.deno.test.ts`)
      - No files error handling
      - FormData file acceptance

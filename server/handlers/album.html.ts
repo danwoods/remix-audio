@@ -1,3 +1,9 @@
+/** @file Handler for album detail page HTML.
+ *
+ * Renders the album page with track list and OG meta tags for sharing.
+ * Sets og:image to the album cover URL (`/artists/:artistId/albums/:albumId/cover`).
+ */
+
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 import { getAlbum, sortTracksByTrackNumber } from "../../app/util/files.ts";
 import pkg from "../../deno.json" with { type: "json" };
@@ -6,8 +12,29 @@ import { createLogger } from "../../app/util/logger.ts";
 
 const logger = createLogger("Album HTML");
 
+/**
+ * Escape string for safe use in HTML attribute values (e.g. title, og:content).
+ *
+ * @param s - Raw string (e.g. user-controlled or dynamic text).
+ * @returns Escaped string safe for double-quoted attribute values.
+ */
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Handle GET request for album detail page.
+ *
+ * @param req - The request; req.url is used to build base URL for og:url and og:image (cover URL).
+ * @param params - Route params: artistId, albumId.
+ * @returns Response with HTML document including OG meta tags and cover image URL.
+ */
 export async function handleAlbumHtml(
-  _req: Request,
+  req: Request,
   params: Record<string, string>,
 ): Promise<Response> {
   const { artistId, albumId } = params;
@@ -42,14 +69,27 @@ export async function handleAlbumHtml(
     <tracklist-item-custom-element data-track-url="${track.url}" data-track-name="${track.title}" data-track-artist="${artistId}" data-track-number="${track.trackNum}"></tracklist-item-custom-element>
   `).join("");
 
+  const baseUrl = new URL(req.url).origin;
+  const pageUrl = `${baseUrl}/artists/${encodeURIComponent(artistId)}/albums/${
+    encodeURIComponent(albumId)
+  }`;
+  const coverUrl = `${pageUrl}/cover`;
+  const ogTitle = `${album.title} - ${pkg.name}`;
+  const ogDescription = "Your audio where you want it.";
+
   const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${pkg.name} - ${albumId}</title>
-  <meta name="description" content="Your audio where you want it.">
+  <title>${escapeAttr(pkg.name)} - ${escapeAttr(albumId)}</title>
+  <meta name="description" content="${escapeAttr(ogDescription)}">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${escapeAttr(ogTitle)}">
+  <meta property="og:description" content="${escapeAttr(ogDescription)}">
+  <meta property="og:url" content="${escapeAttr(pageUrl)}">
+  <meta property="og:image" content="${escapeAttr(coverUrl)}">
   <link rel="stylesheet" href="/app.css">
   <style>
     * {

@@ -1,9 +1,14 @@
-/** @File Utilities for working with AWS S3 */
+/** @file Utilities for working with AWS S3.
+ *
+ * Handles uploads, listing, and object retrieval. {@link getObjectBytes} is used
+ * by the album cover handler to fetch track bytes for ID3 extraction.
+ */
 import type { Files } from "./files.ts";
 
 import { getID3Tags } from "./id3.ts";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import {
+  GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
@@ -55,6 +60,36 @@ const validateConfig = () => {
     STORAGE_BUCKET,
   };
 };
+
+// Reading ////////////////////////////////////////////////////////////////////
+
+/**
+ * Fetch an object from S3 by key and return its body as bytes.
+ *
+ * @param key - S3 object key (e.g. "Artist/Album/1__Title.mp3")
+ * @returns The object body as Uint8Array
+ * @throws Error if the object does not exist or fetch fails
+ */
+export async function getObjectBytes(key: string): Promise<Uint8Array> {
+  const config = validateConfig();
+  const client = new S3Client({
+    region: config.STORAGE_REGION,
+    credentials: fromEnv(),
+  });
+  const response = await client.send(
+    new GetObjectCommand({
+      Bucket: config.STORAGE_BUCKET,
+      Key: key,
+    }),
+  );
+  if (!response.Body) {
+    throw new Error(`S3 object empty: ${key}`);
+  }
+  const bytes = new Uint8Array(
+    await new Response(response.Body as ReadableStream).arrayBuffer(),
+  );
+  return bytes;
+}
 
 // Uploading //////////////////////////////////////////////////////////////////
 
@@ -611,7 +646,7 @@ const fileFetch = async (): Promise<Files> => {
  * Get Files object
  * @param force Optionally force a fresh data pull. Otherwise data will be pulled from cache if available.
  */
-export const getUploadedFiles = async (force?: boolean): Promise<Files> => {
+export const getUploadedFiles = (force?: boolean): Promise<Files> => {
   if (force) {
     logger.info(
       "Force refresh requested, clearing cache and fetching fresh data",

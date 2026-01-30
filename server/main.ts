@@ -3,6 +3,7 @@ import { Router } from "./router.ts";
 import { handleUpload } from "./handlers/upload.ts";
 import { handleIndexHtml } from "./handlers/index.html.ts";
 import { loadEnv } from "./utils/loadEnv.ts";
+import { handleAlbumCover } from "./handlers/album.cover.ts";
 import { handleAlbumHtml } from "./handlers/album.html.ts";
 
 // Load environment variables from .env file
@@ -13,6 +14,11 @@ const router = new Router();
 // Register routes
 router.add({ pattern: "/", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/", handler: handleUpload, method: "POST" });
+router.add({
+  pattern: "/artists/:artistId/albums/:albumId/cover",
+  handler: handleAlbumCover,
+  method: "GET",
+});
 router.add({
   pattern: "/artists/:artistId/albums/:albumId",
   handler: handleAlbumHtml,
