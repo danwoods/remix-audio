@@ -67,6 +67,9 @@ const setAlbumHeaderGradient = (elm: HTMLElement, colors: string[]) => {
 export class AlbumHeaderCustomElement extends HTMLElement {
   static observedAttributes = ["data-album-url"];
 
+  private scrollSentinel: HTMLDivElement | null = null;
+  private scrollObserver: IntersectionObserver | null = null;
+
   constructor() {
     super();
 
@@ -116,15 +119,30 @@ export class AlbumHeaderCustomElement extends HTMLElement {
   }
 
   connectedCallback() {
-    // Scroll handling with Intersection Observer for efficiency
+    // Scroll handling with Intersection Observer for efficiency.
+    // Use the scroll container: next sibling (when header is before the scroll area)
+    // or nearest scrollable ancestor; otherwise viewport (body scroll).
+    const scrollRoot = this.nextElementSibling ??
+      this.findScrollableAncestor();
     const sentinel = document.createElement("div");
     sentinel.style.height = "1px";
-    sentinel.style.position = "absolute";
-    sentinel.style.top = "60px"; // Trigger point
-    sentinel.style.left = "0";
-    sentinel.style.right = "0";
     sentinel.style.pointerEvents = "none";
-    document.body.insertBefore(sentinel, this);
+    sentinel.setAttribute("aria-hidden", "true");
+    if (scrollRoot) {
+      sentinel.style.position = "absolute";
+      sentinel.style.top = "60px"; // Trigger point (px scrolled before shrink)
+      sentinel.style.left = "0";
+      sentinel.style.right = "0";
+      scrollRoot.insertBefore(sentinel, scrollRoot.firstChild);
+    } else {
+      sentinel.style.position = "absolute";
+      sentinel.style.top = "60px";
+      sentinel.style.left = "0";
+      sentinel.style.right = "0";
+      document.body.insertBefore(sentinel, this);
+    }
+
+    this.scrollSentinel = sentinel;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -141,14 +159,41 @@ export class AlbumHeaderCustomElement extends HTMLElement {
       {
         threshold: 0,
         rootMargin: "0px",
+        root: scrollRoot,
       },
     );
 
     observer.observe(sentinel);
+    this.scrollObserver = observer;
+  }
+
+  /**
+   * Returns the nearest ancestor that has overflow-y auto/scroll/overlay,
+   * or null if none (viewport is the scroll context).
+   */
+  private findScrollableAncestor(): Element | null {
+    let el: Element | null = this.parentElement;
+    while (el) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (
+        overflowY === "auto" ||
+        overflowY === "scroll" ||
+        overflowY === "overlay"
+      ) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
   }
 
   disconnectedCallback() {
-    console.log("Custom element removed from page.");
+    if (this.scrollObserver && this.scrollSentinel) {
+      this.scrollObserver.disconnect();
+      this.scrollObserver = null;
+      this.scrollSentinel.remove();
+      this.scrollSentinel = null;
+    }
   }
 
   connectedMoveCallback() {

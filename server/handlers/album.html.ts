@@ -58,11 +58,33 @@ export async function handleAlbumHtml(
       box-sizing: border-box;
     }
 
+    html {
+      height: 100%;
+      overflow: hidden;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #121212;
       color: #fff;
-      min-height: 200vh;
+      margin: 0;
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    body > album-header-custom-element {
+      flex-shrink: 0;
+    }
+
+    .album-page-main {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-bottom: 6rem;
     }
 
     .album-header {
@@ -173,10 +195,12 @@ export async function handleAlbumHtml(
 <body> 
   <album-header-custom-element data-album-url="${albumUrl}"></album-header-custom-element>
 
-  <section class="tracklist">
-    <h2 class="tracklist-title">Tracks</h2>
-    <div id="tracklistContainer">${trackListHtml}</div>
-  </section>
+  <div class="album-page-main">
+    <section class="tracklist">
+      <h2 class="tracklist-title">Tracks</h2>
+      <div id="tracklistContainer">${trackListHtml}</div>
+    </section>
+  </div>
 
   <playbar-custom-element data-album-url="${albumUrl}"></playbar-custom-element>
 
