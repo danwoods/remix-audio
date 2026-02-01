@@ -51,15 +51,16 @@ function timingSafeEqual(a: string, b: string): boolean {
   // Always iterate over max length to avoid timing side-channel
   const maxLength = Math.max(a.length, b.length);
 
+  // Pre-pad strings to eliminate conditionals in the loop
+  const aPadded = a.padEnd(maxLength, "\0");
+  const bPadded = b.padEnd(maxLength, "\0");
+
   // Track both length difference and content difference
   let result = a.length ^ b.length;
 
-  // Always iterate the full max length
+  // Always iterate the full max length without any conditionals
   for (let i = 0; i < maxLength; i++) {
-    // Use 0 for missing characters to avoid branching
-    const aChar = i < a.length ? a.charCodeAt(i) : 0;
-    const bChar = i < b.length ? b.charCodeAt(i) : 0;
-    result |= aChar ^ bChar;
+    result |= aPadded.charCodeAt(i) ^ bPadded.charCodeAt(i);
   }
 
   return result === 0;
