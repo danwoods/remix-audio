@@ -65,10 +65,12 @@ export async function handleAlbumHtml(
   );
   logger.debug("Album URL", { albumUrl });
 
+  // Set up track list HTML
   const trackListHtml = tracks.map((track) => `
     <tracklist-item-custom-element data-track-url="${track.url}" data-track-name="${track.title}" data-track-artist="${artistId}" data-track-number="${track.trackNum}"></tracklist-item-custom-element>
   `).join("");
 
+  // Set up OG meta tags
   const baseUrl = new URL(req.url).origin;
   const pageUrl = `${baseUrl}/artists/${encodeURIComponent(artistId)}/albums/${
     encodeURIComponent(albumId)
@@ -125,98 +127,6 @@ export async function handleAlbumHtml(
       min-height: 0;
       overflow: auto;
       padding-bottom: 6rem;
-    }
-
-    .album-header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: linear-gradient(to bottom, #3a1c5c, #1a1a2e);
-      padding: 24px;
-      transition: padding 0.15s ease-out;
-      will-change: padding;
-    }
-
-    .album-header.shrunk {
-      padding: 12px 24px;
-    }
-
-    .album-content {
-      display: flex;
-      gap: 16px;
-      align-items: flex-end;
-    }
-
-    .album-art {
-      width: 120px;
-      height: 120px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      flex-shrink: 0;
-      transition: width 0.15s ease-out, height 0.15s ease-out;
-      font-size: 48px;
-    }
-
-    .album-header.shrunk .album-art {
-      width: 56px;
-      height: 56px;
-      font-size: 24px;
-    }
-
-    .album-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .album-label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: rgba(255, 255, 255, 0.7);
-      transition: font-size 0.15s ease-out;
-    }
-
-    .album-header.shrunk .album-label {
-      font-size: 10px;
-    }
-
-    .album-title {
-      font-size: 32px;
-      font-weight: 700;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      transition: font-size 0.15s ease-out;
-    }
-
-    .album-header.shrunk .album-title {
-      font-size: 18px;
-    }
-
-    .album-artist {
-      font-size: 14px;
-      color: rgba(255, 255, 255, 0.7);
-      transition: font-size 0.15s ease-out;
-    }
-
-    .album-header.shrunk .album-artist {
-      font-size: 12px;
-    }
-
-    .album-meta {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.5);
-      margin-top: 4px;
-      transition: opacity 0.15s ease-out, height 0.15s ease-out;
-    }
-
-    .album-header.shrunk .album-meta {
-      opacity: 0;
-      height: 0;
-      margin: 0;
-      overflow: hidden;
     }
 
     .tracklist {
