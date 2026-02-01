@@ -33,7 +33,14 @@ function parseBasicAuthHeader(headerValue: string | null): Credentials | null {
   }
 
   try {
-    const decoded = globalThis.atob(encoded);
+    // Decode base64 to bytes, then decode as UTF-8
+    const binaryString = globalThis.atob(encoded);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const decoded = new TextDecoder("utf-8").decode(bytes);
+    
     const separatorIndex = decoded.indexOf(":");
     if (separatorIndex === -1) {
       return null;
