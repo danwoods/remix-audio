@@ -18,6 +18,8 @@ AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 STORAGE_REGION=your_region
 STORAGE_BUCKET=your_bucket_name
+ADMIN_USER=admin_username
+ADMIN_PASS=admin_password
 PORT=8000  # Optional, defaults to 8000
 ```
 
