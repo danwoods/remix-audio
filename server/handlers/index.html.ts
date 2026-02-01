@@ -1,6 +1,7 @@
 /** @file Index page route handler */
 import { renderPage } from "../ssr-plain.ts";
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
+import { getAdminAuthStatus } from "../utils/basicAuth.ts";
 
 import albumRowWithTitleHtml from "../../app/components/AlbumRow/album-row-with-title-html.ts";
 import { getAlbumIdsByRecent } from "../../app/util/files.ts";
@@ -8,11 +9,13 @@ import pkg from "../../deno.json" with { type: "json" };
 
 /** Index page route handler */
 export async function handleIndexHtml(
-  _req: Request,
+  req: Request,
   _params: Record<string, string>,
 ): Promise<Response> {
   const files = await getUploadedFiles();
   const recentlyUploadedAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
+  const { isAuthorized } = getAdminAuthStatus(req);
+  const pathname = new URL(req.url).pathname;
 
   const recentlyListenedToAlbumIds = [
     { id: "Childish Gambino/Poindexter" },
@@ -35,6 +38,8 @@ export async function handleIndexHtml(
       appName: pkg.name,
       headLinks: [],
       assets: { css: "", js: "" },
+      pathname,
+      isAdmin: isAuthorized,
     },
     [
       albumRowWithTitleHtml({

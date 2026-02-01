@@ -6,6 +6,7 @@ export interface AppBarProps {
   pathname?: string;
   startContent?: string;
   endContent?: string;
+  isAdmin?: boolean;
   className?: string;
 }
 
@@ -44,12 +45,24 @@ export default function appBarHtml(props: AppBarProps = {}): string {
     pathname = "/",
     startContent = "",
     endContent = "",
+    isAdmin = false,
     className = "",
   } = props;
 
   const escapedAppName = escapeHtml(appName);
   const escapedStartContent = startContent;
   const escapedEndContent = endContent;
+
+  const adminUploadForm = isAdmin
+    ? `<form method="post" enctype="multipart/form-data" class="flex items-center gap-2" aria-label="Upload files">
+  <label class="sr-only" for="admin-upload-files">Upload audio files</label>
+  <input id="admin-upload-files" type="file" name="files" multiple class="file-input file-input-sm" />
+  <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+</form>`
+    : "";
+  const resolvedEndContent = [escapedEndContent, adminUploadForm]
+    .filter(Boolean)
+    .join("\n");
 
   // Determine if navbar should be sticky (only on home page)
   const stickyClass = pathname === "/" ? "sticky top-0" : "";
@@ -61,10 +74,10 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   const classAttr = ` class="${escapeHtml(allClasses)}"`;
 
   return `<div${classAttr}>
-  <!-- <div class="flex-1">${escapedStartContent}</div> -->
+  <div class="flex-1">${escapedStartContent}</div>
   <div class="flex-1 flex justify-center lg:justify-start">
     <a href="/" class="text-xl font-bold">${escapedAppName}</a>
   </div>
-  <!-- <div class="flex-1 flex justify-end">${escapedEndContent}</div> -->
+  <div class="flex-1 flex justify-end">${resolvedEndContent}</div>
 </div>`;
 }

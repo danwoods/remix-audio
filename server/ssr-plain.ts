@@ -13,6 +13,8 @@ export function renderPage(
     appName: string;
     headLinks: Array<{ rel: string; href: string }>;
     assets: { css: string; js: string };
+    pathname?: string;
+    isAdmin?: boolean;
   },
   children: Array<string>,
 ): string {
@@ -24,6 +26,9 @@ export function renderPage(
   //   const assets = await getClientAssets();
 
   props.assets.css = CSS_PATH;
+
+  const isAdmin = props.isAdmin ?? false;
+  const pathname = props.pathname ?? "/";
 
   return `<!DOCTYPE html>
 <html lang="en" class="bg-black text-white">
@@ -39,10 +44,10 @@ export function renderPage(
       .join("\n    ")
   }
   </head>
-  <body>
+  <body data-is-admin="${isAdmin ? "true" : "false"}">
     <div id="root">
       <div class="flex w-full flex-col">
-        ${appBarHtml({ appName: props.appName })}
+        ${appBarHtml({ appName: props.appName, pathname, isAdmin })}
         <main class="md:mx-auto md:px-6 grow">
           ${children.join("")}
         </main>
