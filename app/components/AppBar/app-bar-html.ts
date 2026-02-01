@@ -28,8 +28,8 @@ function escapeHtml(unsafe: string): string {
  * Generate HTML string for application bar/navbar
  *
  * Returns HTML immediately with a navbar containing logo/title and optional start/end content.
- * 
- * Security: User-controlled data (appName, className) is escaped. startContentHtml and 
+ *
+ * Security: User-controlled data (appName, className) is escaped. startContentHtml and
  * endContentHtml are injected as-is and must only contain trusted HTML.
  *
  * @param props - App bar properties
