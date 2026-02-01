@@ -4,8 +4,10 @@
 export interface AppBarProps {
   appName?: string;
   pathname?: string;
-  startContent?: string;
-  endContent?: string;
+  /** Trusted HTML string to inject at the start of the navbar. Not escaped - only pass trusted content. */
+  startContentHtml?: string;
+  /** Trusted HTML string to inject at the end of the navbar. Not escaped - only pass trusted content. */
+  endContentHtml?: string;
   isAdmin?: boolean;
   className?: string;
 }
@@ -26,6 +28,9 @@ function escapeHtml(unsafe: string): string {
  * Generate HTML string for application bar/navbar
  *
  * Returns HTML immediately with a navbar containing logo/title and optional start/end content.
+ * 
+ * Security: User-controlled data (appName, className) is escaped. startContentHtml and 
+ * endContentHtml are injected as-is and must only contain trusted HTML.
  *
  * @param props - App bar properties
  * @returns HTML string for a navbar element
@@ -35,7 +40,7 @@ function escapeHtml(unsafe: string): string {
  * const html = appBarHtml({
  *   appName: "Remix Audio",
  *   pathname: "/",
- *   endContent: '<button class="p-2 rounded-full" aria-label="search">Search</button>'
+ *   endContentHtml: '<button class="p-2 rounded-full" aria-label="search">Search</button>'
  * });
  * ```
  */
@@ -43,15 +48,15 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   const {
     appName = "Remix Audio",
     pathname = "/",
-    startContent = "",
-    endContent = "",
+    startContentHtml = "",
+    endContentHtml = "",
     isAdmin = false,
     className = "",
   } = props;
 
   const escapedAppName = escapeHtml(appName);
-  const escapedStartContent = startContent;
-  const escapedEndContent = endContent;
+  const trustedStartHtml = startContentHtml;
+  const trustedEndHtml = endContentHtml;
 
   const adminUploadForm = isAdmin
     ? `<form method="post" enctype="multipart/form-data" class="flex items-center gap-2" aria-label="Upload files">
@@ -60,7 +65,7 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   <button type="submit" class="btn btn-primary btn-sm">Upload</button>
 </form>`
     : "";
-  const resolvedEndContent = [escapedEndContent, adminUploadForm]
+  const resolvedEndContent = [trustedEndHtml, adminUploadForm]
     .filter(Boolean)
     .join("\n");
 
@@ -74,7 +79,7 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   const classAttr = ` class="${escapeHtml(allClasses)}"`;
 
   return `<div${classAttr}>
-  <div class="flex-1">${escapedStartContent}</div>
+  <div class="flex-1">${trustedStartHtml}</div>
   <div class="flex-1 flex justify-center lg:justify-start">
     <a href="/" class="text-xl font-bold">${escapedAppName}</a>
   </div>
