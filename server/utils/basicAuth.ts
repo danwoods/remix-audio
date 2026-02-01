@@ -48,13 +48,18 @@ function parseBasicAuthHeader(headerValue: string | null): Credentials | null {
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
+  // Always iterate over max length to avoid timing side-channel
+  const maxLength = Math.max(a.length, b.length);
 
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  // Track both length difference and content difference
+  let result = a.length ^ b.length;
+
+  // Always iterate the full max length
+  for (let i = 0; i < maxLength; i++) {
+    // Use 0 for missing characters to avoid branching
+    const aChar = i < a.length ? a.charCodeAt(i) : 0;
+    const bChar = i < b.length ? b.charCodeAt(i) : 0;
+    result |= aChar ^ bChar;
   }
 
   return result === 0;
