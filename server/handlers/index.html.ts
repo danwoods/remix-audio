@@ -17,6 +17,25 @@ export async function handleIndexHtml(
   const { isAuthorized } = getAdminAuthStatus(req);
   const pathname = new URL(req.url).pathname;
 
+  // Protected admin auth flow:
+  // - Visiting `/admin` without credentials triggers a 401 Basic Auth challenge.
+  // - After successful auth, the browser resends the request with Authorization,
+  //   `isAuthorized` becomes true, and we redirect back to `/`, where the
+  //   upload/admin UI can be rendered.
+  if (pathname === "/admin") {
+    if (!isAuthorized) {
+      return new Response("Authentication required", {
+        status: 401,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          'WWW-Authenticate': 'Basic realm="Admin", charset="UTF-8"',
+        },
+      });
+    }
+
+    const redirectUrl = new URL("/", req.url).toString();
+    return Response.redirect(redirectUrl, 302);
+  }
   const recentlyListenedToAlbumIds = [
     { id: "Childish Gambino/Poindexter" },
     { id: "Girl Talk/All Day" },
