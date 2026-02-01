@@ -1,6 +1,7 @@
 /* Custom CSS variables for breakpoints and other shared values */
 /* These are available in both regular DOM and shadow DOM */
-:root, :host {
+:root,
+:host {
   --breakpoint-sm: 50rem;
   --breakpoint-md: 64rem;
   --breakpoint-lg: 80rem;
@@ -9,17 +10,42 @@
   /* Typography: responsive font sizes (inherited into shadow DOM) */
   --font-size-primary: 0.875rem;
   --font-size-secondary: 0.75rem;
+
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #121212;
+  color: #fff;
+  margin: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @media only screen and (min-width: 50rem) {
-  :root, :host {
+
+  :root,
+  :host {
     --font-size-primary: 1rem;
     --font-size-secondary: 0.8125rem;
   }
 }
 
 @media only screen and (min-width: 64rem) {
-  :root, :host {
+
+  :root,
+  :host {
     --font-size-primary: 1.125rem;
     --font-size-secondary: 0.875rem;
   }

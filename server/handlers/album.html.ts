@@ -94,30 +94,7 @@ export async function handleAlbumHtml(
   <meta property="og:image" content="${escapeAttr(coverUrl)}">
   <link rel="stylesheet" href="/app.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html {
-      height: 100%;
-      overflow: hidden;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #121212;
-      color: #fff;
-      margin: 0;
-      height: 100%;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    body > album-header-custom-element {
+    album-header-custom-element {
       flex-shrink: 0;
     }
 
