@@ -39,7 +39,7 @@
     "build:custom-elements": "deno bundle --minify app/components/register-custom-elements.ts > build/main.js",
     "test:browser": "deno run --allow-net --allow-env --allow-read --allow-run --allow-sys --allow-write --no-check deno-tests/server/handlers/album.html.sticky.browser.playwright.ts",
     "test:doc": "deno test --doc --allow-net app/util/track.ts",
-    "test:all": "deno task test:doc && deno test deno-tests/ 'app/components/Layout/**/*.test.ts' 'app/components/ScrollingText/**/*.test.ts' 'app/components/Tracklist/**/*.test.ts' --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys && npm test -- --exclude='deno-tests/**' --exclude='server/**' --exclude='app/util/s3.server.test.ts'"
+    "test:all": "deno task test:doc && deno test deno-tests/ 'app/components/Layout/**/*.test.ts' 'app/components/ScrollingText/**/*.test.ts' 'app/components/Tracklist/**/*.test.ts' 'app/components/UploadDialog/**/*.test.ts' --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys && npm test -- --exclude='deno-tests/**' --exclude='server/**' --exclude='app/util/s3.server.test.ts'"
   },
   "fmt": {
     "include": ["app/", "server/"]

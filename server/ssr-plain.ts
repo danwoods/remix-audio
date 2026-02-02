@@ -42,7 +42,12 @@ export function renderPage(
   <body>
     <div id="root">
       <div class="flex w-full flex-col">
-        ${appBarHtml({ appName: props.appName })}
+        ${
+    appBarHtml({
+      appName: props.appName,
+      endContent: '<upload-dialog buttonStyle="width: 24px; height: 24px;" />',
+    })
+  }
         <main class="md:mx-auto md:px-6 grow">
           ${children.join("")}
         </main>

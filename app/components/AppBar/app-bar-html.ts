@@ -1,3 +1,5 @@
+/** @file App bar HTML function. */
+
 /**
  * Props for the app bar HTML function
  */
@@ -65,6 +67,6 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   <div class="flex-1 flex justify-center lg:justify-start">
     <a href="/" class="text-xl font-bold">${escapedAppName}</a>
   </div>
-  <!-- <div class="flex-1 flex justify-end">${escapedEndContent}</div> -->
+  <div class="flex-1 flex justify-end">${escapedEndContent}</div>
 </div>`;
 }
