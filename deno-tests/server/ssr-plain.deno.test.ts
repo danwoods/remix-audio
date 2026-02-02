@@ -2,7 +2,11 @@
 import { assertStringIncludes } from "@std/assert";
 import { renderPage } from "../../server/ssr-plain.ts";
 
-Deno.test("renderPage includes upload form for admin requests", () => {
+Deno.test("renderPage includes upload dialog for admin requests", () => {
+  /**
+   * When isAdmin is true, the page must include the upload-dialog custom
+   * element so the upload button is visible to admins.
+   */
   const html = renderPage(
     {
       appName: "Test App",
@@ -14,7 +18,5 @@ Deno.test("renderPage includes upload form for admin requests", () => {
     ["<div>content</div>"],
   );
 
-  assertStringIncludes(html, 'data-is-admin="true"');
-  assertStringIncludes(html, 'enctype="multipart/form-data"');
-  assertStringIncludes(html, 'name="files"');
+  assertStringIncludes(html, "upload-dialog");
 });

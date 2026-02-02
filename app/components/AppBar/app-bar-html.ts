@@ -59,11 +59,7 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   const trustedEndHtml = endContentHtml;
 
   const adminUploadForm = isAdmin
-    ? `<form method="post" enctype="multipart/form-data" class="flex items-center gap-2" aria-label="Upload files">
-  <label class="sr-only" for="admin-upload-files">Upload audio files</label>
-  <input id="admin-upload-files" type="file" name="files" multiple class="file-input file-input-sm" />
-  <button type="submit" class="btn btn-primary btn-sm">Upload</button>
-</form>`
+    ? `<upload-dialog buttonStyle="width: 24px; height: 24px;" />`
     : "";
   const resolvedEndContent = [trustedEndHtml, adminUploadForm]
     .filter(Boolean)

@@ -13,8 +13,7 @@ const JS_PATH = "/build/main.js";
  *
  * @param props - Page options. `isAdmin` is set from admin Basic Auth status
  *   (see `getAdminAuthStatus` in index handler); when true, the page shows
- *   admin-only UI (e.g. upload dialog) and `<body data-is-admin="true">` for
- *   client-side behavior.
+ *   admin-only UI (e.g. upload dialog).
  * @param children - HTML fragments for the main content (e.g. album rows)
  * @returns Full HTML document string
  */
@@ -54,7 +53,7 @@ export function renderPage(
       .join("\n    ")
   }
   </head>
-  <body data-is-admin="${isAdmin ? "true" : "false"}">
+  <body>
     <div id="root">
       <div class="flex w-full flex-col">
         ${
@@ -62,8 +61,6 @@ export function renderPage(
       appName: props.appName,
       pathname,
       isAdmin,
-      endContentHtml:
-        '<upload-dialog buttonStyle="width: 24px; height: 24px;" />',
     })
   }
         <main class="md:mx-auto md:px-6 grow">
