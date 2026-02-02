@@ -13,6 +13,7 @@ const router = new Router();
 
 // Register routes
 router.add({ pattern: "/", handler: handleIndexHtml, method: "GET" });
+router.add({ pattern: "/admin", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/", handler: handleUpload, method: "POST" });
 router.add({
   pattern: "/artists/:artistId/albums/:albumId/cover",
