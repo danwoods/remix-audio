@@ -1,5 +1,5 @@
 /** @file Tests for upload route handler */
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { handleUpload } from "../../../server/handlers/upload.ts";
 
 const ADMIN_USER = "admin";
@@ -48,6 +48,34 @@ Deno.test({
         const text = await response.text();
         assertEquals(text, "No files provided");
       });
+
+      await t.step(
+        "regression: does not return 400 when FormData contains files (client must build FormData before disabling file input)",
+        async () => {
+          const file = new File(["content"], "test.mp3", {
+            type: "audio/mpeg",
+          });
+          const formData = new FormData();
+          formData.append("files", file);
+          const req = new Request("http://localhost:8000/", {
+            method: "POST",
+            body: formData,
+            headers: { Authorization: createAdminAuthHeader() },
+          });
+          const response = await handleUpload(req);
+          assert(
+            response.status !== 400,
+            "Must not return 400 when FormData includes files; client builds FormData before disabling file input",
+          );
+          if (response.status === 400) {
+            const text = await response.text();
+            assert(
+              text !== "No files provided",
+              "Must not return 'No files provided' when files were sent",
+            );
+          }
+        },
+      );
 
       await t.step("accepts FormData with files", async () => {
         // Create a simple text file for testing

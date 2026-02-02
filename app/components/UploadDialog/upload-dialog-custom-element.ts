@@ -222,10 +222,12 @@ export class UploadDialogCustomElement extends HTMLElement {
         submitBtn.classList.add("disabled");
         submitBtn.innerHTML = '<span class="loading loading-spinner"></span>';
       }
+      // Build FormData before disabling the file input: disabled controls are
+      // not successful and are omitted from FormData.
+      const formData = new FormData(form!);
       if (fileInput) fileInput.disabled = true;
 
       try {
-        const formData = new FormData(form);
         const response = await fetch("/", {
           method: "POST",
           body: formData,

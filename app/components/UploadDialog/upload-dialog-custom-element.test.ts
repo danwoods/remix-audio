@@ -31,7 +31,51 @@ let bodyAppendChildCalls: unknown[] = [];
 let bodyRemoveChildCalls: unknown[] = [];
 let containerClickHandler: ((e: { target: unknown }) => void) | null = null;
 
+/** File input mock for regression test: FormData must be built before disabling. */
+let mockFileInput: {
+  disabled: boolean;
+  files: File[];
+  addEventListener: () => void;
+} | null = null;
+
+/** Form mock for regression test: stores submit handler. */
+let mockFormWithSubmit: {
+  _submitHandler: ((e: Event) => void) | null;
+  querySelector: (sel: string) => unknown;
+  addEventListener: (type: string, fn: (e: Event) => void) => void;
+  action: string;
+} | null = null;
+
 function createMockContainer() {
+  const fileInput = {
+    disabled: false,
+    files: [] as File[],
+    addEventListener: () => {},
+  };
+  mockFileInput = fileInput;
+
+  const form = {
+    _submitHandler: null as ((e: Event) => void) | null,
+    querySelector(sel: string) {
+      return sel === "#files" ? fileInput : null;
+    },
+    addEventListener(type: string, fn: (e: Event) => void) {
+      if (type === "submit") {
+        (form as { _submitHandler: ((e: Event) => void) | null })
+          ._submitHandler = fn;
+      }
+    },
+    action: "http://localhost:8000/",
+  };
+  mockFormWithSubmit = form;
+
+  const genericNode = {
+    addEventListener: () => {},
+    disabled: false,
+    classList: { toggle: () => {}, add: () => {} },
+    innerHTML: "",
+  };
+
   const container = {
     style: { cssText: "" },
     innerHTML: "",
@@ -40,16 +84,10 @@ function createMockContainer() {
       if (type === "click") containerClickHandler = fn;
     },
     querySelector: (sel: string) => {
-      const node = {
-        addEventListener: () => {},
-        disabled: false,
-        classList: { toggle: () => {} },
-        innerHTML: "",
-      };
-      return sel === "#upload-form" || sel === "#close-btn" ||
-          sel === "#files" || sel === "#submit-btn"
-        ? node
-        : null;
+      if (sel === "#upload-form") return form;
+      if (sel === "#files") return fileInput;
+      if (sel === "#close-btn" || sel === "#submit-btn") return genericNode;
+      return null;
     },
   };
   return container;
@@ -260,3 +298,83 @@ Deno.test("UploadDialogCustomElement - backdrop click closes the dialog", () => 
     "dialog container should be removed from body on backdrop click",
   );
 });
+
+Deno.test(
+  "UploadDialogCustomElement - regression: FormData is built before file input is disabled so fetch receives files",
+  async () => {
+    /**
+     * Regression test for upload 400 "No files provided". The client must
+     * build FormData(form) before setting fileInput.disabled = true, because
+     * disabled form controls are omitted from FormData.
+     */
+    interface BodyWithGetAll {
+      getAll(k: string): File[];
+    }
+    let capturedBody: BodyWithGetAll | null = null;
+    const OriginalFormData = globalThis.FormData;
+    const OriginalFetch = globalThis.fetch;
+
+    class MockFormData {
+      constructor(form: unknown) {
+        const f = form as {
+          querySelector: (s: string) => { disabled: boolean; files: File[] };
+        };
+        const input = f.querySelector("#files");
+        const disabled = input?.disabled ?? true;
+        const files = input?.files ?? [];
+        const list = Array.isArray(files) ? files : [...files];
+        (this as unknown as { _getAll: (k: string) => File[] })._getAll = (
+          k: string,
+        ) => (k === "files" && !disabled ? list : []);
+      }
+      getAll(k: string): File[] {
+        return (this as unknown as { _getAll: (k: string) => File[] })._getAll(
+          k,
+        );
+      }
+    }
+    (globalThis as { FormData: typeof FormData }).FormData =
+      MockFormData as unknown as typeof FormData;
+
+    (globalThis as { fetch: typeof fetch }).fetch = function (
+      _url: unknown,
+      init?: RequestInit,
+    ) {
+      capturedBody = (init?.body as BodyWithGetAll) ?? null;
+      return Promise.resolve(
+        new Response(null, { status: 303, headers: { Location: "/" } }),
+      );
+    };
+
+    bodyAppendChildCalls = [];
+    const element = new UploadDialogCustomElement();
+    element.connectedCallback();
+    assertExists(triggerClickHandler);
+    triggerClickHandler!();
+    assertExists(
+      mockFormWithSubmit,
+      "form should be created when dialog opens",
+    );
+    assertExists(mockFileInput, "file input should exist");
+    const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
+    mockFileInput.files = [mockFile];
+    mockFileInput.disabled = false;
+    await mockFormWithSubmit!._submitHandler!({
+      preventDefault: () => {},
+    } as Event);
+
+    assertExists(
+      capturedBody,
+      "fetch should be called with body",
+    );
+    const body = capturedBody as BodyWithGetAll;
+    assertEquals(
+      body.getAll("files").length,
+      1,
+      "FormData passed to fetch must include files (build FormData before disabling file input)",
+    );
+
+    (globalThis as { FormData: typeof FormData }).FormData = OriginalFormData;
+    (globalThis as { fetch: typeof fetch }).fetch = OriginalFetch;
+  },
+);
