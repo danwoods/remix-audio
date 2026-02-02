@@ -23,6 +23,33 @@ ADMIN_PASS=admin_password
 PORT=8000  # Optional, defaults to 8000
 ```
 
+## Admin authentication
+
+Admin features (file upload, admin-only UI) are protected by **HTTP Basic
+Auth**. Credentials are read from `ADMIN_USER` and `ADMIN_PASS`. If either is
+unset or empty, admin is not configured and protected routes return 500.
+
+**How to log in as admin:**
+
+1. Visit **`/admin`** in the browser.
+2. The server responds with 401 and `WWW-Authenticate: Basic`; the browser shows
+   a username/password dialog.
+3. Enter the same values as in your `.env` (`ADMIN_USER` / `ADMIN_PASS`).
+4. After success, you are redirected to `/`. The home page then renders with
+   admin-only UI (e.g. upload button). The browser keeps sending the
+   `Authorization` header on subsequent requests in that origin.
+
+**Protected routes:**
+
+- **GET `/admin`** — Login entry point; requires valid Basic Auth, then
+  redirects to `/`.
+- **POST `/`** — File upload; requires valid Basic Auth. Unauthenticated
+  requests receive 401 (Basic Auth challenge).
+
+**Auth state on GET `/`:** The server does not challenge on the home page. It
+uses the request’s `Authorization` header (if present) to set `isAdmin` for SSR,
+so admin UI is shown only when the user has already logged in via `/admin`.
+
 ## Building the Client Bundle
 
 Before running the Deno server, you need to build the client bundle:
@@ -100,8 +127,9 @@ deno test server/router.test.ts --allow-read
 
 ## Routes
 
-- `GET /` - Homepage
-- `POST /` - File upload
+- `GET /` - Homepage (admin UI shown when logged in via `/admin`)
+- `GET /admin` - Admin login (Basic Auth; redirects to `/` on success)
+- `POST /` - File upload (requires admin Basic Auth)
 - `GET /artists/:artistId/albums/:albumId` - Album detail page
 - `GET /artists/:artistId/albums/:albumId/cover` - Album cover image (extracted
   from ID3 tags of first track)

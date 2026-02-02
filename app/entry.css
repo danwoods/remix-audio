@@ -53,4 +53,3 @@ body {
 
 @import "tailwindcss";
 @source "./app/**/*.ts";
-@source "./app/**/*.tsx";

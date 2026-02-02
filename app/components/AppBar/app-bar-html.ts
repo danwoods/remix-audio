@@ -6,9 +6,7 @@
 export interface AppBarProps {
   appName?: string;
   pathname?: string;
-  /** Trusted HTML string to inject at the start of the navbar. Not escaped - only pass trusted content. */
   startContentHtml?: string;
-  /** Trusted HTML string to inject at the end of the navbar. Not escaped - only pass trusted content. */
   endContentHtml?: string;
   isAdmin?: boolean;
   className?: string;

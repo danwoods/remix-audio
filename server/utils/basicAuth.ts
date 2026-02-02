@@ -1,4 +1,24 @@
-/** @file Basic authentication utilities for admin endpoints */
+/**
+ * @file Basic authentication utilities for admin endpoints
+ *
+ * Admin access is controlled by HTTP Basic Auth. Credentials are read from
+ * environment variables `ADMIN_USER` and `ADMIN_PASS`. If either is unset or
+ * empty, admin is considered "not configured" and protected routes return 500.
+ *
+ * **Flow:**
+ * 1. User visits a protected route (e.g. GET `/admin` or POST `/` for uploads).
+ * 2. Handler calls `requireAdminAuth(req)`. If credentials are missing or
+ *    invalid, it returns a 401 with `WWW-Authenticate: Basic`, prompting the
+ *    browser to show a login dialog.
+ * 3. After the user submits valid credentials, the browser resends the request
+ *    with an `Authorization: Basic <base64>` header.
+ * 4. Credentials are compared using a timing-safe comparison to mitigate
+ *    timing side-channel attacks.
+ *
+ * **Protected routes:** GET `/admin` (login entry point), POST `/` (file upload).
+ * **Auth state on GET `/`:** Handlers use `getAdminAuthStatus(req)` to know
+ * whether to show admin-only UI (e.g. upload button) without challenging.
+ */
 
 const ADMIN_USER_ENV = "ADMIN_USER";
 const ADMIN_PASS_ENV = "ADMIN_PASS";
@@ -73,6 +93,14 @@ function timingSafeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
+/**
+ * Determine whether admin credentials are configured and whether the request
+ * has valid admin credentials (via the `Authorization` header).
+ *
+ * @param req - The incoming request (may include `Authorization: Basic ...`)
+ * @returns `{ isConfigured, isAuthorized }` — use `isAuthorized` to show/hide
+ *   admin-only UI on GET `/` without triggering a 401 challenge.
+ */
 export function getAdminAuthStatus(req: Request): AdminAuthStatus {
   const configured = getConfiguredAdminCredentials();
   if (!configured) {
@@ -99,6 +127,15 @@ export function getAdminAuthStatus(req: Request): AdminAuthStatus {
   };
 }
 
+/**
+ * Enforce admin authentication for the request. Use in protected handlers
+ * (e.g. GET `/admin`, POST `/`).
+ *
+ * @param req - The incoming request
+ * @returns A `Response` to send (401 Unauthorized, or 500 if admin not
+ *   configured); or `null` if the request is authorized. When non-null, the
+ *   handler should return this response immediately.
+ */
 export function requireAdminAuth(req: Request): Response | null {
   const { isConfigured, isAuthorized } = getAdminAuthStatus(req);
 

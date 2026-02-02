@@ -1,4 +1,10 @@
-/** @file File upload route handler */
+/**
+ * @file File upload route handler
+ *
+ * Handles POST `/` for uploading audio files to S3. Requires admin
+ * authentication (same Basic Auth as GET `/admin`). Unauthenticated requests
+ * receive 401 with a Basic Auth challenge.
+ */
 import { getUploadedFiles, handleS3Upload } from "../../app/util/s3.server.ts";
 import { requireAdminAuth } from "../utils/basicAuth.ts";
 
@@ -18,6 +24,13 @@ async function* formDataToAsyncIterable(file: File): AsyncIterable<Uint8Array> {
   }
 }
 
+/**
+ * Handle POST `/` — multipart file upload. Requires admin Basic Auth;
+ * returns 401 if not authenticated. On success, redirects to `/` (303).
+ *
+ * @param req - The request; must have valid Authorization and multipart body
+ * @returns 401 if not admin, 400 if no files, 500 on upload failure, 303 to /
+ */
 export async function handleUpload(req: Request): Promise<Response> {
   const authError = requireAdminAuth(req);
   if (authError) {

@@ -7,6 +7,17 @@ import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
 const CSS_PATH = "/app.css";
 const JS_PATH = "/build/main.js";
 
+/**
+ * Render the full HTML page (shell + main content). Used by index and album
+ * handlers.
+ *
+ * @param props - Page options. `isAdmin` is set from admin Basic Auth status
+ *   (see `getAdminAuthStatus` in index handler); when true, the page shows
+ *   admin-only UI (e.g. upload dialog) and `<body data-is-admin="true">` for
+ *   client-side behavior.
+ * @param children - HTML fragments for the main content (e.g. album rows)
+ * @returns Full HTML document string
+ */
 export function renderPage(
   props: {
     appName: string;

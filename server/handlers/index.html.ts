@@ -7,18 +7,27 @@ import albumRowWithTitleHtml from "../../app/components/AlbumRow/album-row-with-
 import { getAlbumIdsByRecent } from "../../app/util/files.ts";
 import pkg from "../../deno.json" with { type: "json" };
 
-/** Index page route handler */
+/**
+ * Handles GET `/` (home) and GET `/admin` (admin login entry).
+ *
+ * **Admin auth flow:**
+ * - GET `/admin`: Requires valid Basic Auth. If missing or invalid, returns 401
+ *   with `WWW-Authenticate: Basic` (browser shows login dialog). After success,
+ *   redirects to `/` so the same request is sent with the `Authorization`
+ *   header; the home page then renders with admin UI (e.g. upload).
+ * - GET `/`: No challenge. Uses `getAdminAuthStatus(req)` to set `isAdmin` for
+ *   SSR; when true, the page shows admin-only UI (upload dialog, etc.).
+ *
+ * @param req - The incoming request
+ * @param _params - Route params (unused for index)
+ * @returns HTML response for the home page, or 401/302 for `/admin`
+ */
 export async function handleIndexHtml(
   req: Request,
   _params: Record<string, string>,
 ): Promise<Response> {
   const pathname = new URL(req.url).pathname;
 
-  // Protected admin auth flow:
-  // - Visiting `/admin` without credentials triggers a 401 Basic Auth challenge.
-  // - After successful auth, the browser resends the request with Authorization,
-  //   `isAuthorized` becomes true, and we redirect back to `/`, where the
-  //   upload/admin UI can be rendered.
   if (pathname === "/admin") {
     const authError = requireAdminAuth(req);
     if (authError) {
