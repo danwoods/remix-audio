@@ -1,5 +1,6 @@
 /** @file File upload route handler */
-import { handleS3Upload, getUploadedFiles } from "../../app/util/s3.server.ts";
+import { getUploadedFiles, handleS3Upload } from "../../app/util/s3.server.ts";
+import { requireAdminAuth } from "../utils/basicAuth.ts";
 
 /**
  * Convert FormData file entry to async iterable
@@ -18,6 +19,11 @@ async function* formDataToAsyncIterable(file: File): AsyncIterable<Uint8Array> {
 }
 
 export async function handleUpload(req: Request): Promise<Response> {
+  const authError = requireAdminAuth(req);
+  if (authError) {
+    return authError;
+  }
+
   try {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
@@ -37,8 +43,9 @@ export async function handleUpload(req: Request): Promise<Response> {
           await handleS3Upload("files", file.type, data);
           successCount++;
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
+          const errorMessage = error instanceof Error
+            ? error.message
+            : "Unknown error";
           const errorName = (error as { name?: string }).name || "Unknown";
           console.error(
             `Failed to upload file ${file.name}: ${errorName} - ${errorMessage}`,
@@ -72,8 +79,9 @@ export async function handleUpload(req: Request): Promise<Response> {
     });
   } catch (error) {
     console.error("Upload error:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = error instanceof Error
+      ? error.message
+      : "Unknown error";
     const errorName = (error as { name?: string }).name || "Unknown";
     console.error(`Upload error name: ${errorName}`);
     return new Response(`Upload failed: ${errorMessage}`, { status: 500 });

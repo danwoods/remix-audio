@@ -6,13 +6,14 @@ import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
 
 const CSS_PATH = "/app.css";
 const JS_PATH = "/build/main.js";
-``;
 
 export function renderPage(
   props: {
     appName: string;
     headLinks: Array<{ rel: string; href: string }>;
     assets: { css: string; js: string };
+    pathname?: string;
+    isAdmin?: boolean;
   },
   children: Array<string>,
 ): string {
@@ -24,6 +25,9 @@ export function renderPage(
   //   const assets = await getClientAssets();
 
   props.assets.css = CSS_PATH;
+
+  const isAdmin = props.isAdmin ?? false;
+  const pathname = props.pathname ?? "/";
 
   return `<!DOCTYPE html>
 <html lang="en" class="bg-black text-white">
@@ -39,13 +43,16 @@ export function renderPage(
       .join("\n    ")
   }
   </head>
-  <body>
+  <body data-is-admin="${isAdmin ? "true" : "false"}">
     <div id="root">
       <div class="flex w-full flex-col">
         ${
     appBarHtml({
       appName: props.appName,
-      endContent: '<upload-dialog buttonStyle="width: 24px; height: 24px;" />',
+      pathname,
+      isAdmin,
+      endContentHtml:
+        '<upload-dialog buttonStyle="width: 24px; height: 24px;" />',
     })
   }
         <main class="md:mx-auto md:px-6 grow">
