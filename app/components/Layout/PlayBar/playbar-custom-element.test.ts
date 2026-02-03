@@ -66,6 +66,12 @@ import { assert, assertEquals, assertExists } from "@std/assert";
  */
 let elementAttributes: { [key: string]: string } = {};
 let innerHTMLValue = "";
+/** Shadow root render state (playbar uses shadow DOM and updates elements in render()). */
+let shadowRootBarClassName = "";
+let _shadowRootTrackUrl = "";
+let _shadowRootPlayState = "";
+let shadowRootHasPreviousTrack = "";
+let _shadowRootHasNextTrack = "";
 let audioElement: Partial<HTMLAudioElement> | null = null;
 const audioEventListeners: {
   [key: string]: ((event: Event) => void)[];
@@ -202,13 +208,14 @@ function setupDOMEnvironment() {
     define: () => {},
   } as unknown as CustomElementRegistry;
 
-  // Set up HTMLElement before imports
+  // Set up HTMLElement before imports (includes attachShadow for shadow DOM)
   globalThis.HTMLElement = class HTMLElement {
     style: CSSStyleDeclaration = {
       display: "",
       width: "",
     } as CSSStyleDeclaration;
     innerHTML = "";
+    shadowRoot: ShadowRoot | null = null;
 
     constructor() {
       Object.defineProperty(this, "innerHTML", {
@@ -218,6 +225,90 @@ function setupDOMEnvironment() {
         },
         configurable: true,
       });
+      this.shadowRoot = {
+        appendChild: () => {},
+        querySelector: (selector: string) => {
+          if (selector === "#playbar-bar") {
+            return {
+              get className() {
+                return shadowRootBarClassName;
+              },
+              set className(v: string) {
+                shadowRootBarClassName = v;
+              },
+              setAttribute: () => {},
+              getAttribute: () => null,
+            };
+          }
+          if (selector === "track-info-custom-element") {
+            return {
+              setAttribute: (name: string, value: string) => {
+                if (name === "data-track-url") _shadowRootTrackUrl = value;
+              },
+              getAttribute: () => null,
+            };
+          }
+          if (selector === "player-controls-custom-element") {
+            return {
+              setAttribute: (name: string, value: string) => {
+                if (name === "data-play-state") _shadowRootPlayState = value;
+                if (name === "data-has-previous-track") {
+                  shadowRootHasPreviousTrack = value;
+                }
+                if (name === "data-has-next-track") {
+                  _shadowRootHasNextTrack = value;
+                }
+              },
+              getAttribute: () => null,
+            };
+          }
+          return null;
+        },
+        getElementById: () => null,
+        append: () => {},
+        replaceChildren: () => {},
+        host: this as unknown as Element,
+        mode: "open" as ShadowRootMode,
+        children: [] as unknown as HTMLCollection,
+        firstChild: null,
+        lastChild: null,
+        childNodes: [] as unknown as NodeListOf<ChildNode>,
+        firstElementChild: null,
+        lastElementChild: null,
+        childElementCount: 0,
+        textContent: "",
+        get innerHTML() {
+          return innerHTMLValue;
+        },
+        set innerHTML(_v: string) {
+          // no-op for mock
+        },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => true,
+        cloneNode: () => this.shadowRoot,
+        contains: () => false,
+        insertBefore: () => null,
+        removeChild: () => ({} as Node),
+        replaceChild: () => ({} as Node),
+        getRootNode: () => this.shadowRoot as unknown as Node,
+        compareDocumentPosition: () => 0,
+        isEqualNode: () => false,
+        isSameNode: () => false,
+        lookupPrefix: () => null,
+        lookupNamespaceURI: () => null,
+        lookupNamespacePrefix: () => null,
+        normalize: () => {},
+        getElementsByTagName: () => [] as unknown as HTMLCollectionOf<Element>,
+        getElementsByTagNameNS: () =>
+          [] as unknown as HTMLCollectionOf<Element>,
+        getElementsByClassName: () =>
+          [] as unknown as HTMLCollectionOf<Element>,
+      } as unknown as ShadowRoot;
+    }
+
+    attachShadow(_init: ShadowRootInit) {
+      return this.shadowRoot!;
     }
 
     getAttribute(name: string) {
@@ -403,6 +494,11 @@ function setupDOMEnvironment() {
 function resetTestState() {
   elementAttributes = {};
   innerHTMLValue = "";
+  shadowRootBarClassName = "";
+  _shadowRootTrackUrl = "";
+  _shadowRootPlayState = "";
+  shadowRootHasPreviousTrack = "";
+  _shadowRootHasNextTrack = "";
   audioEventListeners.timeupdate = [];
   audioEventListeners.ended = [];
   audioEventListeners.loadedmetadata = [];
@@ -652,6 +748,18 @@ function createTestElement(): InstanceType<typeof PlaybarCustomElement> {
     }
   };
 
+  // Override removeAttribute to manually trigger attributeChangedCallback
+  const originalRemoveAttribute = element.removeAttribute.bind(element);
+  element.removeAttribute = (name: string) => {
+    const oldValue = element.getAttribute(name);
+    originalRemoveAttribute(name);
+    if (PlaybarCustomElement.observedAttributes.includes(name)) {
+      element.attributeChangedCallback(name, oldValue, null).catch((error) => {
+        console.error("Error in attributeChangedCallback:", error);
+      });
+    }
+  };
+
   return element;
 }
 
@@ -748,13 +856,12 @@ Deno.test("PlaybarCustomElement - should create element", () => {
 
 Deno.test("PlaybarCustomElement - should set display and width styles on connect", () => {
   /**
-   * Tests that connectedCallback sets the required CSS styles.
-   * The element should be displayed as a block element with full width.
+   * Tests that the element has a shadow root when connected.
+   * Display and width are set via :host in the shadow root styles.
    */
   const element = createTestElement();
   element.connectedCallback();
-  assertEquals(element.style.display, "block");
-  assertEquals(element.style.width, "100%");
+  assert(element.shadowRoot !== null);
 });
 
 Deno.test("PlaybarCustomElement - should create audio element on connect", () => {
@@ -898,10 +1005,8 @@ Deno.test("PlaybarCustomElement - should hide element when no track is set", asy
   element.removeAttribute("data-current-track-url");
   await new Promise((resolve) => setTimeout(resolve, 10));
 
-  // Verify element is hidden (translate-y-full class should be present)
-  assert(
-    innerHTMLValue.includes("translate-y-full") || innerHTMLValue.length > 0,
-  );
+  // Verify bar has playbar-bar--hidden class (element is hidden)
+  assert(shadowRootBarClassName.includes("playbar-bar--hidden"));
 });
 
 // ============================================================================
@@ -1153,12 +1258,9 @@ Deno.test("PlaybarCustomElement - should set hasPreviousTrack to false when curr
   // Wait for tracks to load and render
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // Check that hasPreviousTrack is set to false in the rendered HTML
-  // The player-controls element should have data-has-previous-track="false"
-  const html = innerHTMLValue;
+  // Check that hasPreviousTrack is set to false in the rendered shadow DOM
   assert(
-    html.includes('data-has-previous-track="false"') ||
-      html.includes("data-has-previous-track='false'"),
+    shadowRootHasPreviousTrack === "false",
     "hasPreviousTrack should be false when current track is first",
   );
 });
@@ -1194,22 +1296,10 @@ Deno.test.ignore(
     // We need to wait for attributeChangedCallback (which is async) to complete
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // Check that hasPreviousTrack is set to true in the rendered HTML
-    // The player-controls element should have data-has-previous-track="true"
-    const html = innerHTMLValue;
-    if (
-      !html.includes('data-has-previous-track="true"') &&
-      !html.includes("data-has-previous-track='true'")
-    ) {
-      console.log("HTML content:", html);
-      console.log('Looking for: data-has-previous-track="true"');
-    }
+    // Check that hasPreviousTrack is set to true in the rendered shadow DOM
     assert(
-      html.includes('data-has-previous-track="true"') ||
-        html.includes("data-has-previous-track='true'"),
-      `hasPreviousTrack should be true when current track is not first. HTML: ${
-        html.substring(0, 500)
-      }`,
+      shadowRootHasPreviousTrack === "true",
+      `hasPreviousTrack should be true when current track is not first. Got: ${shadowRootHasPreviousTrack}`,
     );
   },
 );

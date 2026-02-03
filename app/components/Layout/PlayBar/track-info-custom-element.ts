@@ -13,6 +13,7 @@ template.innerHTML = `
       display: block;
       width: 100%;
       height: 100%;
+      color: #fff;
     }
     .root {
       align-items: center;
@@ -35,12 +36,16 @@ template.innerHTML = `
     scrolling-text.secondary {
       font-size: var(--font-size-secondary, 0.875rem);
     }
+    .text-row {
+      display: flex;
+      align-items: center;
+    }
   </style>
   <div class="root">
     <album-image-custom-element data-album-url="" class="album-image"></album-image-custom-element>
     <div class="text-container">
       <scrolling-text class="primary"></scrolling-text>
-      <div class="flex items-center">
+      <div class="text-row">
         <scrolling-text class="secondary"></scrolling-text>
       </div>
     </div>
@@ -66,6 +71,17 @@ export class TrackInfoCustomElement extends HTMLElement {
   connectedCallback() {
     this.updateAttributes();
     this.render();
+  }
+
+  attributeChangedCallback(
+    name: string,
+    _oldValue: string | null,
+    _newValue: string | null,
+  ) {
+    if (name === "data-track-url") {
+      this.updateAttributes();
+      this.render();
+    }
   }
 
   private updateAttributes() {

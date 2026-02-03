@@ -1,7 +1,6 @@
 /** @file Custom element for player controls seen at the bottom of the screen */
 
 import {
-  escapeHtml,
   getAllAlbumTracks,
   getRemainingAlbumTracks,
 } from "../../../util/track.ts";
@@ -13,47 +12,92 @@ import "../../../icons/playlist/index.ts";
 import "./player-controls-custom-element.ts";
 
 /**
- * Injected styles for the playbar and its bar container.
- * Variables are set on the host so they inherit to light-DOM children
+ * Template for the playbar. Styles are encapsulated in the shadow root.
+ * Variables are set on :host so they inherit to child custom elements
  * (track-info, player-controls) and their shadow roots.
  * Breakpoints: default (mobile), 50rem (sm), 64rem (md).
  */
-const PLAYBAR_STYLES = `<style>
-playbar-custom-element {
-  --playbar-height: 4rem;
-  --playbar-padding: 0.5rem;
-  --playbar-album-size: 48px;
-  --playbar-control-size: 2rem;
-  --playbar-controls-width: 7rem;
-  --playbar-gap: 0.5rem;
-}
-@media only screen and (min-width: 50rem) {
-  playbar-custom-element {
-    --playbar-height: 5rem;
-    --playbar-padding: 0.75rem;
-    --playbar-album-size: 64px;
-    --playbar-control-size: 2.25rem;
-    --playbar-controls-width: 8.5rem;
-    --playbar-gap: 0.75rem;
-  }
-}
-@media only screen and (min-width: 64rem) {
-  playbar-custom-element {
-    --playbar-height: 6rem;
-    --playbar-padding: 1rem 1rem 1rem 0;
-    --playbar-album-size: 96px;
-    --playbar-control-size: 2.5rem;
-    --playbar-controls-width: 10rem;
-    --playbar-gap: 1rem;
-  }
-}
-playbar-custom-element > div {
-  height: var(--playbar-height);
-  padding: var(--playbar-padding);
-  min-height: var(--playbar-height);
-  max-height: var(--playbar-height);
-}
-</style>
+const template = document.createElement("template");
+template.innerHTML = `
+  <style>
+    :host {
+      display: block;
+      width: 100%;
+      --playbar-height: 4rem;
+      --playbar-padding: 0.5rem;
+      --playbar-album-size: 48px;
+      --playbar-control-size: 2rem;
+      --playbar-controls-width: 7rem;
+      --playbar-gap: 0.5rem;
+    }
+    @media only screen and (min-width: 50rem) {
+      :host {
+        --playbar-height: 5rem;
+        --playbar-padding: 0.75rem;
+        --playbar-album-size: 64px;
+        --playbar-control-size: 2.25rem;
+        --playbar-controls-width: 8.5rem;
+        --playbar-gap: 0.75rem;
+      }
+    }
+    @media only screen and (min-width: 64rem) {
+      :host {
+        --playbar-height: 6rem;
+        --playbar-padding: 0 1rem 0 0;
+        --playbar-album-size: 96px;
+        --playbar-control-size: 2.5rem;
+        --playbar-controls-width: 10rem;
+        --playbar-gap: 1rem;
+      }
+    }
+    .playbar-bar {
+      position: fixed;
+      bottom: 0;
+      box-sizing: border-box;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: var(--playbar-height);
+      padding: var(--playbar-padding);
+      min-height: var(--playbar-height);
+      max-height: var(--playbar-height);
+      background-color: black;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: transform 0.2s ease;
+    }
+    .playbar-bar--hidden {
+      transform: translateY(100%);
+    }
+    .playbar-track-area {
+      flex: 1 1 0%;
+      min-width: 0;
+      max-width: calc(100% - var(--playbar-controls-width));
+      overflow-x: clip;
+      display: flex;
+      align-items: center;
+      flex-basis: 60%;
+    }
+    @media only screen and (min-width: 64rem) {
+      .playbar-track-area {
+        flex-basis: 20%;
+      }
+    }
+    .playbar-controls-wrap {
+      height: 100%;
+      flex-shrink: 0;
+    }
+  </style>
+  <div id="playbar-bar" class="playbar-bar">
+    <div class="playbar-track-area">
+      <track-info-custom-element data-track-url=""></track-info-custom-element>
+    </div>
+    <div class="playbar-controls-wrap">
+      <player-controls-custom-element data-play-state="paused" data-has-previous-track="false" data-has-next-track="false"></player-controls-custom-element>
+    </div>
+  </div>
 `;
 
 /**
@@ -172,6 +216,8 @@ export class PlaybarCustomElement extends HTMLElement {
 
   constructor() {
     super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot!.appendChild(template.content.cloneNode(true));
     // Use event delegation to avoid memory leaks
     // Store bound function so we can remove it later
     this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
@@ -182,10 +228,6 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   connectedCallback() {
-    // Ensure the custom element displays as a block element with full width
-    this.style.display = "block";
-    this.style.width = "100%";
-
     this.createAudioElement();
     this.updateAttributes();
     this.render();
@@ -220,7 +262,6 @@ export class PlaybarCustomElement extends HTMLElement {
     _oldValue: string | null,
     _newValue: string | null,
   ) {
-    console.log("attributeChangedCallback", name, _oldValue, _newValue);
     if (name === "data-current-track-url") {
       // Only update if different to avoid unnecessary re-renders
       if (this.currentTrackUrl !== _newValue) {
@@ -263,7 +304,6 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private async updateAttributes() {
-    console.log("updateAttributes");
     this.currentTrackUrl = this.getAttribute("data-current-track-url");
     this.isPlaying = this.getAttribute("data-is-playing") === "true";
     this.albumUrl = this.getAttribute("data-album-url");
@@ -271,7 +311,6 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private createAudioElement() {
-    console.log("createAudioElement");
     // Create audio element if it doesn't exist
     if (!this.audioElement) {
       this.audioElement = document.createElement("audio");
@@ -286,7 +325,6 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private updateAudioSource() {
-    console.log("updateAudioSource");
     if (!this.audioElement) return;
 
     if (this.currentTrackUrl) {
@@ -315,7 +353,6 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private updateAudioPlayback() {
-    console.log("updateAudioPlayback");
     if (!this.audioElement || !this.audioElement.src) return;
 
     if (this.isPlaying && this.currentTrackUrl) {
@@ -361,7 +398,6 @@ export class PlaybarCustomElement extends HTMLElement {
    * @param event - The play-toggle custom event
    */
   private async handlePlayToggle(event: Event) {
-    console.log("qwdcade", this.getAttribute("data-current-track-url"));
     event.stopPropagation();
     // Toggle play/pause for the current track
     await this.playToggle(
@@ -398,11 +434,9 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private async loadRemainingTracks() {
-    console.log("loadRemainingTracks");
     // If already loading, wait for it with a timeout
     if (this.loadTracksPromise) {
       try {
-        // Wait with timeout to prevent infinite waiting
         await Promise.race([
           this.loadTracksPromise,
           new Promise((_, reject) =>
@@ -474,7 +508,6 @@ export class PlaybarCustomElement extends HTMLElement {
    * 4. If no track is passed in, it will stop playback
    */
   private async playToggle(trackUrl?: string) {
-    console.log("playToggle", trackUrl, this.currentTrackUrl, this.isPlaying);
     if (trackUrl) {
       if (trackUrl !== this.currentTrackUrl) {
         this.currentTrackUrl = trackUrl;
@@ -575,41 +608,52 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   private render() {
-    // Determine visibility class
-    const visibilityClass = !this.currentTrackUrl ? "translate-y-full" : "";
+    const bar = this.shadowRoot?.querySelector("#playbar-bar");
+    const trackInfo = this.shadowRoot?.querySelector(
+      "track-info-custom-element",
+    );
+    const playerControls = this.shadowRoot?.querySelector(
+      "player-controls-custom-element",
+    );
+    if (!bar || !trackInfo || !playerControls) return;
 
-    // Determine if there's a previous track (matching playPrev() logic)
-    let hasPreviousTrack = false;
-    if (this.currentTrackUrl && this.allAlbumTracks.length > 0) {
-      const currentTrackPieces = this.currentTrackUrl.split("/");
-      const currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
-      const currentTrackIndex = this.allAlbumTracks.findIndex((track) => {
-        const trackPieces = track.url.split("/");
-        const trackKey = trackPieces[trackPieces.length - 1];
-        return trackKey === currentTrackKey;
-      });
+    bar.className = this.currentTrackUrl
+      ? "playbar-bar"
+      : "playbar-bar playbar-bar--hidden";
 
-      hasPreviousTrack = currentTrackIndex > 0;
+    trackInfo.setAttribute(
+      "data-track-url",
+      this.currentTrackUrl ?? "",
+    );
+    playerControls.setAttribute(
+      "data-play-state",
+      this.isPlaying ? "playing" : "paused",
+    );
+    playerControls.setAttribute(
+      "data-has-previous-track",
+      this.hasPreviousTrack() ? "true" : "false",
+    );
+    playerControls.setAttribute(
+      "data-has-next-track",
+      this.remainingTracks.length > 0 ? "true" : "false",
+    );
+  }
+
+  /**
+   * Whether there is a previous track (matching playPrev() logic).
+   */
+  private hasPreviousTrack(): boolean {
+    if (!this.currentTrackUrl || this.allAlbumTracks.length === 0) {
+      return false;
     }
-
-    this.innerHTML = `${PLAYBAR_STYLES}
-      <div class="fixed bottom-0 left-0 right-0 w-full bg-black z-10 flex justify-between items-center transition-transform ${visibilityClass}">
-        <div class="max-sm:basis-3/5 lg:basis-1/5 overflow-x-clip items-center flex-1 min-w-0" style="max-width: calc(100% - var(--playbar-controls-width));">
-          <track-info-custom-element data-track-url="${
-      escapeHtml(this.currentTrackUrl)
-    }"></track-info-custom-element>
-        </div>
-        <div class="h-full flex-shrink-0">
-          <player-controls-custom-element data-play-state="${
-      this.isPlaying ? "playing" : "paused"
-    }" data-has-previous-track="${
-      hasPreviousTrack ? "true" : "false"
-    }" data-has-next-track="${
-      this.remainingTracks.length > 0 ? "true" : "false"
-    }"></player-controls-custom-element>
-        </div>
-      </div>
-    `;
+    const currentTrackPieces = this.currentTrackUrl.split("/");
+    const currentTrackKey = currentTrackPieces[currentTrackPieces.length - 1];
+    const currentTrackIndex = this.allAlbumTracks.findIndex((track) => {
+      const trackPieces = track.url.split("/");
+      const trackKey = trackPieces[trackPieces.length - 1];
+      return trackKey === currentTrackKey;
+    });
+    return currentTrackIndex > 0;
   }
 }
 

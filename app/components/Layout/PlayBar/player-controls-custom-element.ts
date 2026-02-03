@@ -52,6 +52,13 @@ template.innerHTML = `
       padding-left: var(--playbar-padding, 1rem);
       padding-right: var(--playbar-padding, 1rem);
     }
+    @keyframes playbar-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .animate-pulse {
+      animation: playbar-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
   </style>
   <div class="root">
     <button data-play-prev>
@@ -210,6 +217,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
       this.dispatchEvent(
         new CustomEvent("play-prev", {
           bubbles: true,
+          composed: true,
           cancelable: false,
         }),
       );
@@ -231,6 +239,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
     this.dispatchEvent(
       new CustomEvent("play-toggle", {
         bubbles: true,
+        composed: true,
         cancelable: false,
       }),
     );
@@ -254,6 +263,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
       this.dispatchEvent(
         new CustomEvent("play-next", {
           bubbles: true,
+          composed: true,
           cancelable: false,
         }),
       );
@@ -286,7 +296,7 @@ export class PlayerControlsCustomElement extends HTMLElement {
       toggleButton.innerHTML = playState === "playing"
         ? "<pause-icon></pause-icon>"
         : playState === "paused"
-        ? "<play-icon class='animate-pulse'></play-icon>"
+        ? '<play-icon class="animate-pulse"></play-icon>'
         : "<play-icon></play-icon>";
     }
   }
