@@ -24,13 +24,29 @@ const ADMIN_USER_ENV = "ADMIN_USER";
 const ADMIN_PASS_ENV = "ADMIN_PASS";
 const AUTH_REALM = "Admin";
 
+/**
+ * Result of checking admin authentication for a request.
+ *
+ * @property isConfigured - Whether `ADMIN_USER` and `ADMIN_PASS` are set. If
+ *   false, protected routes return 500 instead of 401.
+ * @property isAdmin - Whether the request carries valid admin credentials
+ *   (via `Authorization: Basic`). Use this to show/hide admin-only UI without
+ *   triggering a 401 challenge.
+ */
 export interface AdminAuthStatus {
   isConfigured: boolean;
   isAdmin: boolean;
 }
 
+/** Internal representation of username and password (env or parsed from header). */
 type Credentials = { username: string; password: string };
 
+/**
+ * Reads admin credentials from environment variables.
+ *
+ * @returns `{ username, password }` if both `ADMIN_USER` and `ADMIN_PASS` are
+ *   set and non-empty; otherwise `null` (admin not configured).
+ */
 function getConfiguredAdminCredentials(): Credentials | null {
   const username = Deno.env.get(ADMIN_USER_ENV) ?? "";
   const password = Deno.env.get(ADMIN_PASS_ENV) ?? "";
@@ -42,6 +58,16 @@ function getConfiguredAdminCredentials(): Credentials | null {
   return { username, password };
 }
 
+/**
+ * Parses an HTTP Basic Auth header value into username and password.
+ *
+ * Expects `"Basic <base64(username:password)>"`. Invalid or malformed values
+ * (e.g. wrong scheme, bad base64, missing colon) return `null`.
+ *
+ * @param headerValue - The raw `Authorization` header value, or `null`.
+ * @returns `{ username, password }` if the header is valid Basic auth;
+ *   otherwise `null`.
+ */
 function parseBasicAuthHeader(headerValue: string | null): Credentials | null {
   if (!headerValue) {
     return null;
@@ -74,6 +100,17 @@ function parseBasicAuthHeader(headerValue: string | null): Credentials | null {
   }
 }
 
+/**
+ * Compares two strings in constant time to mitigate timing side-channel attacks.
+ *
+ * Uses fixed iteration over the longer length and pads the shorter string so
+ * that comparison time does not leak information about length or character
+ * position of the first difference.
+ *
+ * @param a - First string to compare.
+ * @param b - Second string to compare.
+ * @returns `true` if `a` and `b` are identical; otherwise `false`.
+ */
 function timingSafeEqual(a: string, b: string): boolean {
   // Always iterate over max length to avoid timing side-channel
   const maxLength = Math.max(a.length, b.length);

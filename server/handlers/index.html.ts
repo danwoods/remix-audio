@@ -28,6 +28,12 @@ export async function handleIndexHtml(
 ): Promise<Response> {
   const pathname = new URL(req.url).pathname;
 
+  /**
+   * GET `/admin`: Enforce Basic Auth, then redirect to home.
+   * On missing/invalid credentials, returns 401 with WWW-Authenticate (browser
+   * shows login). On success, redirects to `/` so the home request carries
+   * the Authorization header and SSR can set isAdmin for admin UI.
+   */
   if (pathname === "/admin") {
     const authError = requireAdminAuth(req);
     if (authError) {
