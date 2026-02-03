@@ -26,7 +26,7 @@ const AUTH_REALM = "Admin";
 
 export interface AdminAuthStatus {
   isConfigured: boolean;
-  isAuthorized: boolean;
+  isAdmin: boolean;
 }
 
 type Credentials = { username: string; password: string };
@@ -98,18 +98,18 @@ function timingSafeEqual(a: string, b: string): boolean {
  * has valid admin credentials (via the `Authorization` header).
  *
  * @param req - The incoming request (may include `Authorization: Basic ...`)
- * @returns `{ isConfigured, isAuthorized }` — use `isAuthorized` to show/hide
+ * @returns `{ isConfigured, isAdmin }` — use `isAdmin` to show/hide
  *   admin-only UI on GET `/` without triggering a 401 challenge.
  */
 export function getAdminAuthStatus(req: Request): AdminAuthStatus {
   const configured = getConfiguredAdminCredentials();
   if (!configured) {
-    return { isConfigured: false, isAuthorized: false };
+    return { isConfigured: false, isAdmin: false };
   }
 
   const provided = parseBasicAuthHeader(req.headers.get("Authorization"));
   if (!provided) {
-    return { isConfigured: true, isAuthorized: false };
+    return { isConfigured: true, isAdmin: false };
   }
 
   const usernameMatches = timingSafeEqual(
@@ -123,7 +123,7 @@ export function getAdminAuthStatus(req: Request): AdminAuthStatus {
 
   return {
     isConfigured: true,
-    isAuthorized: usernameMatches && passwordMatches,
+    isAdmin: usernameMatches && passwordMatches,
   };
 }
 
@@ -137,7 +137,7 @@ export function getAdminAuthStatus(req: Request): AdminAuthStatus {
  *   handler should return this response immediately.
  */
 export function requireAdminAuth(req: Request): Response | null {
-  const { isConfigured, isAuthorized } = getAdminAuthStatus(req);
+  const { isConfigured, isAdmin } = getAdminAuthStatus(req);
 
   if (!isConfigured) {
     return new Response("Admin credentials not configured", {
@@ -146,7 +146,7 @@ export function requireAdminAuth(req: Request): Response | null {
     });
   }
 
-  if (!isAuthorized) {
+  if (!isAdmin) {
     return new Response("Unauthorized", {
       status: 401,
       headers: {

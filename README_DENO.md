@@ -25,9 +25,15 @@ PORT=8000  # Optional, defaults to 8000
 
 ## Admin authentication
 
+Only **GET `/admin`** and **POST `/`** require auth and may return 401; the home
+page does not challenge—it only checks the `Authorization` header to show or
+hide admin UI.
+
 Admin features (file upload, admin-only UI) are protected by **HTTP Basic
 Auth**. Credentials are read from `ADMIN_USER` and `ADMIN_PASS`. If either is
-unset or empty, admin is not configured and protected routes return 500.
+unset or empty, admin is not configured and protected routes return 500. If you
+see 500 on `/admin` or on upload, ensure `ADMIN_USER` and `ADMIN_PASS` are set
+in your `.env`.
 
 **How to log in as admin:**
 

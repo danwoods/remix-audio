@@ -40,7 +40,7 @@ export async function handleIndexHtml(
 
   const files = await getUploadedFiles();
   const recentlyUploadedAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
-  const { isAuthorized } = getAdminAuthStatus(req);
+  const { isAdmin } = getAdminAuthStatus(req);
   const recentlyListenedToAlbumIds = [
     { id: "Childish Gambino/Poindexter" },
     { id: "Girl Talk/All Day" },
@@ -63,7 +63,7 @@ export async function handleIndexHtml(
       headLinks: [],
       assets: { css: "", js: "" },
       pathname,
-      isAdmin: isAuthorized,
+      isAdmin,
     },
     [
       albumRowWithTitleHtml({
