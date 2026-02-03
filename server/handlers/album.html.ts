@@ -92,6 +92,7 @@ export async function handleAlbumHtml(
   <meta property="og:description" content="${escapeAttr(ogDescription)}">
   <meta property="og:url" content="${escapeAttr(pageUrl)}">
   <meta property="og:image" content="${escapeAttr(coverUrl)}">
+  <link rel="preload" href="/build/main.js" as="script" />
   <link rel="stylesheet" href="/app.css">
   <style>
     album-header-custom-element {
