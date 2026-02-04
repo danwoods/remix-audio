@@ -82,6 +82,7 @@ let changeEventListeners: ((event: Event) => void)[] = [];
 let playToggleEventListeners: ((event: Event) => void)[] = [];
 let playNextEventListeners: ((event: Event) => void)[] = [];
 let playPrevEventListeners: ((event: Event) => void)[] = [];
+let seekEventListeners: ((event: Event) => void)[] = [];
 let mockBucketContents: string[] = [];
 let mockBucketContentsError: Error | null = null;
 let audioPlayCalls: unknown[][] = [];
@@ -262,6 +263,12 @@ function setupDOMEnvironment() {
               getAttribute: () => null,
             };
           }
+          if (selector === "progress-indicator-custom-element") {
+            return {
+              setAttribute: () => {},
+              getAttribute: () => null,
+            };
+          }
           return null;
         },
         getElementById: () => null,
@@ -369,6 +376,14 @@ function setupDOMEnvironment() {
         ) {
           playPrevEventListeners.push((event) => listener.handleEvent(event));
         }
+      } else if (type === "seek") {
+        if (typeof listener === "function") {
+          seekEventListeners.push(listener);
+        } else if (
+          listener && typeof listener === "object" && "handleEvent" in listener
+        ) {
+          seekEventListeners.push((event) => listener.handleEvent(event));
+        }
       }
     }
 
@@ -400,6 +415,11 @@ function setupDOMEnvironment() {
         const index = playPrevEventListeners.findIndex((l) => l === listener);
         if (index !== -1) {
           playPrevEventListeners.splice(index, 1);
+        }
+      } else if (type === "seek") {
+        const index = seekEventListeners.findIndex((l) => l === listener);
+        if (index !== -1) {
+          seekEventListeners.splice(index, 1);
         }
       }
     }
@@ -450,6 +470,14 @@ function setupDOMEnvironment() {
       } else if (event.type === "play-prev") {
         // Call listeners synchronously
         playPrevEventListeners.forEach((listener) => {
+          try {
+            listener(event);
+          } catch (_e) {
+            // Ignore errors in listeners
+          }
+        });
+      } else if (event.type === "seek") {
+        seekEventListeners.forEach((listener) => {
           try {
             listener(event);
           } catch (_e) {
@@ -508,6 +536,7 @@ function resetTestState() {
   playToggleEventListeners = [];
   playNextEventListeners = [];
   playPrevEventListeners = [];
+  seekEventListeners = [];
   mockBucketContents = [];
   mockBucketContentsError = null;
   audioPlayCalls = [];
@@ -1816,6 +1845,39 @@ Deno.test("PlaybarCustomElement - should preload next track when within 20s of e
   // Note: This may be 0 if tracks haven't loaded yet, which is acceptable
   assert(audioCallCount >= 0);
   globalThis.Audio = OriginalAudio;
+});
+
+Deno.test("PlaybarCustomElement - should set audio currentTime when seek event is dispatched", async () => {
+  /**
+   * Tests that when a seek event is dispatched (e.g. from progress-indicator),
+   * the playbar sets the audio element's currentTime to the requested time.
+   */
+  const element = createTestElement();
+  element.connectedCallback();
+
+  element.setAttribute(
+    "data-current-track-url",
+    "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const seekTime = 42;
+  const seekEvent = new CustomEvent("seek", {
+    detail: { time: seekTime },
+    bubbles: true,
+    composed: true,
+  });
+  element.dispatchEvent(seekEvent);
+
+  assert(
+    audioElement !== null,
+    "Audio element should exist after connect and track set",
+  );
+  assertEquals(
+    (audioElement as { currentTime: number }).currentTime,
+    seekTime,
+    "Audio currentTime should be set to seek event detail.time",
+  );
 });
 
 Deno.test("PlaybarCustomElement - should handle play() errors gracefully", async () => {

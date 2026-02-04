@@ -10,11 +10,12 @@ import "../../../icons/prev/index.ts";
 import "../../../icons/next/index.ts";
 import "../../../icons/playlist/index.ts";
 import "./player-controls-custom-element.ts";
+import "./progress-indicator-custom-element.ts";
 
 /**
  * Template for the playbar. Styles are encapsulated in the shadow root.
  * Variables are set on :host so they inherit to child custom elements
- * (track-info, player-controls) and their shadow roots.
+ * (track-info, player-controls, progress-indicator) and their shadow roots.
  * Breakpoints: default (mobile), 50rem (sm), 64rem (md).
  */
 const template = document.createElement("template");
@@ -43,7 +44,7 @@ template.innerHTML = `
     @media only screen and (min-width: 64rem) {
       :host {
         --playbar-height: 6rem;
-        --playbar-padding: 0 1rem 0 0;
+        --playbar-padding: 0;
         --playbar-album-size: 96px;
         --playbar-control-size: 2.5rem;
         --playbar-controls-width: 10rem;
@@ -64,9 +65,16 @@ template.innerHTML = `
       background-color: black;
       z-index: 10;
       display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      transition: transform 0.2s ease;
+    }
+    .playbar-bar-inner {
+      display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: transform 0.2s ease;
+      flex: 1 1 0%;
+      min-height: 0;
     }
     .playbar-bar--hidden {
       transform: translateY(100%);
@@ -80,22 +88,40 @@ template.innerHTML = `
       align-items: center;
       flex-basis: 60%;
     }
-    @media only screen and (min-width: 64rem) {
-      .playbar-track-area {
-        flex-basis: 20%;
-      }
-    }
     .playbar-controls-wrap {
       height: 100%;
       flex-shrink: 0;
     }
+    .playbar-progress-wrap {
+      flex: 0 0 auto;
+      width: 100%;
+      /* 6px so progress bar hover state (6px) isn't clipped */
+      height: 6px;
+      display: none;
+    }
+    @media only screen and (min-width: 64rem) {
+      .playbar-controls-wrap {
+        padding-right: 1rem;
+      }
+      .playbar-progress-wrap {
+        display: flex;
+      }
+      .playbar-track-area {
+        flex-basis: 20%;
+      }
+    }
   </style>
   <div id="playbar-bar" class="playbar-bar">
-    <div class="playbar-track-area">
-      <track-info-custom-element data-track-url=""></track-info-custom-element>
+    <div class="playbar-progress-wrap">
+      <progress-indicator-custom-element data-current-time="0" data-duration="0"></progress-indicator-custom-element>
     </div>
-    <div class="playbar-controls-wrap">
-      <player-controls-custom-element data-play-state="paused" data-has-previous-track="false" data-has-next-track="false"></player-controls-custom-element>
+    <div class="playbar-bar-inner">
+      <div class="playbar-track-area">
+        <track-info-custom-element data-track-url=""></track-info-custom-element>
+      </div>
+      <div class="playbar-controls-wrap">
+        <player-controls-custom-element data-play-state="paused" data-has-previous-track="false" data-has-next-track="false"></player-controls-custom-element>
+      </div>
     </div>
   </div>
 `;
@@ -173,12 +199,13 @@ template.innerHTML = `
  * @remarks
  * The element automatically:
  * - Manages its own audio element and playback state internally
- * - Handles all user interactions (play/pause/next buttons, playlist clicks)
+ * - Handles all user interactions (play/pause/next buttons, playlist clicks, progress scrubber)
+ * - Listens for `seek` events from the embedded progress-indicator and sets audio currentTime
  * - Loads remaining tracks in the album when both `data-album-url` and `data-current-track-url` are set
  * - Preloads the next track when within 20 seconds of the end
  * - Auto-plays the next track when the current track ends
  * - Parses track information from the URL format: `{number}__{name}.{ext}`
- * - Updates the UI when attributes change
+ * - Updates the UI when attributes change (including progress bar on timeupdate)
  * - Hides itself when no track is set (using `translate-y-full` class)
  *
  * All player logic is self-contained within this element. External code should
@@ -213,6 +240,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private boundHandlePlayToggle: (event: Event) => void;
   private boundHandlePlayNext: (event: Event) => void;
   private boundHandlePlayPrev: (event: Event) => void;
+  private boundHandleSeek: (event: Event) => void;
 
   constructor() {
     super();
@@ -225,6 +253,7 @@ export class PlaybarCustomElement extends HTMLElement {
     this.boundHandlePlayToggle = this.handlePlayToggle.bind(this);
     this.boundHandlePlayNext = this.handlePlayNext.bind(this);
     this.boundHandlePlayPrev = this.handlePlayPrev.bind(this);
+    this.boundHandleSeek = this.handleSeek.bind(this);
   }
 
   connectedCallback() {
@@ -237,6 +266,7 @@ export class PlaybarCustomElement extends HTMLElement {
     this.addEventListener("play-next", this.boundHandlePlayNext);
     // Listen for play-prev event from player-controls-custom-element
     this.addEventListener("play-prev", this.boundHandlePlayPrev);
+    this.addEventListener("seek", this.boundHandleSeek);
   }
 
   disconnectedCallback() {
@@ -244,6 +274,7 @@ export class PlaybarCustomElement extends HTMLElement {
     this.removeEventListener("play-toggle", this.boundHandlePlayToggle);
     this.removeEventListener("play-next", this.boundHandlePlayNext);
     this.removeEventListener("play-prev", this.boundHandlePlayPrev);
+    this.removeEventListener("seek", this.boundHandleSeek);
     if (this.audioElement) {
       this.audioElement.removeEventListener("timeupdate", this.boundTimeUpdate);
       this.audioElement.removeEventListener("ended", this.boundEnded);
@@ -370,6 +401,7 @@ export class PlaybarCustomElement extends HTMLElement {
 
   private handleTimeUpdate(event: Event) {
     const audio = event.target as HTMLAudioElement;
+    this.updateProgressIndicator(audio);
     if (
       !this.nextTrackLoaded &&
       !Number.isNaN(audio.duration) &&
@@ -384,6 +416,41 @@ export class PlaybarCustomElement extends HTMLElement {
         new Audio(nextTrack.url);
       }
     }
+  }
+
+  /**
+   * Updates the progress indicator element with current time and duration.
+   */
+  private updateProgressIndicator(audio: HTMLAudioElement) {
+    const progress = this.shadowRoot?.querySelector(
+      "progress-indicator-custom-element",
+    );
+    if (!progress) return;
+    const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+    const duration =
+      Number.isFinite(audio.duration) && !Number.isNaN(audio.duration)
+        ? audio.duration
+        : 0;
+    progress.setAttribute("data-current-time", String(current));
+    progress.setAttribute("data-duration", String(duration));
+  }
+
+  /**
+   * Handles the seek event from progress-indicator-custom-element.
+   * Sets the audio element's currentTime to the requested position.
+   */
+  private handleSeek(event: Event) {
+    const seekEvent = event as CustomEvent<{ time: number }>;
+    const time = seekEvent.detail?.time;
+    if (
+      typeof time !== "number" ||
+      !Number.isFinite(time) ||
+      time < 0 ||
+      !this.audioElement
+    ) {
+      return;
+    }
+    this.audioElement.currentTime = time;
   }
 
   private handleEnded() {
@@ -615,6 +682,9 @@ export class PlaybarCustomElement extends HTMLElement {
     const playerControls = this.shadowRoot?.querySelector(
       "player-controls-custom-element",
     );
+    const progress = this.shadowRoot?.querySelector(
+      "progress-indicator-custom-element",
+    );
     if (!bar || !trackInfo || !playerControls) return;
 
     bar.className = this.currentTrackUrl
@@ -637,6 +707,15 @@ export class PlaybarCustomElement extends HTMLElement {
       "data-has-next-track",
       this.remainingTracks.length > 0 ? "true" : "false",
     );
+
+    if (progress) {
+      if (this.audioElement?.src) {
+        this.updateProgressIndicator(this.audioElement);
+      } else {
+        progress.setAttribute("data-current-time", "0");
+        progress.setAttribute("data-duration", "0");
+      }
+    }
   }
 
   /**
