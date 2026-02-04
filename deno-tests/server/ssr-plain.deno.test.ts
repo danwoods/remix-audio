@@ -4,7 +4,7 @@ import { renderPage } from "../../server/ssr-plain.ts";
 
 Deno.test("renderPage includes upload dialog for admin requests", () => {
   /**
-   * When isAdmin is true, the page must include the upload-dialog custom
+   * When isAdmin is true, the page must include the upload-dialog-custom-element
    * element so the upload button is visible to admins.
    */
   const html = renderPage(
@@ -18,5 +18,5 @@ Deno.test("renderPage includes upload dialog for admin requests", () => {
     ["<div>content</div>"],
   );
 
-  assertStringIncludes(html, "upload-dialog");
+  assertStringIncludes(html, "upload-dialog-custom-element");
 });

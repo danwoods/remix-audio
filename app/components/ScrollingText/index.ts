@@ -84,15 +84,15 @@ template.innerHTML = `
  * **CSS custom property**
  *
  * - `--text-gap` (default `16px`): Gap between the original and duplicated
- *   text when scrolling. Set on the host: `<scrolling-text style="--text-gap: 24px">`.
+ *   text when scrolling. Set on the host: `<scrolling-text-custom-element style="--text-gap: 24px">`.
  *
  * @example
  * ```html
- * <scrolling-text class="some-class">Some long text that might overflow</scrolling-text>
+ * <scrolling-text-custom-element class="some-class">Some long text that might overflow</scrolling-text-custom-element>
  * ```
  *
  * @extends HTMLElement
- * @customElement scrolling-text
+ * @customElement scrolling-text-custom-element
  */
 export class ScrollingTextCustomElement extends HTMLElement {
   private resizeObserver: ResizeObserver | null = null;
@@ -349,4 +349,7 @@ export class ScrollingTextCustomElement extends HTMLElement {
 
 // REGISTRATION ///////////////////////////////////////////////////////////////
 
-customElements.define("scrolling-text", ScrollingTextCustomElement);
+customElements.define(
+  "scrolling-text-custom-element",
+  ScrollingTextCustomElement,
+);

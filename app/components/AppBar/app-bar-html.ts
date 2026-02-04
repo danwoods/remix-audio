@@ -59,7 +59,7 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   const trustedEndHtml = endContentHtml;
 
   const adminUploadForm = isAdmin
-    ? `<upload-dialog buttonStyle="width: 24px; height: 24px;" />`
+    ? `<upload-dialog-custom-element buttonStyle="width: 24px; height: 24px;" />`
     : "";
   const resolvedEndContent = [trustedEndHtml, adminUploadForm]
     .filter(Boolean)

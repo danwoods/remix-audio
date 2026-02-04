@@ -54,7 +54,7 @@ export function createIconElement(options: CreateIconElementOptions) {
    * Custom element that renders an icon SVG.
    *
    * @remarks
-   * The icon uses Tailwind CSS classes (${defaultClasses} by default) and inherits the current text color
+   * The icon inherits the current text color
    * via currentColor. Custom classes passed via the `class` attribute will be merged
    * with the default classes. You can override the size or add additional classes.
    * Styles and content are encapsulated within a shadow root.

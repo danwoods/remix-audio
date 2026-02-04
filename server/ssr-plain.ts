@@ -1,5 +1,5 @@
 /** @file Server-side rendering utilities
- *  Render a React component to HTML string with the root App wrapper
+ *  Render full HTML page (shell + content) for custom elements / static HTML.
  */
 
 import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
@@ -68,11 +68,6 @@ export function renderPage(
         </main>
       </div>
     </div>
-    ${
-    props.assets.js
-      ? `<script type="module" src="${props.assets.js}"></script>`
-      : ""
-  }
     <script type="module" src="${JS_PATH}"></script>
   </body>
 </html>`;

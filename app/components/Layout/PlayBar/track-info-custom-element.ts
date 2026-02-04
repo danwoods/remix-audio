@@ -30,10 +30,10 @@ template.innerHTML = `
       overflow: hidden;
       min-width: 0;
     }
-    scrolling-text.primary {
+    scrolling-text-custom-element.primary {
       font-size: var(--font-size-primary, 1rem);
     }
-    scrolling-text.secondary {
+    scrolling-text-custom-element.secondary {
       font-size: var(--font-size-secondary, 0.875rem);
     }
     .text-row {
@@ -44,9 +44,9 @@ template.innerHTML = `
   <div class="root">
     <album-image-custom-element data-album-url="" class="album-image"></album-image-custom-element>
     <div class="text-container">
-      <scrolling-text class="primary"></scrolling-text>
+      <scrolling-text-custom-element class="primary"></scrolling-text-custom-element>
       <div class="text-row">
-        <scrolling-text class="secondary"></scrolling-text>
+        <scrolling-text-custom-element class="secondary"></scrolling-text-custom-element>
       </div>
     </div>
   </div>
@@ -107,10 +107,10 @@ export class TrackInfoCustomElement extends HTMLElement {
       "data-album-url",
       albumUrl || "",
     );
-    this.shadowRoot!.querySelector("scrolling-text.primary")!.textContent =
-      trackName;
-    this.shadowRoot!.querySelector("scrolling-text.secondary")!.textContent =
-      scrollingText ?? "";
+    this.shadowRoot!.querySelector("scrolling-text-custom-element.primary")!
+      .textContent = trackName;
+    this.shadowRoot!.querySelector("scrolling-text-custom-element.secondary")!
+      .textContent = scrollingText ?? "";
   }
 }
 

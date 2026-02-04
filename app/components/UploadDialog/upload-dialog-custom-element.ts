@@ -48,11 +48,11 @@ template.innerHTML = `
  * The modal is rendered into document.body so document-level styles (daisyUI)
  * apply. Supports optional trigger button classes via the `class` attribute.
  *
- * @customElement upload-dialog
+ * @customElement upload-dialog-custom-element
  *
  * @example
  * ```html
- * <upload-dialog class="btn btn-ghost btn-circle max-md:hidden"></upload-dialog>
+ * <upload-dialog-custom-element class="btn btn-ghost btn-circle max-md:hidden"></upload-dialog-custom-element>
  * ```
  */
 export class UploadDialogCustomElement extends HTMLElement {
@@ -249,4 +249,7 @@ export class UploadDialogCustomElement extends HTMLElement {
   }
 }
 
-customElements.define("upload-dialog", UploadDialogCustomElement);
+customElements.define(
+  "upload-dialog-custom-element",
+  UploadDialogCustomElement,
+);

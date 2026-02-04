@@ -12,6 +12,10 @@ import "../../../icons/playlist/index.ts";
 import "./player-controls-custom-element.ts";
 import "./progress-indicator-custom-element.ts";
 
+/** playlist-custom-element is intentionally not imported here or in register-custom-elements.
+ * It is not used in the current playbar UI; if the playlist dropdown is re-added, import
+ * playlist-custom-element.ts so the element is defined before use. */
+
 /**
  * Template for the playbar. Styles are encapsulated in the shadow root.
  * Variables are set on :host so they inherit to child custom elements

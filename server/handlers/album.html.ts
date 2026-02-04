@@ -65,9 +65,15 @@ export async function handleAlbumHtml(
   );
   logger.debug("Album URL", { albumUrl });
 
-  // Set up track list HTML
+  // Set up track list HTML (escape dynamic values to prevent attribute injection)
   const trackListHtml = tracks.map((track) => `
-    <tracklist-item-custom-element data-track-url="${track.url}" data-track-name="${track.title}" data-track-artist="${artistId}" data-track-number="${track.trackNum}"></tracklist-item-custom-element>
+    <tracklist-item-custom-element data-track-url="${
+    escapeAttr(track.url)
+  }" data-track-name="${escapeAttr(track.title)}" data-track-artist="${
+    escapeAttr(artistId)
+  }" data-track-number="${
+    escapeAttr(String(track.trackNum))
+  }"></tracklist-item-custom-element>
   `).join("");
 
   // Set up OG meta tags
@@ -121,7 +127,9 @@ export async function handleAlbumHtml(
   </style>
 </head>
 <body> 
-  <album-header-custom-element data-album-url="${albumUrl}"></album-header-custom-element>
+  <album-header-custom-element data-album-url="${
+    escapeAttr(albumUrl)
+  }"></album-header-custom-element>
 
   <div class="album-page-main">
     <section class="tracklist">
@@ -130,7 +138,9 @@ export async function handleAlbumHtml(
     </section>
   </div>
 
-  <playbar-custom-element data-album-url="${albumUrl}"></playbar-custom-element>
+  <playbar-custom-element data-album-url="${
+    escapeAttr(albumUrl)
+  }"></playbar-custom-element>
 
   <script type="module" src="/build/main.js"></script>
   <script>

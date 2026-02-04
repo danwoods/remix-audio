@@ -843,7 +843,10 @@ Deno.test("ScrollingTextCustomElement - creates shadow DOM with template", () =>
 Deno.test("ScrollingTextCustomElement - registers custom element", () => {
   // The module should register the custom element when imported
   assert(customElementsDefineCalls.length > 0);
-  assertEquals(customElementsDefineCalls[0][0], "scrolling-text");
+  assertEquals(
+    customElementsDefineCalls[0][0],
+    "scrolling-text-custom-element",
+  );
 });
 
 // ============================================================================
