@@ -20,8 +20,6 @@
   "tasks": {
     "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --watch server/main.ts",
     "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys server/main.ts",
-    "lint": "deno lint server/ deno-tests/",
-    "lint:fix": "deno lint --fix server/ deno-tests/",
     "build": "deno task build:custom-elements",
     "build:docs": "deno doc --html --name='Remix Audio Components' --output=./docs doc.exports.ts",
     "build:custom-elements": "deno bundle --minify app/components/register-custom-elements.ts > build/main.js",
@@ -33,7 +31,7 @@
     "include": ["app/", "server/"]
   },
   "lint": {
-    "include": ["server/", "deno-tests/"],
+    "include": ["server/", "app/"],
     "rules": {
       "tags": ["recommended"]
     }

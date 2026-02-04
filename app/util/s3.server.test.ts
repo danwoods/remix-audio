@@ -15,10 +15,10 @@ const mockDenoEnv = {
   },
 };
 
-// Set Deno on both global and globalThis to ensure it's accessible
-global.Deno = { env: mockDenoEnv } as typeof Deno;
-(globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } })
-  .Deno = { env: mockDenoEnv };
+// Set Deno on globalThis to ensure it's accessible in test environment
+(globalThis as { Deno?: typeof Deno }).Deno = {
+  env: mockDenoEnv,
+} as typeof Deno;
 
 // Mock the logger module to avoid Deno dependency issues
 vi.mock("./logger", () => ({

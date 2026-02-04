@@ -1,5 +1,6 @@
-import { describe, test, beforeEach } from "vitest";
-import { strict as expect, strict as assert } from "node:assert";
+import { beforeEach, describe, test } from "vitest";
+import { strict as assert, strict as expect } from "node:assert";
+import { Buffer } from "node:buffer";
 import { extractCoverImage } from "./id3";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "node:url";
@@ -11,10 +12,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Polyfill browser APIs for testing
 beforeEach(() => {
   // Mock minimal window environment
-  global.window = {} as Window & typeof globalThis;
+  globalThis.window = {} as Window & typeof globalThis;
 
   // Mock Image API
-  global.Image = class {
+  (globalThis as { Image: typeof Image }).Image = class {
     onload: () => void = () => {};
     onerror: () => void = () => {};
     width = 100;
@@ -27,7 +28,7 @@ beforeEach(() => {
   } as unknown as typeof Image;
 
   // Mock URL API
-  global.URL = {
+  (globalThis as { URL: typeof URL }).URL = {
     createObjectURL: () => "mock-url",
     revokeObjectURL: () => {},
   } as unknown as typeof URL;
@@ -37,7 +38,7 @@ beforeEach(() => {
     drawImage: () => {},
   };
 
-  global.document = {
+  (globalThis as { document: Document }).document = {
     createElement: () => ({
       getContext: () => mockContext,
       toDataURL: () => "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
@@ -45,7 +46,8 @@ beforeEach(() => {
   } as unknown as Document;
 
   // Mock atob
-  global.atob = (str: string) => Buffer.from(str, "base64").toString("binary");
+  (globalThis as { atob: (s: string) => string }).atob = (str: string) =>
+    Buffer.from(str, "base64").toString("binary");
 });
 
 describe("extractCoverImage", () => {
@@ -107,7 +109,7 @@ describe("extractCoverImage", () => {
     const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
 
     // Mock canvas to return null context
-    global.document = {
+    (globalThis as { document: Document }).document = {
       createElement: () => ({
         getContext: () => null,
       }),
@@ -133,7 +135,7 @@ describe("extractCoverImage", () => {
     const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
 
     // Mock Image to trigger error
-    global.Image = class {
+    (globalThis as { Image: typeof Image }).Image = class {
       onerror: () => void = () => {};
       constructor() {
         setTimeout(() => this.onerror(), 0);
