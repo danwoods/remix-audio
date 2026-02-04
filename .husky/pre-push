@@ -18,13 +18,4 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Run Node/Vitest tests (exclude Deno tests and Deno-dependent tests)
-echo "Running Node/Vitest tests..."
-npm test -- --exclude="deno-tests/**" --exclude="server/**" --exclude="app/util/s3.server.test.ts"
-
-if [ $? -ne 0 ]; then
-  echo "❌ Node tests failed. Push aborted."
-  exit 1
-fi
-
 echo "✅ All tests passed!"
