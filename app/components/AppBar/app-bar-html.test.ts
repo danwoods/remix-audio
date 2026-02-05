@@ -4,7 +4,7 @@
  * user is logged in as admin (isAdmin: true).
  */
 import { assert } from "@std/assert";
-import appBarHtml from "../../../../app/components/AppBar/app-bar-html.ts";
+import appBarHtml from "./app-bar-html.ts";
 
 Deno.test("appBarHtml does not include upload button when isAdmin is false", () => {
   /**

@@ -1,5 +1,5 @@
 /** Mock for id3.ts - used when running s3.server tests with import map */
-import type { ID3Tags } from "../id3.ts";
+import type { ID3Tags } from "../../../app/util/id3.ts";
 
 let returnValue: ID3Tags = {
   artist: "Test Artist",

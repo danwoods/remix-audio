@@ -3,13 +3,13 @@
  * Or use: deno task test:s3
  */
 import { assertEquals } from "@std/assert";
-import { setGetID3TagsReturn } from "./s3.server.test-mocks/id3.ts";
+import { setGetID3TagsReturn } from "./server/s3.server.test-mocks/id3.ts";
 import {
   clearSendCalls as clearS3SendCalls,
   sendCalls,
   setSendBehavior,
-} from "./s3.server.test-mocks/s3-client.ts";
-import { handleS3Upload } from "./s3.server.ts";
+} from "./server/s3.server.test-mocks/s3-client.ts";
+import { handleS3Upload } from "../app/util/s3.server.ts";
 
 function setupEnv(): void {
   Deno.env.set("AWS_ACCESS_KEY_ID", "test-key");

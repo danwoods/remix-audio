@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import {
   createDataUrlFromBytes,
   decodeDataUrl,
-} from "../../../app/util/data-url.ts";
+} from "./data-url.ts";
 
 Deno.test("createDataUrlFromBytes produces valid data URL", () => {
   const bytes = new Uint8Array([0xff, 0xd8, 0xff]);
