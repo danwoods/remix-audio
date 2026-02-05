@@ -1,20 +1,9 @@
+# Run tests before push
 echo "🧪 Running tests before push..."
-
-# Run documentation tests
-echo "Running documentation tests..."
-deno task test:doc
+deno task test:all
 
 if [ $? -ne 0 ]; then
-  echo "❌ Documentation tests failed. Push aborted."
-  exit 1
-fi
-
-# Run Deno tests
-echo "Running Deno tests..."
-deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys
-
-if [ $? -ne 0 ]; then
-  echo "❌ Deno tests failed. Push aborted."
+  echo "❌ Tests failed. Push aborted."
   exit 1
 fi
 

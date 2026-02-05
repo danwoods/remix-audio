@@ -1,252 +1,203 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+/** @file Tests for handleS3Upload - uses import map to inject mocks (no s3.server.ts changes).
+ * Run from app/util/ with: deno test --import-map=import_map.s3_test.json s3.server.test.ts --allow-env --no-check
+ * Or use: deno task test:s3
+ */
+import { assertEquals } from "@std/assert";
+import { setGetID3TagsReturn } from "./s3.server.test-mocks/id3.ts";
+import {
+  clearSendCalls as clearS3SendCalls,
+  sendCalls,
+  setSendBehavior,
+} from "./s3.server.test-mocks/s3-client.ts";
+import { handleS3Upload } from "./s3.server.ts";
 
-// Mock Deno global for Node.js test environment - must be before any imports
-const mockDenoEnv = {
-  get: (key: string) => {
-    const env: Record<string, string> = {
-      AWS_ACCESS_KEY_ID: "test-key",
-      AWS_SECRET_ACCESS_KEY: "test-secret",
-      STORAGE_REGION: "us-east-1",
-      STORAGE_BUCKET: "test-bucket",
-      LOG_LEVEL: "INFO",
-      S3_LOG_LEVEL: "INFO",
-    };
-    return env[key] || undefined;
-  },
-};
+function setupEnv(): void {
+  Deno.env.set("AWS_ACCESS_KEY_ID", "test-key");
+  Deno.env.set("AWS_SECRET_ACCESS_KEY", "test-secret");
+  Deno.env.set("STORAGE_REGION", "test-region");
+  Deno.env.set("STORAGE_BUCKET", "test-bucket");
+}
 
-// Set Deno on globalThis to ensure it's accessible in test environment
-(globalThis as { Deno?: typeof Deno }).Deno = {
-  env: mockDenoEnv,
-} as typeof Deno;
+function defaultSendBehavior(command: unknown): Promise<unknown> {
+  const name = (command as { constructor: { name: string } }).constructor?.name;
+  if (name === "HeadObjectCommand") {
+    const err = new Error("NotFound");
+    (err as { name: string }).name = "NotFound";
+    return Promise.reject(err);
+  }
+  return Promise.resolve({});
+}
 
-// Mock the logger module to avoid Deno dependency issues
-vi.mock("./logger", () => ({
-  createLogger: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-}));
+Deno.test("handleS3Upload - should handle file upload with cover image", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior(defaultSendBehavior);
 
-// Mock the ID3 module
-vi.mock("./id3", () => ({
-  getID3Tags: vi.fn().mockResolvedValue({
+  const mockData = [new Uint8Array([1, 2, 3])];
+  const result = await handleS3Upload(
+    "files",
+    "audio/mpeg",
+    (async function* () {
+      for (const chunk of mockData) {
+        yield chunk;
+      }
+    })(),
+  );
+
+  const headObjectCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string } }).constructor?.name ===
+        "HeadObjectCommand",
+  );
+  assertEquals(headObjectCalls.length, 1);
+  assertEquals(
+    (headObjectCalls[0].command as { input: { Bucket: string; Key: string } })
+      .input,
+    { Bucket: "test-bucket", Key: "Test Artist/Test Album/cover.jpeg" },
+  );
+
+  const coverPutCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key ===
+        "Test Artist/Test Album/cover.jpeg",
+  );
+  assertEquals(coverPutCalls.length, 1);
+  assertEquals(
+    (coverPutCalls[0].command as {
+      input: { Key: string; ContentType: string; Body: unknown };
+    }).input.Key,
+    "Test Artist/Test Album/cover.jpeg",
+  );
+  assertEquals(
+    (coverPutCalls[0].command as { input: { ContentType: string } }).input
+      .ContentType,
+    "image/jpeg",
+  );
+  assertEquals(
+    (coverPutCalls[0].command as { input: { Body: unknown } }).input
+      .Body instanceof Uint8Array,
+    true,
+  );
+
+  const audioUploadCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key ===
+        "Test Artist/Test Album/1__Test Song",
+  );
+  assertEquals(audioUploadCalls.length, 1);
+  assertEquals(
+    (audioUploadCalls[0].command as { input: { Key: string } }).input.Key,
+    "Test Artist/Test Album/1__Test Song",
+  );
+
+  assertEquals(
+    result?.includes(
+      "test-bucket.s3.test-region.amazonaws.com/Test Artist/Test Album/1__Test Song",
+    ),
+    true,
+  );
+});
+
+Deno.test("handleS3Upload - should skip cover image upload if it already exists", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "HeadObjectCommand") return Promise.resolve({});
+    if (name === "PutObjectCommand") return Promise.resolve({});
+    return Promise.resolve({});
+  });
+
+  const mockData = [new Uint8Array([1, 2, 3])];
+  await handleS3Upload(
+    "files",
+    "audio/mpeg",
+    (async function* () {
+      for (const chunk of mockData) {
+        yield chunk;
+      }
+    })(),
+  );
+
+  const headObjectCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string } }).constructor?.name ===
+        "HeadObjectCommand",
+  );
+  assertEquals(headObjectCalls.length, 1);
+
+  const coverPutCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key ===
+        "Test Artist/Test Album/cover.jpeg",
+  );
+  assertEquals(coverPutCalls.length, 0);
+
+  const audioUploadCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key ===
+        "Test Artist/Test Album/1__Test Song",
+  );
+  assertEquals(audioUploadCalls.length, 1);
+});
+
+Deno.test("handleS3Upload - should handle files without cover images", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior(defaultSendBehavior);
+  setGetID3TagsReturn({
     artist: "Test Artist",
     album: "Test Album",
     title: "Test Song",
     trackNumber: 1,
-    image: "data:image/jpeg;base64,/9j/4AAQSkZJRg==", // mock base64 image data
-  }),
-}));
-
-// Create mock S3Client send function
-const mockSend = vi.fn();
-
-// Setup initial mocks
-vi.mock("@aws-sdk/client-s3", async () => {
-  const actual = await vi.importActual("@aws-sdk/client-s3");
-  return {
-    ...actual,
-    S3Client: vi.fn().mockImplementation(() => ({
-      send: mockSend,
-    })),
-  };
-});
-
-// Now import the module that depends on the mocked modules
-import { handleS3Upload } from "./s3.server.ts";
-import { getID3Tags } from "./id3.ts";
-
-// Mock environment variables
-vi.stubEnv("AWS_ACCESS_KEY_ID", "test-key");
-vi.stubEnv("AWS_SECRET_ACCESS_KEY", "test-secret");
-vi.stubEnv("STORAGE_REGION", "test-region");
-vi.stubEnv("STORAGE_BUCKET", "test-bucket");
-
-describe("handleS3Upload", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    // Setup S3 mocks - default: headObject fails with NotFound, putObject succeeds
-    mockSend.mockImplementation((command) => {
-      const commandName = command.constructor.name;
-
-      if (commandName === "HeadObjectCommand") {
-        const error = new Error("NotFound");
-        (error as { name: string }).name = "NotFound";
-        return Promise.reject(error);
-      }
-
-      if (commandName === "PutObjectCommand") {
-        return Promise.resolve({});
-      }
-
-      // For upload stream (PutObjectCommand for audio file)
-      return Promise.resolve({});
-    });
   });
 
-  it("should handle file upload with cover image", async () => {
-    // Create mock file upload data
-    const mockData = [new Uint8Array([1, 2, 3])];
-    const mockUploadHandlerParams = {
-      name: "files",
-      contentType: "audio/mpeg",
-      data: (async function* () {
-        for (const chunk of mockData) {
-          yield chunk;
-        }
-      })(),
-    };
-
-    // Execute handler
-    const result = await handleS3Upload(
-      mockUploadHandlerParams.name,
-      mockUploadHandlerParams.contentType,
-      mockUploadHandlerParams.data,
-    );
-
-    // Verify cover image check was performed (HeadObjectCommand)
-    const headObjectCalls = mockSend.mock.calls.filter(
-      (call) => call[0].constructor.name === "HeadObjectCommand",
-    );
-    expect(headObjectCalls).toHaveLength(1);
-    expect(headObjectCalls[0][0].input).toMatchObject({
-      Bucket: "test-bucket",
-      Key: "Test Artist/Test Album/cover.jpeg",
-    });
-
-    // Verify cover image was uploaded (since headObject returned NotFound)
-    const putObjectCalls = mockSend.mock.calls.filter(
-      (call) =>
-        call[0].constructor.name === "PutObjectCommand" &&
-        call[0].input.Key === "Test Artist/Test Album/cover.jpeg",
-    );
-    expect(putObjectCalls).toHaveLength(1);
-    expect(putObjectCalls[0][0].input).toMatchObject({
-      Key: "Test Artist/Test Album/cover.jpeg",
-      ContentType: "image/jpeg",
-    });
-    expect(putObjectCalls[0][0].input.Body).toBeInstanceOf(Uint8Array);
-
-    // Verify audio file was uploaded (PutObjectCommand for audio)
-    const audioUploadCalls = mockSend.mock.calls.filter(
-      (call) =>
-        call[0].constructor.name === "PutObjectCommand" &&
-        call[0].input.Key === "Test Artist/Test Album/1__Test Song",
-    );
-    expect(audioUploadCalls).toHaveLength(1);
-    expect(audioUploadCalls[0][0].input).toMatchObject({
-      Key: "Test Artist/Test Album/1__Test Song",
-    });
-
-    // Verify return value contains the expected URL pattern
-    expect(result).toContain(
-      "test-bucket.s3.us-east-1.amazonaws.com/Test Artist/Test Album/1__Test Song",
-    );
-  });
-
-  it("should skip cover image upload if it already exists", async () => {
-    // Override mockSend to return success for HeadObjectCommand
-    mockSend.mockImplementation((command) => {
-      const commandName = command.constructor.name;
-
-      if (commandName === "HeadObjectCommand") {
-        return Promise.resolve({});
+  const mockData = [new Uint8Array([1, 2, 3])];
+  await handleS3Upload(
+    "files",
+    "audio/mpeg",
+    (async function* () {
+      for (const chunk of mockData) {
+        yield chunk;
       }
+    })(),
+  );
 
-      if (commandName === "PutObjectCommand") {
-        return Promise.resolve({});
-      }
+  const headObjectCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string } }).constructor?.name ===
+        "HeadObjectCommand",
+  );
+  assertEquals(headObjectCalls.length, 0);
 
-      return Promise.resolve({});
-    });
+  const coverPutCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key ===
+        "Test Artist/Test Album/cover.jpeg",
+  );
+  assertEquals(coverPutCalls.length, 0);
 
-    const mockData = [new Uint8Array([1, 2, 3])];
-    const mockUploadHandlerParams = {
-      name: "files",
-      contentType: "audio/mpeg",
-      data: (async function* () {
-        for (const chunk of mockData) {
-          yield chunk;
-        }
-      })(),
-    };
-
-    await handleS3Upload(
-      mockUploadHandlerParams.name,
-      mockUploadHandlerParams.contentType,
-      mockUploadHandlerParams.data,
-    );
-
-    const headObjectCalls = mockSend.mock.calls.filter(
-      (call) => call[0].constructor.name === "HeadObjectCommand",
-    );
-    expect(headObjectCalls).toHaveLength(1);
-
-    const coverPutCalls = mockSend.mock.calls.filter(
-      (call) =>
-        call[0].constructor.name === "PutObjectCommand" &&
-        call[0].input.Key === "Test Artist/Test Album/cover.jpeg",
-    );
-    expect(coverPutCalls).toHaveLength(0);
-
-    const audioUploadCalls = mockSend.mock.calls.filter(
-      (call) =>
-        call[0].constructor.name === "PutObjectCommand" &&
-        call[0].input.Key === "Test Artist/Test Album/1__Test Song",
-    );
-    expect(audioUploadCalls).toHaveLength(1);
-  });
-
-  it("should handle files without cover images", async () => {
-    // Override getID3Tags to return no image
-    vi.mocked(getID3Tags).mockResolvedValueOnce({
-      artist: "Test Artist",
-      album: "Test Album",
-      title: "Test Song",
-      trackNumber: 1,
-    });
-
-    const mockData = [new Uint8Array([1, 2, 3])];
-    const mockUploadHandlerParams = {
-      name: "files",
-      contentType: "audio/mpeg",
-      data: (async function* () {
-        for (const chunk of mockData) {
-          yield chunk;
-        }
-      })(),
-    };
-
-    await handleS3Upload(
-      mockUploadHandlerParams.name,
-      mockUploadHandlerParams.contentType,
-      mockUploadHandlerParams.data,
-    );
-
-    const headObjectCalls = mockSend.mock.calls.filter(
-      (call) => call[0].constructor.name === "HeadObjectCommand",
-    );
-    expect(headObjectCalls).toHaveLength(0);
-
-    const coverPutCalls = mockSend.mock.calls.filter(
-      (call) =>
-        call[0].constructor.name === "PutObjectCommand" &&
-        call[0].input.Key === "Test Artist/Test Album/cover.jpeg",
-    );
-    expect(coverPutCalls).toHaveLength(0);
-
-    const audioUploadCalls = mockSend.mock.calls.filter(
-      (call) =>
-        call[0].constructor.name === "PutObjectCommand" &&
-        call[0].input.Key === "Test Artist/Test Album/1__Test Song",
-    );
-    expect(audioUploadCalls).toHaveLength(1);
-    expect(audioUploadCalls[0][0].input).toMatchObject({
-      Key: "Test Artist/Test Album/1__Test Song",
-    });
-  });
+  const audioUploadCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key ===
+        "Test Artist/Test Album/1__Test Song",
+  );
+  assertEquals(audioUploadCalls.length, 1);
+  assertEquals(
+    (audioUploadCalls[0].command as { input: { Key: string } }).input.Key,
+    "Test Artist/Test Album/1__Test Song",
+  );
 });

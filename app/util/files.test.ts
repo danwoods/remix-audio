@@ -1,9 +1,9 @@
-import assert from "node:assert";
-import { describe, it } from "vitest";
+/** @file Tests for files utility - getAlbum (co-located); see deno-tests for full coverage */
+import { assertEquals } from "@std/assert";
 import { getAlbum } from "./files.ts";
 
-describe("track organization methods", () => {
-  it("getAlbum", () => {
+Deno.test("track organization methods", async (t) => {
+  await t.step("getAlbum", () => {
     const album1 = {
       id: "artist1/album1",
       title: "album1",
@@ -23,6 +23,6 @@ describe("track organization methods", () => {
       },
     };
 
-    assert.equal(getAlbum(files, "artist1/album1"), album1);
+    assertEquals(getAlbum(files, "artist1/album1"), album1);
   });
 });

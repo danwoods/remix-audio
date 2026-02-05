@@ -1,0 +1,16 @@
+{
+  "imports": {
+    "@aws-sdk/client-s3": "./s3.server.test-mocks/s3-client.ts",
+    "@aws-sdk/credential-providers": "npm:@aws-sdk/credential-providers@^3.614.0",
+    "music-metadata": "npm:music-metadata@^10.0.0",
+    "music-metadata-browser": "npm:music-metadata-browser@^2.5.11",
+    "id3js": "npm:id3js@^2.1.1",
+    "extract-colors": "npm:extract-colors@^4.0.6",
+    "match-sorter": "npm:match-sorter@^6.3.1",
+    "sort-by": "npm:sort-by@^1.2.0",
+    "tiny-invariant": "npm:tiny-invariant@^1.3.1",
+    "@std/assert": "https://deno.land/std@0.208.0/assert/mod.ts",
+    "./id3.ts": "./s3.server.test-mocks/id3.ts",
+    "./logger.ts": "./s3.server.test-mocks/logger.ts"
+  }
+}
