@@ -1,4 +1,12 @@
-/** @file Main Deno server entry point */
+/**
+ * Main Deno server entry point.
+ *
+ * Serves the remix-audio app: static assets, CSS, favicon, and API routes.
+ * Request handling order: static files under `/build/` and `/assets/`, favicon,
+ * `/app.css`, then the router (HTML pages and upload/album endpoints).
+ *
+ * @module
+ */
 import { Router } from "./router.ts";
 import { handleUpload } from "./handlers/upload.ts";
 import { handleIndexHtml } from "./handlers/index.html.ts";
@@ -6,12 +14,11 @@ import { loadEnv } from "./utils/loadEnv.ts";
 import { handleAlbumCover } from "./handlers/album.cover.ts";
 import { handleAlbumHtml } from "./handlers/album.html.ts";
 
-// Load environment variables from .env file
+// --- Environment & router setup ---
 await loadEnv();
-
 const router = new Router();
 
-// Register routes
+// App routes (HTML)
 router.add({ pattern: "/", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/admin", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/", handler: handleUpload, method: "POST" });
@@ -26,30 +33,43 @@ router.add({
   method: "GET",
 });
 
-// Start server
-const port = parseInt(Deno.env.get("PORT") || "8000", 10);
+/**
+ * CORS headers applied to `/build/*` and `/app.css` responses so those
+ * assets can be loaded cross-origin (e.g. from another origin or dev tools).
+ */
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
 
-console.log(`🚀 Server running on http://localhost:${port}`);
+// --- Server ---
+const port = parseInt(Deno.env.get("PORT") || "8000", 10);
+console.log(`🔊 BoomBox server running on http://localhost:${port}`);
 
 Deno.serve({ port }, async (req: Request) => {
   const url = new URL(req.url);
 
-  // Handle static assets (CSS, JS, images) from build directory
+  // Static assets from build directory (CORS enabled)
   if (url.pathname.startsWith("/build/")) {
     try {
       const filePath = `.${url.pathname}`;
       const file = await Deno.readFile(filePath);
       const contentType = getContentType(url.pathname);
       return new Response(file, {
-        headers: { "Content-Type": contentType },
+        headers: { "Content-Type": contentType, ...CORS_HEADERS },
       });
     } catch (error) {
       console.error(`Failed to serve static file ${url.pathname}:`, error);
-      return new Response("Not Found", { status: 404 });
+      return new Response("Not Found", {
+        status: 404,
+        headers: CORS_HEADERS,
+      });
     }
   }
 
-  // Handle assets directory (for Vite dev server compatibility)
+  // Vite-style assets under /assets/ (build/client/assets/)
   if (url.pathname.startsWith("/assets/")) {
     try {
       const filePath = `./build/client${url.pathname}`;
@@ -63,7 +83,7 @@ Deno.serve({ port }, async (req: Request) => {
     }
   }
 
-  // Handle favicon
+  // Favicon from public/
   if (url.pathname === "/favicon.ico") {
     try {
       const file = await Deno.readFile("./public/favicon.ico");
@@ -75,22 +95,31 @@ Deno.serve({ port }, async (req: Request) => {
     }
   }
 
-  // Handle app.css
+  // Global app stylesheet (CORS enabled)
   if (url.pathname === "/app.css") {
     try {
       const file = await Deno.readFile("./app/app.css");
       return new Response(file, {
-        headers: { "Content-Type": "text/css" },
+        headers: { "Content-Type": "text/css", ...CORS_HEADERS },
       });
     } catch {
-      return new Response("Not Found", { status: 404 });
+      return new Response("Not Found", {
+        status: 404,
+        headers: CORS_HEADERS,
+      });
     }
   }
 
-  // Route requests through router
+  // HTML pages and API (upload, album cover, album page)
   return router.handle(req);
 });
 
+/**
+ * Derives a `Content-Type` value from a URL pathname for static file responses.
+ *
+ * @param pathname - Request path (e.g. `/build/client/main.js`)
+ * @returns MIME type string, or `application/octet-stream` if unknown
+ */
 function getContentType(pathname: string): string {
   if (pathname.endsWith(".css")) return "text/css";
   if (pathname.endsWith(".js")) return "application/javascript";
