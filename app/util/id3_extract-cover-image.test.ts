@@ -1,20 +1,19 @@
-import { describe, test, beforeEach } from "vitest";
-import { strict as expect, strict as assert } from "node:assert";
-import { extractCoverImage } from "./id3";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "path";
+/** @file Tests for extractCoverImage (browser-only ID3 cover extraction) */
+import { assertEquals, assertExists, assertRejects } from "@std/assert";
+import { extractCoverImage } from "./id3.ts";
 
-// Set up __dirname equivalent for ES modules
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const testDataDir = new URL("../../test_data/", import.meta.url);
+const withCoverMp3 = new URL("with-cover.mp3", testDataDir);
+const withCoverFlac = new URL("with-cover.flac", testDataDir);
+const withCoverWav = new URL("with-cover.wav", testDataDir);
+const noCoverMp3 = new URL("no-cover.mp3", testDataDir);
 
-// Polyfill browser APIs for testing
-beforeEach(() => {
-  // Mock minimal window environment
-  global.window = {} as Window & typeof globalThis;
+function setupBrowserMocks(): void {
+  (globalThis as { window: Window & typeof globalThis }).window = {} as
+    & Window
+    & typeof globalThis;
 
-  // Mock Image API
-  global.Image = class {
+  (globalThis as { Image: typeof Image }).Image = class {
     onload: () => void = () => {};
     onerror: () => void = () => {};
     width = 100;
@@ -26,144 +25,133 @@ beforeEach(() => {
     }
   } as unknown as typeof Image;
 
-  // Mock URL API
-  global.URL = {
-    createObjectURL: () => "mock-url",
-    revokeObjectURL: () => {},
-  } as unknown as typeof URL;
+  const RealURL = globalThis.URL;
+  (globalThis as { URL: typeof URL }).URL = Object.assign(
+    function URL(
+      ...args: ConstructorParameters<typeof URL>
+    ): URL {
+      return new RealURL(...args);
+    },
+    {
+      createObjectURL: () => "mock-url",
+      revokeObjectURL: () => {},
+    },
+  ) as typeof URL;
 
-  // Mock Canvas API
-  const mockContext = {
-    drawImage: () => {},
-  };
+  const mockContext = { drawImage: () => {} };
 
-  global.document = {
-    createElement: () => ({
-      getContext: () => mockContext,
-      toDataURL: () => "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
-    }),
+  (globalThis as { document: Document }).document = {
+    createElement: () =>
+      ({
+        getContext: () => mockContext,
+        toDataURL: () => "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+      }) as unknown as HTMLCanvasElement,
   } as unknown as Document;
+}
 
-  // Mock atob
-  global.atob = (str: string) => Buffer.from(str, "base64").toString("binary");
+Deno.test("extractCoverImage - should extract cover image from MP3 with embedded art", async () => {
+  setupBrowserMocks();
+  const buffer = await Deno.readFile(withCoverMp3);
+  const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
+
+  const result = await extractCoverImage(file);
+
+  assertExists(result);
+  assertEquals(result?.format, "image/jpeg");
+  assertEquals(result?.data instanceof Uint8Array, true);
+  assertEquals((result?.data.length ?? 0) > 0, true);
 });
 
-describe("extractCoverImage", () => {
-  test("should extract cover image from MP3 with embedded art", async () => {
-    const buffer = readFileSync(
-      join(__dirname, "../../test_data/with-cover.mp3"),
-    );
-    const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
+Deno.test("extractCoverImage - should extract cover image from FLAC with embedded art", async () => {
+  setupBrowserMocks();
+  const buffer = await Deno.readFile(withCoverFlac);
+  const file = new File([buffer], "test.flac", { type: "audio/flac" });
 
-    const result = await extractCoverImage(file);
+  const result = await extractCoverImage(file);
 
-    expect(result !== null);
-    expect(result?.format === "image/jpeg");
-    expect(result?.data instanceof Uint8Array);
-    expect(result?.data.length > 0);
-  });
+  assertExists(result);
+  assertEquals(result?.format, "image/jpeg");
+  assertEquals(result?.data instanceof Uint8Array, true);
+});
 
-  test("should extract cover image from FLAC with embedded art", async () => {
-    const buffer = readFileSync(
-      join(__dirname, "../../test_data/with-cover.flac"),
-    );
-    const file = new File([buffer], "test.flac", { type: "audio/flac" });
+Deno.test("extractCoverImage - should extract cover image from WAV with embedded art", async () => {
+  setupBrowserMocks();
+  const buffer = await Deno.readFile(withCoverWav);
+  const file = new File([buffer], "test.wav", { type: "audio/wav" });
 
-    const result = await extractCoverImage(file);
+  const result = await extractCoverImage(file);
 
-    expect(result !== null);
-    expect(result?.format === "image/jpeg");
-    expect(result?.data instanceof Uint8Array);
-  });
+  assertExists(result);
+  assertEquals(result?.format, "image/jpeg");
+  assertEquals(result?.data instanceof Uint8Array, true);
+});
 
-  test("should extract cover image from WAV with embedded art", async () => {
-    const buffer = readFileSync(
-      join(__dirname, "../../test_data/with-cover.wav"),
-    );
-    const file = new File([buffer], "test.wav", { type: "audio/wav" });
+Deno.test("extractCoverImage - should return null for audio files without cover art", async () => {
+  setupBrowserMocks();
+  const buffer = await Deno.readFile(noCoverMp3);
+  const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
 
-    const result = await extractCoverImage(file);
+  const result = await extractCoverImage(file);
 
-    expect(result !== null);
-    expect(result?.format === "image/jpeg");
-    expect(result?.data instanceof Uint8Array);
-  });
+  assertEquals(result, null);
+});
 
-  test("should return null for audio files without cover art", async () => {
-    const buffer = readFileSync(
-      join(__dirname, "../../test_data/no-cover.mp3"),
-    );
-    const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
+Deno.test("extractCoverImage - should handle canvas context error", async () => {
+  setupBrowserMocks();
+  const buffer = await Deno.readFile(withCoverMp3);
+  const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
 
-    const result = await extractCoverImage(file);
-
-    expect(result === null);
-  });
-
-  test("should handle canvas context error", async () => {
-    const buffer = readFileSync(
-      join(__dirname, "../../test_data/with-cover.mp3"),
-    );
-    const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
-
-    // Mock canvas to return null context
-    global.document = {
-      createElement: () => ({
+  (globalThis as { document: Document }).document = {
+    createElement: () =>
+      ({
         getContext: () => null,
-      }),
-    } as unknown as Document;
+      }) as unknown as HTMLCanvasElement,
+  } as unknown as Document;
 
-    try {
-      await extractCoverImage(file);
-    } catch (error) {
-      if (!(error instanceof Error)) {
-        throw new Error("Expected error to be instance of Error");
-      }
-      assert.strictEqual(
-        error.message,
-        "Failed to extract cover image: Could not get canvas context",
-      );
+  try {
+    await extractCoverImage(file);
+  } catch (error) {
+    if (!(error instanceof Error)) {
+      throw new Error("Expected error to be instance of Error");
     }
-  });
-
-  test("should handle image load error", async () => {
-    const buffer = readFileSync(
-      join(__dirname, "../../test_data/with-cover.mp3"),
+    assertEquals(
+      error.message,
+      "Failed to extract cover image: Could not get canvas context",
     );
-    const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
+  }
+});
 
-    // Mock Image to trigger error
-    global.Image = class {
-      onerror: () => void = () => {};
-      constructor() {
-        setTimeout(() => this.onerror(), 0);
-      }
-    } as unknown as typeof Image;
+Deno.test("extractCoverImage - should handle image load error", async () => {
+  setupBrowserMocks();
+  const buffer = await Deno.readFile(withCoverMp3);
+  const file = new File([buffer], "test.mp3", { type: "audio/mpeg" });
 
-    await expect.rejects(
-      async () => await extractCoverImage(file),
-      "Failed to extract cover image",
-    );
-  });
-
-  test("should handle invalid audio files", async () => {
-    const file = new File([new Uint8Array(10)], "invalid.mp3", {
-      type: "audio/mpeg",
-    });
-
-    try {
-      await extractCoverImage(file);
-    } catch (error) {
-      console.log("Error details:", error);
-      if (!(error instanceof Error)) {
-        console.log("Error is not an Error instance. Type:", typeof error);
-        console.log("Error value:", error);
-      }
-      // Still verify the rejection happens
-      assert.strictEqual(
-        error instanceof Error ? error.message : String(error),
-        "Failed to extract cover image: Unknown error",
-      );
+  (globalThis as { Image: typeof Image }).Image = class {
+    onerror: () => void = () => {};
+    constructor() {
+      setTimeout(() => this.onerror(), 0);
     }
+  } as unknown as typeof Image;
+
+  await assertRejects(
+    async () => await extractCoverImage(file),
+    Error,
+    "Failed to extract cover image",
+  );
+});
+
+Deno.test("extractCoverImage - should handle invalid audio files", async () => {
+  setupBrowserMocks();
+  const file = new File([new Uint8Array(10)], "invalid.mp3", {
+    type: "audio/mpeg",
   });
+
+  try {
+    await extractCoverImage(file);
+  } catch (error) {
+    assertEquals(
+      error instanceof Error ? error.message : String(error),
+      "Failed to extract cover image: Unknown error",
+    );
+  }
 });

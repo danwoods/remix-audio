@@ -91,8 +91,8 @@ const albumArtCache = new Map<string, Promise<string | null>>();
 /** Track blob URLs for cleanup */
 const blobUrlCache = new Map<string, string>();
 
-/** Fetch album art */
-export const getAlbumArt = (files: Files, albumId: string) => {
+/** Fetch album art. Cached. Returns a blob URL. Client-side only. */
+export const getAlbumArtAsBlobUrl = (files: Files, albumId: string) => {
   if (!albumArtCache.has(albumId)) {
     const album = getAlbum(files, albumId);
 
@@ -124,6 +124,44 @@ export const getAlbumArt = (files: Files, albumId: string) => {
   }
 
   return albumArtCache.get(albumId)!;
+};
+
+/** Get album art as a data URL. Not cached */
+export const getAlbumArtAsDataUrl = async (
+  files: Files,
+  albumId: string,
+): Promise<string | null> => {
+  const album = getAlbum(files, albumId);
+  if (!album) return null;
+
+  const tags = await fromUrl(album.tracks[0].url);
+  if (Array.isArray(tags?.images)) {
+    const arrayBuffer = tags.images[0].data;
+    const mimeType = tags.images[0].mime || "image/jpeg";
+
+    // Convert to base64 - use efficient chunking to avoid stack overflow
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const chunkSize = 0x8000; // 32KB chunks
+    const chunks: string[] = [];
+
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(
+        i,
+        Math.min(i + chunkSize, uint8Array.length),
+      );
+      // Build string for this chunk without spreading
+      let chunkStr = "";
+      for (let j = 0; j < chunk.length; j++) {
+        chunkStr += String.fromCharCode(chunk[j]);
+      }
+      chunks.push(chunkStr);
+    }
+
+    const binaryString = chunks.join("");
+    const base64 = btoa(binaryString);
+    return `data:${mimeType};base64,${base64}`;
+  }
+  return null;
 };
 
 /** Cleanup function to revoke blob URLs (useful for cache invalidation) */
@@ -219,7 +257,7 @@ export const search = (files: Files, searchStr: string): SearchResults => {
       results.artists.push({
         id: artist,
         title: artist,
-        localUrl: `/artists/${artist}`,
+        localUrl: `/artists/${encodeURIComponent(artist)}`,
       });
     }
 
@@ -228,7 +266,7 @@ export const search = (files: Files, searchStr: string): SearchResults => {
         results.albums.push({
           id: albumObj.id,
           title: album,
-          localUrl: `/artists/${artist}/albums/${album}`,
+          localUrl: `/artists/${encodeURIComponent(artist)}/albums/${encodeURIComponent(album)}`,
         });
       }
 
@@ -237,7 +275,7 @@ export const search = (files: Files, searchStr: string): SearchResults => {
           results.tracks.push({
             id: t.url,
             title: t.title,
-            localUrl: `/artists/${artist}/albums/${album}`,
+            localUrl: `/artists/${encodeURIComponent(artist)}/albums/${encodeURIComponent(album)}`,
             url: t.url,
           });
         }

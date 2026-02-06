@@ -1,0 +1,16 @@
+---
+alwaysApply: true
+---
+
+# Custom Elements Pattern
+
+Key requirements:
+- Use shadow DOM with `attachShadow({ mode: "open" })` in constructor
+- Create template element outside the class with encapsulated styles
+- Clone template content into shadow root: `this.shadowRoot!.appendChild(template.content.cloneNode(true))`
+- Follow naming convention: `[ElementName]CustomElement` class → `<element-name>` tag
+- Include JSDoc comments with `@customElement` tag
+
+See `app/icons/play/index.ts` and `app/components/AlbumImage/album-image-custom-element.ts` for examples.
+
+Use https://github.com/webcomponents/gold-standard/wiki as a baseline for quality

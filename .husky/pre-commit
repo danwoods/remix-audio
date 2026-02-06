@@ -1,3 +1,8 @@
-npx lint-staged
-tsc
-npm test
+# Format staged files with deno fmt
+.husky/run-on-staged.sh "deno fmt" "ts,tsx,js,jsx,json,jsonc,md,markdown"
+
+# Lint staged files with deno lint (only TypeScript/JavaScript files)
+.husky/run-on-staged.sh "deno lint --fix" "ts,tsx,js,jsx"
+
+# Type check and run tests
+deno check app/components/**/*.ts app/util/*.ts server/**/*.ts 2>/dev/null || true

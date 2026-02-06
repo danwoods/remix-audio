@@ -1,0 +1,10 @@
+# Run tests before push
+echo "🧪 Running tests before push..."
+deno task test:all
+
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed. Push aborted."
+  exit 1
+fi
+
+echo "✅ All tests passed!"

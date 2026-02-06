@@ -1,9 +1,0 @@
-# Ignore artifacts:
-build
-coverage
-
-# Ignore node modules
-node_modules
-
-# Ignore editor files/folders
-.vscode
