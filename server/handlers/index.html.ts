@@ -47,21 +47,21 @@ export async function handleIndexHtml(
   const files = await getUploadedFiles();
   const recentlyUploadedAlbumIds = getAlbumIdsByRecent(files).slice(0, 5);
   const { isAdmin } = getAdminAuthStatus(req);
-  const recentlyListenedToAlbumIds = [
-    { id: "Childish Gambino/Poindexter" },
-    { id: "Girl Talk/All Day" },
-    { id: "Pearl Jam/Vitalogy (Expanded Edition)" },
-    { id: "The Rolling Stones/Let It Bleed" },
-    { id: "The Black Keys/Ohio Players" },
-  ];
+  // const recentlyListenedToAlbumIds = [
+  //   { id: "Childish Gambino/Poindexter" },
+  //   { id: "Girl Talk/All Day" },
+  //   { id: "Pearl Jam/Vitalogy (Expanded Edition)" },
+  //   { id: "The Rolling Stones/Let It Bleed" },
+  //   { id: "The Black Keys/Ohio Players" },
+  // ];
 
-  const mostListenedToAlbumIds = [
-    { id: "Pearl Jam/Dark Matter" },
-    { id: "Run The Jewels/RTJ4" },
-    { id: "Pink Floyd/Wish You Were Here" },
-    { id: "Wu-Tang Clan/Enter The Wu-Tang: 36 Chambers" },
-    { id: "The Rolling Stones/Exile On Main St." },
-  ];
+  // const mostListenedToAlbumIds = [
+  //   { id: "Pearl Jam/Dark Matter" },
+  //   { id: "Run The Jewels/RTJ4" },
+  //   { id: "Pink Floyd/Wish You Were Here" },
+  //   { id: "Wu-Tang Clan/Enter The Wu-Tang: 36 Chambers" },
+  //   { id: "The Rolling Stones/Exile On Main St." },
+  // ];
 
   const html = renderPage(
     {
@@ -72,21 +72,21 @@ export async function handleIndexHtml(
       isAdmin,
     },
     [
-      albumRowWithTitleHtml({
-        albumIds: recentlyListenedToAlbumIds,
-        files: files,
-        title: "Continue Listening",
-      }),
+      // albumRowWithTitleHtml({
+      //   albumIds: recentlyListenedToAlbumIds,
+      //   files: files,
+      //   title: "Continue Listening",
+      // }),
       albumRowWithTitleHtml({
         albumIds: recentlyUploadedAlbumIds,
         files: files,
         title: "Latest",
       }),
-      albumRowWithTitleHtml({
-        albumIds: mostListenedToAlbumIds,
-        files: files,
-        title: "Favorites",
-      }),
+      // albumRowWithTitleHtml({
+      //   albumIds: mostListenedToAlbumIds,
+      //   files: files,
+      //   title: "Favorites",
+      // }),
     ],
   );
 
