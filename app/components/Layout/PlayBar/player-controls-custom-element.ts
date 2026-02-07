@@ -38,7 +38,7 @@ template.innerHTML = `
     button[data-play-prev] {
       display: none;
       /* Note: CSS variables cannot be used in media queries, so we use the literal value */
-      /* This matches --breakpoint-sm: 50rem defined in entry.css */
+      /* This matches --breakpoint-sm: 50rem defined in app.css */
       @media only screen and (min-width: 50rem) {
         display: block;
       }
