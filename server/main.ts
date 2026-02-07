@@ -37,12 +37,12 @@ router.add({
  * CORS headers applied to `/build/*` and `/app.css` responses so those
  * assets can be loaded cross-origin (e.g. from another origin or dev tools).
  */
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Max-Age": "86400",
-};
+// const CORS_HEADERS: Record<string, string> = {
+//   "Access-Control-Allow-Origin": "*",
+//   "Access-Control-Allow-Methods": "GET, OPTIONS",
+//   "Access-Control-Allow-Headers": "Content-Type",
+//   "Access-Control-Max-Age": "86400",
+// };
 
 // --- Server ---
 const port = parseInt(Deno.env.get("PORT") || "8000", 10);
@@ -58,13 +58,12 @@ Deno.serve({ port }, async (req: Request) => {
       const file = await Deno.readFile(filePath);
       const contentType = getContentType(url.pathname);
       return new Response(file, {
-        headers: { "Content-Type": contentType, ...CORS_HEADERS },
+        headers: { "Content-Type": contentType },
       });
     } catch (error) {
       console.error(`Failed to serve static file ${url.pathname}:`, error);
       return new Response("Not Found", {
         status: 404,
-        headers: CORS_HEADERS,
       });
     }
   }
@@ -100,12 +99,11 @@ Deno.serve({ port }, async (req: Request) => {
     try {
       const file = await Deno.readFile("./app/app.css");
       return new Response(file, {
-        headers: { "Content-Type": "text/css", ...CORS_HEADERS },
+        headers: { "Content-Type": "text/css" },
       });
     } catch {
       return new Response("Not Found", {
         status: 404,
-        headers: CORS_HEADERS,
       });
     }
   }
