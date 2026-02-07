@@ -154,7 +154,7 @@ tests under `deno-tests/`).
 ├── server/                 # Deno server
 │   ├── main.ts             # Entry point, static files, router
 │   ├── router.ts           # Custom route matcher
-│   ├── ssr-plain.ts        # HTML page shell (SSR)
+│   ├── ssr.ts              # HTML page shell and layout (SSR)
 │   ├── handlers/           # Route handlers (index, album, upload, cover)
 │   └── utils/              # basicAuth, loadEnv, manifest
 ├── build/                  # Build output
@@ -201,9 +201,8 @@ Static assets: `/build/*`, `/assets/*` (if present), `/favicon.ico`, `/app.css`.
 
 - The server uses Deno’s native HTTP server and a small custom router (no
   framework).
-- SSR is done manually: handlers call `renderPage()` in `server/ssr-plain.ts`,
-  which returns full HTML including the custom elements script
-  (`/build/main.js`).
+- SSR is done manually: handlers call `renderPage()` in `server/ssr.ts`, which
+  returns full HTML including the custom elements script (`/build/main.js`).
 - The client is built from custom elements registered in
   `app/components/register-custom-elements.ts`, bundled with
   `deno bundle --platform=browser` to `build/main.js`.

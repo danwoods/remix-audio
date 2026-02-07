@@ -9,22 +9,10 @@ import { getAlbum, sortTracksByTrackNumber } from "../../app/util/files.ts";
 import pkg from "../../deno.json" with { type: "json" };
 import { createAlbumUrl } from "../../lib/album.ts";
 import { createLogger } from "../../app/util/logger.ts";
+import { escapeAttr, renderPage } from "../ssr.ts";
+import { getAdminAuthStatus } from "../utils/basicAuth.ts";
 
 const logger = createLogger("Album HTML");
-
-/**
- * Escape string for safe use in HTML attribute values (e.g. title, og:content).
- *
- * @param s - Raw string (e.g. user-controlled or dynamic text).
- * @returns Escaped string safe for double-quoted attribute values.
- */
-function escapeAttr(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 /**
  * Handle GET request for album detail page.
@@ -76,7 +64,7 @@ export async function handleAlbumHtml(
   }"></tracklist-item-custom-element>
   `).join("");
 
-  // Set up OG meta tags
+  // Set up OG meta tags and page URL
   const baseUrl = new URL(req.url).origin;
   const pageUrl = `${baseUrl}/artists/${encodeURIComponent(artistId)}/albums/${
     encodeURIComponent(albumId)
@@ -84,22 +72,16 @@ export async function handleAlbumHtml(
   const coverUrl = `${pageUrl}/cover`;
   const ogTitle = `${album.title} - ${pkg.name}`;
   const ogDescription = "Your audio where you want it.";
+  const pathname = `/artists/${encodeURIComponent(artistId)}/albums/${
+    encodeURIComponent(albumId)
+  }`;
 
-  const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeAttr(pkg.name)} - ${escapeAttr(albumId)}</title>
-  <meta name="description" content="${escapeAttr(ogDescription)}">
+  const headExtra = `
   <meta property="og:type" content="website">
   <meta property="og:title" content="${escapeAttr(ogTitle)}">
   <meta property="og:description" content="${escapeAttr(ogDescription)}">
   <meta property="og:url" content="${escapeAttr(pageUrl)}">
   <meta property="og:image" content="${escapeAttr(coverUrl)}">
-  <link rel="preload" href="/build/main.js" as="script" />
-  <link rel="stylesheet" href="/app.css">
   <style>
     album-header-custom-element {
       flex-shrink: 0;
@@ -124,9 +106,9 @@ export async function handleAlbumHtml(
       margin-bottom: 16px;
       color: rgba(255, 255, 255, 0.9);
     }
-  </style>
-</head>
-<body> 
+  </style>`;
+
+  const mainContentHtml = `
   <album-header-custom-element data-album-url="${
     escapeAttr(albumUrl)
   }"></album-header-custom-element>
@@ -136,29 +118,22 @@ export async function handleAlbumHtml(
       <h2 class="tracklist-title">Tracks</h2>
       <div id="tracklistContainer">${trackListHtml}</div>
     </section>
-  </div>
+  </div>`;
 
-  <playbar-custom-element data-album-url="${
-    escapeAttr(albumUrl)
-  }"></playbar-custom-element>
+  const { isAdmin } = getAdminAuthStatus(req);
 
-  <script type="module" src="/build/main.js"></script>
-  <script>
-    document.addEventListener("track-click", (event) => {
-      const customEvent = event instanceof CustomEvent ? event : null;
-      if (customEvent && customEvent.detail) {
-        const trackUrl = customEvent.detail.trackUrl;
-        const playbar = document.querySelector('playbar-custom-element');
-        if (playbar) {
-          playbar.setAttribute('data-current-track-url', trackUrl);
-          playbar.setAttribute('data-is-playing', 'true');
-        }
-      }
-    });
-  </script>
-</body>
-</html>
-`;
+  const html = renderPage(
+    {
+      appName: pkg.name,
+      title: `${pkg.name} - ${albumId}`,
+      description: ogDescription,
+      headExtra,
+      pathname,
+      isAdmin,
+      playbarAlbumUrl: albumUrl,
+    },
+    [mainContentHtml],
+  );
 
   return new Response(html, {
     headers: { "Content-Type": "text/html" },

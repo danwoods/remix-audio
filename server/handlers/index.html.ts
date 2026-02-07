@@ -1,5 +1,5 @@
 /** @file Index page route handler */
-import { renderPage } from "../ssr-plain.ts";
+import { renderPage } from "../ssr.ts";
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 import { getAdminAuthStatus, requireAdminAuth } from "../utils/basicAuth.ts";
 
@@ -67,7 +67,6 @@ export async function handleIndexHtml(
     {
       appName: pkg.name,
       headLinks: [],
-      assets: { css: "", js: "" },
       pathname,
       isAdmin,
     },
