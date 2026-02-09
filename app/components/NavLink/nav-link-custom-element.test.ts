@@ -88,24 +88,36 @@ function setupDOMEnvironment() {
     getElementById: () => null,
   } as unknown as Document;
 
+  const mockLocation = {
+    origin: "http://localhost:8000",
+    href: "http://localhost:8000/",
+  };
+  const mockHistory = {
+    pushState: (...args: unknown[]) => {
+      pushStateCalls.push(args);
+    },
+  };
+  const mockAddEventListener = () => {};
+
   (globalThis as {
     window: typeof globalThis & {
-      location: { origin: string; href: string };
-      history: { pushState: (...args: unknown[]) => void };
+      location: typeof mockLocation;
+      history: typeof mockHistory;
+      addEventListener: typeof mockAddEventListener;
     };
   }).window = {
     ...globalThis,
-    location: {
-      origin: "http://localhost:8000",
-      href: "http://localhost:8000/",
-    },
-    history: {
-      pushState: (...args: unknown[]) => {
-        pushStateCalls.push(args);
-      },
-    },
-    addEventListener: () => {},
+    location: mockLocation,
+    history: mockHistory,
+    addEventListener: mockAddEventListener,
   };
+
+  // Component uses globalThis.location/history/addEventListener; in Deno those
+  // are not set, so point them at the same mocks as window.
+  (globalThis as { location: typeof mockLocation }).location = mockLocation;
+  (globalThis as { history: typeof mockHistory }).history = mockHistory;
+  (globalThis as { addEventListener: typeof mockAddEventListener })
+    .addEventListener = mockAddEventListener;
 
   (globalThis as { customElements: { define: () => void } }).customElements = {
     define: () => {},
@@ -194,7 +206,7 @@ Deno.test("NavLinkCustomElement - popstate triggers fetch and applyEnvelope", as
   const popstateUrl = "http://localhost:8000/artists/a/albums/b";
   let popstateListener: (() => void) | null = null;
 
-  (globalThis as { window: Window }).window = {
+  const popstateWindow = {
     ...globalThis,
     location: {
       origin: "http://localhost:8000",
@@ -207,6 +219,13 @@ Deno.test("NavLinkCustomElement - popstate triggers fetch and applyEnvelope", as
       if (type === "popstate") popstateListener = fn;
     },
   } as unknown as Window;
+  (globalThis as { window: Window }).window = popstateWindow;
+  (globalThis as { location: typeof popstateWindow.location }).location =
+    popstateWindow.location;
+  (globalThis as { history: typeof popstateWindow.history }).history =
+    popstateWindow.history;
+  (globalThis as { addEventListener: typeof popstateWindow.addEventListener })
+    .addEventListener = popstateWindow.addEventListener;
 
   globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string"
@@ -446,21 +465,24 @@ Deno.test("NavLinkCustomElement - keydown Enter with cross-origin href does not 
 Deno.test("NavLinkCustomElement - fallback to location.href when fetch fails", async () => {
   setupDOMEnvironment();
   let locationHrefSet = "";
-  (globalThis as { window: { location: { href: string; origin: string } } })
-    .window = {
-      ...globalThis,
-      location: {
-        origin: "http://localhost:8000",
-        get href() {
-          return locationHrefSet || "http://localhost:8000/";
-        },
-        set href(value: string) {
-          locationHrefSet = value;
-        },
-      },
-      history: { pushState: () => {} },
-      addEventListener: () => {},
-    } as unknown as Window;
+  const fallbackLocation = {
+    origin: "http://localhost:8000",
+    get href() {
+      return locationHrefSet || "http://localhost:8000/";
+    },
+    set href(value: string) {
+      locationHrefSet = value;
+    },
+  };
+  const fallbackWindow = {
+    ...globalThis,
+    location: fallbackLocation,
+    history: { pushState: () => {} },
+    addEventListener: () => {},
+  } as unknown as Window;
+  (globalThis as { window: Window }).window = fallbackWindow;
+  (globalThis as { location: typeof fallbackLocation }).location =
+    fallbackLocation;
 
   globalThis.fetch = () =>
     Promise.resolve({ ok: false, status: 500 } as Response);
