@@ -77,7 +77,7 @@ export default function appBarHtml(props: AppBarProps = {}): string {
   return `<div${classAttr}>
   <div class="flex-1">${trustedStartHtml}</div>
   <div class="flex-1 flex justify-center lg:justify-start">
-    <a href="/" class="text-xl font-bold">${escapedAppName}</a>
+    <nav-link href="/" class="text-xl font-bold">${escapedAppName}</nav-link>
   </div>
   <div class="flex-1 flex justify-end">${resolvedEndContent}</div>
 </div>`;

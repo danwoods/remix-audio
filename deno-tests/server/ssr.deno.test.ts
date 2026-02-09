@@ -1,6 +1,25 @@
 /** @file Tests for SSR rendering utilities */
-import { assertStringIncludes } from "@std/assert";
-import { renderPage } from "../../server/ssr.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { isFragmentRequest, renderPage } from "../../server/ssr.ts";
+
+Deno.test("isFragmentRequest returns true when X-Requested-With is fetch", () => {
+  const req = new Request("http://localhost:8000/", {
+    headers: { "X-Requested-With": "fetch" },
+  });
+  assertEquals(isFragmentRequest(req), true);
+});
+
+Deno.test("isFragmentRequest returns false when header is absent", () => {
+  const req = new Request("http://localhost:8000/");
+  assertEquals(isFragmentRequest(req), false);
+});
+
+Deno.test("isFragmentRequest returns false when header has other value", () => {
+  const req = new Request("http://localhost:8000/", {
+    headers: { "X-Requested-With": "xmlhttprequest" },
+  });
+  assertEquals(isFragmentRequest(req), false);
+});
 
 Deno.test("renderPage returns valid HTML", () => {
   const html = renderPage(
@@ -86,7 +105,7 @@ Deno.test("renderPage includes children in main", () => {
 Deno.test("renderPage includes AppBar in layout", () => {
   /**
    * Every page uses the shared layout from ssr.ts, which includes the AppBar.
-   * The AppBar renders the app name in an anchor with class "text-xl font-bold".
+   * The AppBar renders the app name in a nav-link with class "text-xl font-bold".
    */
   const html = renderPage(
     {

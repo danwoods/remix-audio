@@ -1,0 +1,230 @@
+/** @file Custom element for same-origin app navigation with fragment loading.
+ *
+ * Renders as a link (slot content). On click, fetches the route with a fragment
+ * request header, then updates main content, document title, and head meta
+ * from the JSON envelope instead of full page load. Falls back to full
+ * navigation on error or for non-app routes.
+ *
+ * @customElement nav-link
+ */
+
+import {
+  FRAGMENT_REQUEST_HEADER,
+  FRAGMENT_REQUEST_VALUE,
+  type FragmentEnvelope,
+} from "../../../lib/fragment-envelope.ts";
+
+/** Same-origin path (starts with "/"); any such route may be fetched as fragment. */
+function isAppRoute(pathname: string): boolean {
+  return pathname.startsWith("/");
+}
+
+const FRAGMENT_CRITICAL_STYLES_ID = "fragment-critical-styles";
+
+/** Remove all fragment-managed OG meta tags from document head. */
+function clearFragmentManagedMeta(): void {
+  const head = document.head;
+  const ogMeta = head.querySelectorAll('meta[property^="og:"]');
+  for (const el of ogMeta) {
+    head.removeChild(el);
+  }
+}
+
+function applyEnvelope(envelope: FragmentEnvelope): void {
+  const main = document.querySelector("main");
+  if (main) {
+    main.innerHTML = envelope.html;
+  }
+  document.title = envelope.title;
+
+  if (envelope.meta == null || envelope.meta.length === 0) {
+    clearFragmentManagedMeta();
+  } else {
+    for (const item of envelope.meta) {
+      const selector = item.property
+        ? `meta[property="${item.property}"]`
+        : `meta[name="${item.name}"]`;
+      let meta = document.querySelector(selector);
+      if (!meta) {
+        meta = document.createElement("meta");
+        if (item.property) {
+          meta.setAttribute("property", item.property);
+        } else if (item.name) {
+          meta.setAttribute("name", item.name);
+        }
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", item.content);
+    }
+  }
+
+  const stylesEl = document.getElementById(FRAGMENT_CRITICAL_STYLES_ID) as
+    | HTMLStyleElement
+    | null;
+  if (envelope.styles) {
+    // Server sends a single <style>...</style> block or raw CSS; we strip one surrounding tag and inject the inner CSS. Multiple style blocks are undefined.
+    const css = envelope.styles.replace(/^<style[^>]*>|<\/style>$/gi, "")
+      .trim();
+    if (stylesEl) {
+      stylesEl.textContent = css;
+    } else {
+      const el = document.createElement("style");
+      el.id = FRAGMENT_CRITICAL_STYLES_ID;
+      el.textContent = css;
+      document.head.appendChild(el);
+    }
+  } else if (stylesEl) {
+    stylesEl.remove();
+  }
+}
+
+function navigateToFragment(url: URL): void {
+  const main = document.querySelector("main");
+  if (!main) {
+    globalThis.location.href = url.href;
+    return;
+  }
+  fetch(url.href, {
+    headers: { [FRAGMENT_REQUEST_HEADER]: FRAGMENT_REQUEST_VALUE },
+  })
+    .then((res) => {
+      if (!res.ok) {
+        throw new Error(`Fragment request failed: ${res.status}`);
+      }
+      return res.json() as Promise<FragmentEnvelope>;
+    })
+    .then((envelope) => {
+      applyEnvelope(envelope);
+      globalThis.history.pushState(
+        { pathname: url.pathname },
+        envelope.title,
+        url.href,
+      );
+    })
+    .catch(() => {
+      globalThis.location.href = url.href;
+    });
+}
+
+let popstateRegistered = false;
+
+function registerPopstate(): void {
+  if (popstateRegistered) return;
+  popstateRegistered = true;
+  globalThis.addEventListener("popstate", () => {
+    const url = new URL(globalThis.location.href);
+    if (url.origin !== globalThis.location.origin || !isAppRoute(url.pathname)) {
+      return;
+    }
+    const main = document.querySelector("main");
+    if (!main) return;
+    fetch(url.href, {
+      headers: { [FRAGMENT_REQUEST_HEADER]: FRAGMENT_REQUEST_VALUE },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json() as Promise<FragmentEnvelope>;
+      })
+      .then(applyEnvelope)
+      .catch(() => {
+        globalThis.location.reload();
+      });
+  });
+}
+
+const template = document.createElement("template");
+template.innerHTML = `
+  <style>
+    :host {
+      display: inline;
+      cursor: pointer;
+      color: inherit;
+      text-decoration: none;
+    }
+    :host(:hover) {
+      text-decoration: underline;
+    }
+  </style>
+  <slot></slot>
+`;
+
+/**
+ * Custom element for client-side app navigation. Use href for the route;
+ * slot content is the link label.
+ *
+ * @example
+ * ```html
+ * <nav-link href="/">Home</nav-link>
+ * <nav-link href="/artists/Artist/albums/Album">Album Name</nav-link>
+ * ```
+ */
+export class NavLinkCustomElement extends HTMLElement {
+  static observedAttributes = ["href"];
+
+  private boundHandleClick = this.handleClick.bind(this);
+  private boundHandleKeydown = this.handleKeydown.bind(this);
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot!.appendChild(template.content.cloneNode(true));
+  }
+
+  connectedCallback(): void {
+    this.updateLinkAttrs();
+    this.addEventListener("click", this.boundHandleClick);
+    this.addEventListener("keydown", this.boundHandleKeydown);
+    registerPopstate();
+  }
+
+  disconnectedCallback(): void {
+    this.removeEventListener("click", this.boundHandleClick);
+    this.removeEventListener("keydown", this.boundHandleKeydown);
+  }
+
+  attributeChangedCallback(
+    _name: string,
+    _oldValue: string | null,
+    _newValue: string | null,
+  ): void {
+    this.updateLinkAttrs();
+  }
+
+  private updateLinkAttrs(): void {
+    const href = this.getAttribute("href");
+    if (href) {
+      this.setAttribute("role", "link");
+      this.setAttribute("tabindex", "0");
+    } else {
+      this.removeAttribute("role");
+      this.setAttribute("tabindex", "-1");
+    }
+  }
+
+  /** Returns true if fragment navigation was performed (caller should preventDefault). */
+  private tryNavigate(): boolean {
+    const href = this.getAttribute("href");
+    if (!href) return false;
+    const url = new URL(href, document.baseURI || undefined);
+    if (url.origin !== globalThis.location.origin) return false;
+    if (!isAppRoute(url.pathname)) return false;
+    navigateToFragment(url);
+    return true;
+  }
+
+  private handleClick(e: MouseEvent): void {
+    if (this.tryNavigate()) {
+      e.preventDefault();
+    }
+  }
+
+  private handleKeydown(e: KeyboardEvent): void {
+    if (e.key === "Enter" || e.key === " ") {
+      if (this.tryNavigate()) {
+        e.preventDefault();
+      }
+    }
+  }
+}
+
+customElements.define("nav-link", NavLinkCustomElement);

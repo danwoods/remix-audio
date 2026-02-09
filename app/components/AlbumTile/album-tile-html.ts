@@ -1,3 +1,10 @@
+/** @file Album tile HTML function.
+ *
+ * Renders a clickable tile (cover art + title/artist) for an album. Uses
+ * `<nav-link>` so navigation to the album page uses client-side fragment
+ * loading when possible.
+ */
+
 import type { Files } from "../../util/files.ts";
 import { getAlbum } from "../../util/files.ts";
 
@@ -54,7 +61,7 @@ export default function albumTileHtml(
   const srcArr = albumObject.tracks[0].url.split("/");
   srcArr.pop();
 
-  return `<a href="${escapeHtml(href)}">
+  return `<nav-link href="${escapeHtml(href)}">
   <album-image-custom-element style="width: 100%; border-radius: 4px; aspect-ratio: 1/1; display: inline-block;" data-album-url="${
     escapeHtml(srcArr.join("/"))
   }"></album-image-custom-element>
@@ -62,5 +69,5 @@ export default function albumTileHtml(
     <p class="text-base font-bold line-clamp-1">${escapedAlbumName}</p>
     <p class="text-sm line-clamp-1">by ${escapedArtistName}</p>
   </div>
-</a>`;
+</nav-link>`;
 }

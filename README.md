@@ -83,6 +83,22 @@ to show or hide admin UI.
 
 ---
 
+## Client-side navigation
+
+Inner-app links use the `<nav-link>` custom element (e.g. home in the AppBar,
+album tiles on the home page). When the user activates a nav-link to an app
+route (`/` or `/artists/:id/albums/:id`), the client fetches a **fragment**
+instead of loading a full page: the server returns a JSON envelope
+`{ title, html, meta?, styles? }` when the request includes the header
+`X-Requested-With: fetch`. The client updates the main content area, document
+title, head meta (e.g. OG tags), and optional critical CSS (`styles`). It uses
+`history.pushState`, so back/forward works without a full reload. Direct loads
+(e.g. opening an album URL in a new tab or refreshing the page) always receive
+the full HTML document; the fragment envelope is only returned when the client
+sends `X-Requested-With: fetch` during in-app navigation.
+
+---
+
 ## Building
 
 - **Custom elements bundle** (required for the UI):
@@ -203,6 +219,9 @@ Static assets: `/build/*`, `/assets/*` (if present), `/favicon.ico`, `/app.css`.
   framework).
 - SSR is done manually: handlers call `renderPage()` in `server/ssr.ts`, which
   returns full HTML including the custom elements script (`/build/main.js`).
+  When the client requests a fragment (header `X-Requested-With: fetch`),
+  handlers return a JSON envelope `{ title, html, meta?, styles? }` instead of a
+  full document.
 - The client is built from custom elements registered in
   `app/components/register-custom-elements.ts`, bundled with
   `deno bundle --platform=browser` to `build/main.js`.

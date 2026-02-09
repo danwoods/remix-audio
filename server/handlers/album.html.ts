@@ -9,7 +9,8 @@ import { getAlbum, sortTracksByTrackNumber } from "../../app/util/files.ts";
 import pkg from "../../deno.json" with { type: "json" };
 import { createAlbumUrl } from "../../lib/album.ts";
 import { createLogger } from "../../app/util/logger.ts";
-import { escapeAttr, renderPage } from "../ssr.ts";
+import type { FragmentMetaItem } from "../ssr.ts";
+import { escapeAttr, isFragmentRequest, renderPage } from "../ssr.ts";
 import { getAdminAuthStatus } from "../utils/basicAuth.ts";
 
 const logger = createLogger("Album HTML");
@@ -76,13 +77,8 @@ export async function handleAlbumHtml(
     encodeURIComponent(albumId)
   }`;
 
-  const headExtra = `
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="${escapeAttr(ogTitle)}">
-  <meta property="og:description" content="${escapeAttr(ogDescription)}">
-  <meta property="og:url" content="${escapeAttr(pageUrl)}">
-  <meta property="og:image" content="${escapeAttr(coverUrl)}">
-  <style>
+  /** Critical CSS for album page layout; used in full-page headExtra and fragment envelope. */
+  const albumPageCriticalCss = `<style>
     album-header-custom-element {
       flex-shrink: 0;
     }
@@ -108,6 +104,14 @@ export async function handleAlbumHtml(
     }
   </style>`;
 
+  const headExtra = `
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${escapeAttr(ogTitle)}">
+  <meta property="og:description" content="${escapeAttr(ogDescription)}">
+  <meta property="og:url" content="${escapeAttr(pageUrl)}">
+  <meta property="og:image" content="${escapeAttr(coverUrl)}">
+  ${albumPageCriticalCss}`;
+
   const mainContentHtml = `
   <album-header-custom-element data-album-url="${
     escapeAttr(albumUrl)
@@ -121,11 +125,31 @@ export async function handleAlbumHtml(
   </div>`;
 
   const { isAdmin } = getAdminAuthStatus(req);
+  const pageTitle = `${pkg.name} - ${albumId}`;
+
+  if (isFragmentRequest(req)) {
+    const meta: FragmentMetaItem[] = [
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: ogTitle },
+      { property: "og:description", content: ogDescription },
+      { property: "og:url", content: pageUrl },
+      { property: "og:image", content: coverUrl },
+    ];
+    const envelope = {
+      title: pageTitle,
+      html: mainContentHtml,
+      meta,
+      styles: albumPageCriticalCss,
+    };
+    return new Response(JSON.stringify(envelope), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const html = renderPage(
     {
       appName: pkg.name,
-      title: `${pkg.name} - ${albumId}`,
+      title: pageTitle,
       description: ogDescription,
       headExtra,
       pathname,

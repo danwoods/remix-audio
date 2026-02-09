@@ -5,11 +5,31 @@
  */
 
 import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
+import {
+  FRAGMENT_REQUEST_HEADER,
+  FRAGMENT_REQUEST_VALUE,
+  type FragmentEnvelope,
+  type FragmentMetaItem,
+} from "../lib/fragment-envelope.ts";
 
 const CSS_PATH = "/app.css";
 const JS_PATH = "/build/main.js";
 
 const DEFAULT_DESCRIPTION = "Your audio where you want it.";
+
+export { FRAGMENT_REQUEST_HEADER, FRAGMENT_REQUEST_VALUE };
+export type { FragmentEnvelope, FragmentMetaItem };
+
+/**
+ * True when the request asks for a fragment response (main content as JSON envelope).
+ * Used by HTML handlers to return { title, html, meta } instead of full document.
+ *
+ * @param req - The incoming request.
+ * @returns True if req has X-Requested-With: fetch.
+ */
+export function isFragmentRequest(req: Request): boolean {
+  return req.headers.get(FRAGMENT_REQUEST_HEADER) === FRAGMENT_REQUEST_VALUE;
+}
 
 /**
  * Escape string for safe use in HTML attribute values and meta content
@@ -141,7 +161,7 @@ export function renderLayout(options: RenderLayoutOptions): string {
     : "";
 
   return `<div id="root">
-      <div class="flex w-full flex-col">
+      <div class="layout-root-inner">
         ${
     appBarHtml({
       appName,
@@ -149,7 +169,7 @@ export function renderLayout(options: RenderLayoutOptions): string {
       isAdmin,
     })
   }
-        <main class="md:mx-auto md:px-6 grow">
+        <main class="layout-main">
           ${mainContentHtml}
         </main>
       </div>
