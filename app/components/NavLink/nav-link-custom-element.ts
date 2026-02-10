@@ -21,6 +21,24 @@ function isAppRoute(pathname: string): boolean {
 
 const FRAGMENT_CRITICAL_STYLES_ID = "fragment-critical-styles";
 
+/** Max consecutive fragment load failures before showing error instead of reload. */
+const FRAGMENT_LOAD_MAX_ATTEMPTS = 4;
+
+/** sessionStorage key for counting consecutive popstate fragment load failures. */
+const FRAGMENT_FAILURES_KEY = "nav-link-fragment-failures";
+
+/** Renders a simple error message in main when fragment load fails after max attempts. */
+function showFragmentLoadError(): void {
+  const main = document.querySelector("main");
+  if (!main) return;
+  main.innerHTML = `
+    <div class="p-4 rounded-lg bg-base-200 text-base-content" role="alert">
+      <p class="font-medium">Couldn't load this page</p>
+      <p class="text-sm mt-1 opacity-90">The server may be unavailable. You can try again or reload the page.</p>
+      <a href="${globalThis.location.href}" class="link link-primary mt-2 inline-block">Reload page</a>
+    </div>`;
+}
+
 /** Remove all fragment-managed OG meta tags from document head. */
 function clearFragmentManagedMeta(): void {
   const head = document.head;
@@ -108,6 +126,24 @@ function navigateToFragment(url: URL): void {
 
 let popstateRegistered = false;
 
+/** Pending reload timers (scheduled delays); cleared when we show error after max attempts. */
+const pendingReloadTimers: number[] = [];
+
+function clearFragmentFailureCount(): void {
+  try {
+    globalThis.sessionStorage.removeItem(FRAGMENT_FAILURES_KEY);
+  } catch {
+    // Ignore when sessionStorage is unavailable (e.g. private mode)
+  }
+}
+
+function clearPendingReloadTimers(): void {
+  for (const id of pendingReloadTimers) {
+    globalThis.clearTimeout(id);
+  }
+  pendingReloadTimers.length = 0;
+}
+
 function registerPopstate(): void {
   if (popstateRegistered) return;
   popstateRegistered = true;
@@ -127,9 +163,38 @@ function registerPopstate(): void {
         if (!res.ok) throw new Error(String(res.status));
         return res.json() as Promise<FragmentEnvelope>;
       })
-      .then(applyEnvelope)
+      .then((envelope) => {
+        clearFragmentFailureCount();
+        applyEnvelope(envelope);
+      })
       .catch(() => {
-        globalThis.location.reload();
+        let count = 0;
+        try {
+          const raw = globalThis.sessionStorage.getItem(FRAGMENT_FAILURES_KEY);
+          count = Math.min(
+            FRAGMENT_LOAD_MAX_ATTEMPTS,
+            1 + parseInt(raw ?? "0", 10),
+          );
+          globalThis.sessionStorage.setItem(
+            FRAGMENT_FAILURES_KEY,
+            String(count),
+          );
+        } catch {
+          count = 1;
+        }
+        if (count >= FRAGMENT_LOAD_MAX_ATTEMPTS) {
+          clearPendingReloadTimers();
+          clearFragmentFailureCount();
+          showFragmentLoadError();
+          return;
+        }
+        const delayMs = 500 * Math.pow(2, count - 1);
+        const id = globalThis.setTimeout(() => {
+          const idx = pendingReloadTimers.indexOf(id);
+          if (idx !== -1) pendingReloadTimers.splice(idx, 1);
+          globalThis.location.reload();
+        }, delayMs);
+        pendingReloadTimers.push(id);
       });
   });
 }
@@ -240,3 +305,9 @@ export class NavLinkCustomElement extends HTMLElement {
 }
 
 customElements.define("nav-link", NavLinkCustomElement);
+
+/** Resets popstate registration state for tests. Not for production use. */
+export function _testResetPopstateState(): void {
+  popstateRegistered = false;
+  pendingReloadTimers.length = 0;
+}

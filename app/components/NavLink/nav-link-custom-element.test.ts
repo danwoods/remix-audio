@@ -288,6 +288,91 @@ Deno.test("NavLinkCustomElement - popstate triggers fetch and applyEnvelope", as
   assertEquals(documentTitle, "Popstate Title");
 });
 
+Deno.test("NavLinkCustomElement - popstate shows error after 4 fragment load failures and does not reload", async () => {
+  setupDOMEnvironment();
+
+  const popstateUrl = "http://localhost:8000/artists/a/albums/b";
+  let popstateListener: (() => void) | null = null;
+  const reloadCalls: unknown[] = [];
+  const storage: Record<string, string> = {};
+
+  const popstateWindow = {
+    ...globalThis,
+    location: {
+      origin: "http://localhost:8000",
+      get href() {
+        return popstateUrl;
+      },
+      reload() {
+        reloadCalls.push(undefined);
+      },
+    },
+    history: { pushState: () => {} },
+    addEventListener(type: string, fn: () => void) {
+      if (type === "popstate") popstateListener = fn;
+    },
+    get sessionStorage() {
+      return {
+        getItem(key: string) {
+          return storage[key] ?? null;
+        },
+        setItem(key: string, value: string) {
+          storage[key] = value;
+        },
+        removeItem(key: string) {
+          delete storage[key];
+        },
+      };
+    },
+  } as unknown as Window & { sessionStorage: Storage };
+  (globalThis as { window: Window }).window = popstateWindow;
+  (globalThis as { location: typeof popstateWindow.location }).location =
+    popstateWindow.location;
+  (globalThis as { history: typeof popstateWindow.history }).history =
+    popstateWindow.history;
+  (globalThis as { addEventListener: typeof popstateWindow.addEventListener })
+    .addEventListener = popstateWindow.addEventListener;
+  (globalThis as { sessionStorage: Storage }).sessionStorage =
+    popstateWindow.sessionStorage;
+
+  globalThis.fetch = () =>
+    Promise.resolve({ ok: false, status: 503 }) as Promise<Response>;
+
+  const { NavLinkCustomElement, _testResetPopstateState } = await import(
+    "./nav-link-custom-element.ts"
+  );
+  _testResetPopstateState();
+
+  const el = new NavLinkCustomElement() as unknown as
+    & InstanceType<typeof MockHTMLElement>
+    & { connectedCallback?: () => void };
+  if (
+    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
+      "function"
+  ) {
+    (el as { connectedCallback: () => void }).connectedCallback();
+  }
+
+  assertExists(popstateListener, "popstate listener should be registered");
+
+  for (let i = 0; i < 4; i++) {
+    popstateListener!();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  assertEquals(
+    reloadCalls.length,
+    0,
+    "reload must not be called; error should be shown after 4 failures",
+  );
+  assertEquals(
+    mainInnerHTML.includes("Couldn't load this page"),
+    true,
+    "main should show error message after 4 failures",
+  );
+});
+
 Deno.test("NavLinkCustomElement - click fetches with X-Requested-With header and updates main and title", async () => {
   setupDOMEnvironment();
 
