@@ -507,6 +507,35 @@ Deno.test("NavLinkCustomElement - click with metaKey (Cmd+click) does not preven
   );
 });
 
+Deno.test("NavLinkCustomElement - no href sets host tabindex -1 and no role", async () => {
+  setupDOMEnvironment();
+
+  const { NavLinkCustomElement } = await import(
+    "./nav-link-custom-element.ts"
+  );
+
+  const el = new NavLinkCustomElement() as unknown as
+    & InstanceType<typeof MockHTMLElement>
+    & { connectedCallback?: () => void };
+  if (
+    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
+      "function"
+  ) {
+    (el as { connectedCallback: () => void }).connectedCallback();
+  }
+
+  assertEquals(
+    el.getAttribute("tabindex"),
+    "-1",
+    "host should have tabindex -1 when no href",
+  );
+  assertEquals(
+    el.getAttribute("role"),
+    null,
+    "host should have no role when no href",
+  );
+});
+
 Deno.test("NavLinkCustomElement - keydown Enter triggers same fetch as click", async () => {
   setupDOMEnvironment();
 

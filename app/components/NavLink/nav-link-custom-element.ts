@@ -221,15 +221,17 @@ template.innerHTML = `
   <style>
     :host {
       display: inline;
-      cursor: pointer;
+    }
+    #link {
       color: inherit;
       text-decoration: none;
+      cursor: pointer;
     }
-    :host(:hover) {
+    #link:hover {
       text-decoration: underline;
     }
   </style>
-  <slot></slot>
+  <a id="link" href=""><slot></slot></a>
 `;
 
 /**
@@ -276,9 +278,13 @@ export class NavLinkCustomElement extends HTMLElement {
 
   private updateLinkAttrs(): void {
     const href = this.getAttribute("href");
+    const linkEl = this.shadowRoot?.querySelector?.("a") ?? null;
+    if (linkEl) {
+      linkEl.setAttribute("href", href ?? "");
+    }
     if (href) {
-      this.setAttribute("role", "link");
-      this.setAttribute("tabindex", "0");
+      this.removeAttribute("role");
+      this.removeAttribute("tabindex");
     } else {
       this.removeAttribute("role");
       this.setAttribute("tabindex", "-1");
