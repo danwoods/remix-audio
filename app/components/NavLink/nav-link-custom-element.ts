@@ -113,7 +113,9 @@ function registerPopstate(): void {
   popstateRegistered = true;
   globalThis.addEventListener("popstate", () => {
     const url = new URL(globalThis.location.href);
-    if (url.origin !== globalThis.location.origin || !isAppRoute(url.pathname)) {
+    if (
+      url.origin !== globalThis.location.origin || !isAppRoute(url.pathname)
+    ) {
       return;
     }
     const main = document.querySelector("main");
@@ -213,6 +215,16 @@ export class NavLinkCustomElement extends HTMLElement {
   }
 
   private handleClick(e: MouseEvent): void {
+    // Let the browser handle modifier keys and non-primary button (e.g. open in new tab, new window)
+    if (
+      e.ctrlKey ||
+      e.metaKey ||
+      e.shiftKey ||
+      e.altKey ||
+      (e.button != null && e.button !== 0)
+    ) {
+      return;
+    }
     if (this.tryNavigate()) {
       e.preventDefault();
     }

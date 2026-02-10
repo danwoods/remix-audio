@@ -376,6 +376,50 @@ Deno.test("NavLinkCustomElement - click with cross-origin href does not preventD
   );
 });
 
+Deno.test("NavLinkCustomElement - click with metaKey (Cmd+click) does not preventDefault and does not fetch", async () => {
+  setupDOMEnvironment();
+
+  const { NavLinkCustomElement } = await import(
+    "./nav-link-custom-element.ts"
+  );
+
+  const el = new NavLinkCustomElement() as unknown as
+    & InstanceType<
+      typeof MockHTMLElement
+    >
+    & { connectedCallback?: () => void };
+  el.setAttribute("href", "/");
+  if (
+    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
+      "function"
+  ) {
+    (el as { connectedCallback: () => void }).connectedCallback();
+  }
+
+  const preventDefault = () => {
+    preventDefaultCalled = true;
+  };
+  const clickEvent = {
+    type: "click",
+    bubbles: true,
+    preventDefault,
+    metaKey: true,
+  } as unknown as Event;
+
+  el.dispatchEvent(clickEvent);
+
+  assertEquals(
+    preventDefaultCalled,
+    false,
+    "Cmd+click should not prevent default (allows open in new tab)",
+  );
+  assertEquals(
+    fetchCalls.length,
+    0,
+    "Cmd+click should not trigger fragment fetch",
+  );
+});
+
 Deno.test("NavLinkCustomElement - keydown Enter triggers same fetch as click", async () => {
   setupDOMEnvironment();
 
