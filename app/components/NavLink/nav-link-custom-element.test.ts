@@ -146,6 +146,7 @@ function setupDOMEnvironment() {
     fetchCalls.push({ url, headers });
     return Promise.resolve({
       ok: true,
+      headers: new Headers({ "Content-Type": "application/json" }),
       json: () =>
         Promise.resolve({
           title: "New Title",
@@ -250,6 +251,7 @@ Deno.test("NavLinkCustomElement - popstate triggers fetch and applyEnvelope", as
     fetchCalls.push({ url, headers });
     return Promise.resolve({
       ok: true,
+      headers: new Headers({ "Content-Type": "application/json" }),
       json: () =>
         Promise.resolve({
           title: "Popstate Title",
@@ -646,6 +648,73 @@ Deno.test("NavLinkCustomElement - fallback to location.href when fetch fails", a
   assertEquals(locationHrefSet, "http://localhost:8000/");
 });
 
+Deno.test("NavLinkCustomElement - fallback to location.href when fragment response Content-Type is not application/json", async () => {
+  setupDOMEnvironment();
+  let locationHrefSet = "";
+  const fallbackLocation = {
+    origin: "http://localhost:8000",
+    get href() {
+      return locationHrefSet || "http://localhost:8000/";
+    },
+    set href(value: string) {
+      locationHrefSet = value;
+    },
+  };
+  const fallbackWindow = {
+    ...globalThis,
+    location: fallbackLocation,
+    history: { pushState: () => {} },
+    addEventListener: () => {},
+  } as unknown as Window;
+  (globalThis as { window: Window }).window = fallbackWindow;
+  (globalThis as { location: typeof fallbackLocation }).location =
+    fallbackLocation;
+
+  globalThis.fetch = () =>
+    Promise.resolve({
+      ok: true,
+      headers: new Headers({ "Content-Type": "text/html" }),
+      json: () =>
+        Promise.resolve({
+          title: "Untrusted",
+          html: "<p>should not be applied</p>",
+          meta: [],
+        }),
+    } as Response);
+
+  const { NavLinkCustomElement } = await import(
+    "./nav-link-custom-element.ts"
+  );
+
+  const el = new NavLinkCustomElement() as unknown as
+    & InstanceType<typeof MockHTMLElement>
+    & { connectedCallback?: () => void };
+  el.setAttribute("href", "/");
+  if (
+    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
+      "function"
+  ) {
+    (el as { connectedCallback: () => void }).connectedCallback();
+  }
+
+  const clickEvent = {
+    type: "click",
+    bubbles: true,
+    preventDefault: () => {},
+  } as unknown as Event;
+  el.dispatchEvent(clickEvent);
+
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  assertEquals(
+    mainInnerHTML,
+    "",
+    "main must not be updated when Content-Type is not application/json",
+  );
+  assertEquals(locationHrefSet, "http://localhost:8000/");
+});
+
 Deno.test("NavLinkCustomElement - fragment with empty meta clears OG meta from head", async () => {
   setupDOMEnvironment();
 
@@ -721,6 +790,7 @@ Deno.test("NavLinkCustomElement - fragment with new meta clears previous OG tags
   globalThis.fetch = () =>
     Promise.resolve({
       ok: true,
+      headers: new Headers({ "Content-Type": "application/json" }),
       json: () =>
         Promise.resolve({
           title: "Home",
@@ -784,6 +854,7 @@ Deno.test("NavLinkCustomElement - fragment with styles injects critical CSS into
   globalThis.fetch = () =>
     Promise.resolve({
       ok: true,
+      headers: new Headers({ "Content-Type": "application/json" }),
       json: () =>
         Promise.resolve({
           title: "Album",
@@ -845,6 +916,7 @@ Deno.test("NavLinkCustomElement - fragment with no styles removes existing criti
   globalThis.fetch = () =>
     Promise.resolve({
       ok: true,
+      headers: new Headers({ "Content-Type": "application/json" }),
       json: () =>
         Promise.resolve({
           title: "Home",

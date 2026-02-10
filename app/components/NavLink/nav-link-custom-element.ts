@@ -27,6 +27,16 @@ const FRAGMENT_LOAD_MAX_ATTEMPTS = 4;
 /** sessionStorage key for counting consecutive popstate fragment load failures. */
 const FRAGMENT_FAILURES_KEY = "nav-link-fragment-failures";
 
+/**
+ * True when the response declares a JSON body (e.g. application/json or
+ * application/json; charset=utf-8). Used to reject fragment responses that
+ * are not from the expected API (e.g. HTML error pages) before parsing.
+ */
+function isJsonFragmentResponse(res: Response): boolean {
+  const ct = res.headers.get("Content-Type")?.toLowerCase();
+  return ct?.includes("application/json") ?? false;
+}
+
 /** Renders a simple error message in main when fragment load fails after max attempts. */
 function showFragmentLoadError(): void {
   const main = document.querySelector("main");
@@ -110,6 +120,9 @@ function navigateToFragment(url: URL): void {
       if (!res.ok) {
         throw new Error(`Fragment request failed: ${res.status}`);
       }
+      if (!isJsonFragmentResponse(res)) {
+        throw new Error("Fragment response must be application/json");
+      }
       return res.json() as Promise<FragmentEnvelope>;
     })
     .then((envelope) => {
@@ -162,6 +175,9 @@ function registerPopstate(): void {
     })
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));
+        if (!isJsonFragmentResponse(res)) {
+          throw new Error("Fragment response must be application/json");
+        }
         return res.json() as Promise<FragmentEnvelope>;
       })
       .then((envelope) => {
