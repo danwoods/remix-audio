@@ -88,14 +88,87 @@ to show or hide admin UI.
 Inner-app links use the `<nav-link>` custom element (e.g. home in the AppBar,
 album tiles on the home page). When the user activates a nav-link to an app
 route (`/` or `/artists/:id/albums/:id`), the client fetches a **fragment**
-instead of loading a full page: the server returns a JSON envelope
-`{ title, html, meta?, styles? }` when the request includes the header
-`X-Requested-With: fetch`. The client updates the main content area, document
-title, head meta (e.g. OG tags), and optional critical CSS (`styles`). It uses
-`history.pushState`, so back/forward works without a full reload. Direct loads
-(e.g. opening an album URL in a new tab or refreshing the page) always receive
-the full HTML document; the fragment envelope is only returned when the client
-sends `X-Requested-With: fetch` during in-app navigation.
+instead of loading a full page: the server returns a JSON envelope when the
+request includes a special header. The client updates the main content area,
+document title, head meta (e.g. OG tags), and optional critical CSS. It uses
+`history.pushState`, so back/forward works without a full reload.
+
+### Fragment protocol (detail)
+
+- **Request**: For same-origin GETs to app paths (any path starting with `/`),
+  `<nav-link>` sends a `fetch()` with the header `X-Requested-With: fetch`.
+  Modifier clicks (e.g. Cmd+click) and cross-origin links are left to the
+  browser (no fragment request).
+- **Response**: If the server sees `X-Requested-With: fetch`, it responds with
+  `Content-Type: application/json` and a JSON envelope instead of a full HTML
+  document. If the header is absent (e.g. direct load, refresh, new tab), the
+  server returns the full HTML page as usual.
+- **Envelope shape** (see `lib/fragment-envelope.ts`):
+  - `title` (string) — document title.
+  - `html` (string) — inner HTML for the `<main>` element.
+  - `meta` (optional array) — head meta tags: each item has `property` (e.g.
+    `og:title`) or `name` (e.g. `description`) and `content`. The client creates
+    or updates `<meta>` tags and clears previous fragment-managed OG tags when
+    applying.
+  - `styles` (optional string) — critical CSS for the page (e.g. a single
+    `<style>...</style>` block or raw CSS). Injected into a
+    `<style id="fragment-critical-styles">` in `<head>`; removed if the envelope
+    omits `styles`.
+- **Client behavior**: On success, the client sets `main.innerHTML`,
+  `document.title`, meta tags, and optional critical styles, then
+  `history.pushState(url, title, url)`. On fetch failure it falls back to full
+  navigation (`location.href`). On `popstate`, it re-fetches the current URL
+  with the fragment header and applies the envelope; after several consecutive
+  failures it shows an error message instead of reloading.
+
+### Adding new routes that support fragments
+
+To add a new app route that can be loaded as a fragment (so `<nav-link>` to it
+does not trigger a full page load):
+
+1. **Register the route** in `server/main.ts`:
+   ```ts
+   router.add({
+     pattern: "/your-path",
+     handler: handleYourPage,
+     method: "GET",
+   });
+   // Or with params: pattern: "/artists/:artistId/albums/:albumId"
+   ```
+
+2. **Implement the handler** (e.g. in `server/handlers/your-page.html.ts`):
+   - Build the **main content HTML** (the markup that goes inside `<main>`), the
+     same for both full page and fragment.
+   - If the request is a fragment request, return a JSON envelope instead of a
+     full document:
+     ```ts
+     import { isFragmentRequest } from "../ssr.ts";
+     import type { FragmentMetaItem } from "../ssr.ts";
+
+     if (isFragmentRequest(req)) {
+       const envelope = {
+         title: "Your Page Title",
+         html: mainContentHtml,
+         meta: [/* optional: { property: "og:title", content: "..." } etc. */],
+         styles: "optional critical CSS string",
+       };
+       return new Response(JSON.stringify(envelope), {
+         headers: { "Content-Type": "application/json" },
+       });
+     }
+     ```
+   - Otherwise call `renderPage(...)` and return the full HTML document (same as
+     existing handlers like `handleIndexHtml` and `handleAlbumHtml`).
+
+3. **Use `<nav-link>`** in your HTML so in-app navigation requests the fragment:
+   ```html
+   <nav-link href="/your-path">Your label</nav-link>
+   ```
+
+The client treats any same-origin path starting with `/` as an app route and
+will send the fragment header when navigating via `<nav-link>`. No client
+changes are required for new routes; only the server handler must support
+`isFragmentRequest(req)` and return the envelope when true.
 
 ---
 
