@@ -14,6 +14,8 @@ deno-tests/
 ├── server/
 │   ├── handlers/
 │   │   ├── album.cover.deno.test.ts    # Tests for album cover route handler
+│   │   ├── album.html.deno.test.ts     # Tests for album page handler (HTML + fragment)
+│   │   ├── index.html.deno.test.ts     # Tests for index/admin handler (auth + fragment)
 │   │   └── upload.deno.test.ts          # Tests for upload route handler
 │   ├── router.deno.test.ts              # Tests for custom router
 │   ├── ssr.deno.test.ts                 # Tests for SSR rendering
@@ -87,13 +89,23 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
 
 6. **SSR Tests** (`server/ssr.deno.test.ts`)
 
+   - `isFragmentRequest()` (X-Requested-With: fetch)
    - HTML structure validation
-   - Initial data script inclusion
    - Asset inclusion (CSS/JS)
    - Head links support
    - Script tag escaping
 
 7. **Handler Tests**
+   - **Index / Admin Handler** (`server/handlers/index.html.deno.test.ts`)
+     - Admin auth flow: 500 when credentials missing, 401 when unauthenticated,
+       302 redirect to `/` when authenticated
+     - Fragment response: when `X-Requested-With: fetch`, returns JSON envelope
+       `{ title, html, meta }` instead of full HTML
+   - **Album HTML Handler** (`server/handlers/album.html.deno.test.ts`)
+     - 400 when artistId or albumId is missing
+     - Full HTML when no fragment header (DOCTYPE, layout, tracklist)
+     - Fragment response: when `X-Requested-With: fetch`, returns JSON envelope
+       with `title`, `html`, `meta` (OG tags), and `styles` (critical CSS)
    - **Album Cover Handler** (`server/handlers/album.cover.deno.test.ts`)
      - 400 when artistId or albumId is missing
      - `decodeDataUrl()` behavior (valid and invalid data URLs)
@@ -102,9 +114,6 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
      - No files error handling
      - FormData file acceptance
      - Multiple file handling
-   - **Note**: Root and Album handler tests were removed after handlers were
-     refactored to use plain HTML rendering (`index.html.ts` and
-     `album.html.ts`)
 
 ## Test Philosophy
 

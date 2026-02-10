@@ -1,5 +1,5 @@
 /** @file Index page route handler */
-import { renderPage } from "../ssr-plain.ts";
+import { isFragmentRequest, renderPage } from "../ssr.ts";
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 import { getAdminAuthStatus, requireAdminAuth } from "../utils/basicAuth.ts";
 
@@ -63,31 +63,33 @@ export async function handleIndexHtml(
   //   { id: "The Rolling Stones/Exile On Main St." },
   // ];
 
+  const mainContentHtml = [
+    albumRowWithTitleHtml({
+      albumIds: recentlyUploadedAlbumIds,
+      files: files,
+      title: "Latest",
+    }),
+  ].join("");
+
+  if (isFragmentRequest(req)) {
+    const envelope = {
+      title: pkg.name,
+      html: mainContentHtml,
+      meta: [] as Array<{ property?: string; name?: string; content: string }>,
+    };
+    return new Response(JSON.stringify(envelope), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const html = renderPage(
     {
       appName: pkg.name,
       headLinks: [],
-      assets: { css: "", js: "" },
       pathname,
       isAdmin,
     },
-    [
-      // albumRowWithTitleHtml({
-      //   albumIds: recentlyListenedToAlbumIds,
-      //   files: files,
-      //   title: "Continue Listening",
-      // }),
-      albumRowWithTitleHtml({
-        albumIds: recentlyUploadedAlbumIds,
-        files: files,
-        title: "Latest",
-      }),
-      // albumRowWithTitleHtml({
-      //   albumIds: mostListenedToAlbumIds,
-      //   files: files,
-      //   title: "Favorites",
-      // }),
-    ],
+    [mainContentHtml],
   );
 
   return new Response(html, {

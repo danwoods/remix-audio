@@ -1,9 +1,17 @@
 /** @file Tests for index page route handler */
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { handleIndexHtml } from "../../../server/handlers/index.html.ts";
+import { setSendBehavior } from "../s3.server.test-mocks/s3-client.ts";
 
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "secret";
+
+function setupStorageEnv(): void {
+  Deno.env.set("AWS_ACCESS_KEY_ID", "test-key");
+  Deno.env.set("AWS_SECRET_ACCESS_KEY", "test-secret");
+  Deno.env.set("STORAGE_REGION", "test-region");
+  Deno.env.set("STORAGE_BUCKET", "test-bucket");
+}
 
 function createAdminAuthHeader(): string {
   return `Basic ${globalThis.btoa(`${ADMIN_USER}:${ADMIN_PASS}`)}`;
@@ -70,4 +78,34 @@ Deno.test({
       }
     }
   },
+});
+
+Deno.test("Index handler returns JSON fragment when X-Requested-With fetch", async () => {
+  setupStorageEnv();
+  setSendBehavior((command: unknown) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({ Contents: [], IsTruncated: false });
+    }
+    return Promise.resolve({});
+  });
+
+  const req = new Request("http://localhost:8000/", {
+    headers: { "X-Requested-With": "fetch" },
+  });
+  const response = await handleIndexHtml(req, {});
+
+  assertEquals(response.status, 200);
+  assertEquals(
+    response.headers.get("Content-Type"),
+    "application/json",
+  );
+  const body = await response.json();
+  assertEquals(typeof body.title, "string");
+  assertEquals(body.title.length > 0, true);
+  assertEquals(typeof body.html, "string");
+  assertEquals(Array.isArray(body.meta), true);
+  assertEquals(body.html.includes("<!DOCTYPE html"), false);
+  assertStringIncludes(body.html, "Latest");
 });

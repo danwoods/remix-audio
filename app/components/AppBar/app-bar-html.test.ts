@@ -22,3 +22,17 @@ Deno.test("appBarHtml does not include upload button when isAdmin is false", () 
     "Expected app bar HTML to omit upload-dialog-custom-element when isAdmin is false, but it was present",
   );
 });
+
+Deno.test("appBarHtml uses nav-link for home with href and app name", () => {
+  const html = appBarHtml({
+    appName: "Remix Audio",
+    pathname: "/",
+    isAdmin: false,
+  });
+
+  assert(
+    html.includes('<nav-link href="/"'),
+    "Home link should be nav-link with href",
+  );
+  assert(html.includes("Remix Audio"), "App name should be in link content");
+});
