@@ -58,6 +58,7 @@ function applyEnvelope(envelope: FragmentEnvelope): void {
   if (envelope.meta == null || envelope.meta.length === 0) {
     clearFragmentManagedMeta();
   } else {
+    clearFragmentManagedMeta();
     for (const item of envelope.meta) {
       const selector = item.property
         ? `meta[property="${item.property}"]`

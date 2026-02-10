@@ -699,6 +699,71 @@ Deno.test("NavLinkCustomElement - fragment with empty meta clears OG meta from h
   );
 });
 
+Deno.test("NavLinkCustomElement - fragment with new meta clears previous OG tags before applying", async () => {
+  setupDOMEnvironment();
+
+  const removeChildCalls: unknown[] = [];
+  const mockOgMeta = [{}, {}, {}, {}, {}];
+  const doc = globalThis.document as {
+    head: {
+      appendChild: ReturnType<typeof createMockFn>;
+      querySelector: () => null;
+      querySelectorAll: (sel: string) => unknown[];
+      removeChild: (child: unknown) => void;
+    };
+  };
+  doc.head.querySelectorAll = (sel: string) =>
+    sel === 'meta[property^="og:"]' ? mockOgMeta : [];
+  doc.head.removeChild = (child: unknown) => {
+    removeChildCalls.push(child);
+  };
+
+  globalThis.fetch = () =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          title: "Home",
+          html: "<div>home content</div>",
+          meta: [
+            { property: "og:title", content: "BoomBox" },
+            { property: "og:description", content: "Music player" },
+          ],
+        }),
+    } as Response);
+
+  const { NavLinkCustomElement } = await import(
+    "./nav-link-custom-element.ts"
+  );
+
+  const el = new NavLinkCustomElement() as unknown as
+    & InstanceType<typeof MockHTMLElement>
+    & { connectedCallback?: () => void };
+  el.setAttribute("href", "/");
+  if (
+    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
+      "function"
+  ) {
+    (el as { connectedCallback: () => void }).connectedCallback();
+  }
+
+  const clickEvent = {
+    type: "click",
+    bubbles: true,
+    preventDefault: () => {},
+  } as unknown as Event;
+  el.dispatchEvent(clickEvent);
+
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  assertEquals(
+    removeChildCalls.length,
+    5,
+    "removeChild should be called for each previous OG meta before applying new subset",
+  );
+});
+
 Deno.test("NavLinkCustomElement - fragment with styles injects critical CSS into head", async () => {
   setupDOMEnvironment();
 
