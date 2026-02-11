@@ -71,11 +71,11 @@ template.innerHTML = `
 export class UploadDialogCustomElement extends HTMLElement {
   static observedAttributes = ["class", "buttonStyle"];
 
-  private _showUploadUI = false;
-  private _isSubmitting = false;
+  #showUploadUI = false;
+  #isSubmitting = false;
   /** Selected files drive the list and submit; single source of truth. */
-  private _selectedFiles: File[] = [];
-  private _dialog: HTMLDialogElement | null = null;
+  #selectedFiles: File[] = [];
+  #dialog: HTMLDialogElement | null = null;
 
   constructor() {
     super();
@@ -86,7 +86,7 @@ export class UploadDialogCustomElement extends HTMLElement {
   connectedCallback() {
     const trigger = this.shadowRoot!.getElementById("trigger");
     if (trigger) {
-      trigger.addEventListener("click", this._onTriggerClick);
+      trigger.addEventListener("click", this.#onTriggerClick);
     }
 
     if (this.hasAttribute("buttonStyle")) {
@@ -100,9 +100,9 @@ export class UploadDialogCustomElement extends HTMLElement {
   disconnectedCallback() {
     const trigger = this.shadowRoot?.getElementById("trigger");
     if (trigger) {
-      trigger.removeEventListener("click", this._onTriggerClick);
+      trigger.removeEventListener("click", this.#onTriggerClick);
     }
-    this._close();
+    this.#close();
   }
 
   attributeChangedCallback(
@@ -119,29 +119,29 @@ export class UploadDialogCustomElement extends HTMLElement {
     }
   }
 
-  private _onTriggerClick = () => {
-    this._showUploadUI = true;
-    this._selectedFiles = [];
-    this._isSubmitting = false;
-    this._renderDialog();
+  #onTriggerClick = () => {
+    this.#showUploadUI = true;
+    this.#selectedFiles = [];
+    this.#isSubmitting = false;
+    this.#renderDialog();
   };
 
   /** Hide modal and cleanup. Called from dialog 'close' event (Escape, close button, backdrop). */
-  private _close() {
-    this._showUploadUI = false;
-    this._selectedFiles = [];
-    this._isSubmitting = false;
-    if (this._dialog?.parentNode) {
-      this._dialog.parentNode.removeChild(this._dialog);
+  #close() {
+    this.#showUploadUI = false;
+    this.#selectedFiles = [];
+    this.#isSubmitting = false;
+    if (this.#dialog?.parentNode) {
+      this.#dialog.parentNode.removeChild(this.#dialog);
     }
-    this._dialog = null;
+    this.#dialog = null;
   }
 
-  private _renderDialog() {
-    if (!this._showUploadUI || this._dialog) return;
+  #renderDialog() {
+    if (!this.#showUploadUI || this.#dialog) return;
 
     const dialog = document.createElement("dialog");
-    this._dialog = dialog;
+    this.#dialog = dialog;
 
     /** X mark icon (heroicons 24 solid). */
     const xMarkSvg =
@@ -387,7 +387,7 @@ export class UploadDialogCustomElement extends HTMLElement {
               class="upload-dialog-submit"
             >
             ${
-      this._isSubmitting
+      this.#isSubmitting
         ? '<span class="upload-dialog-loading" aria-hidden="true"></span>'
         : "Upload"
     }
@@ -401,7 +401,7 @@ export class UploadDialogCustomElement extends HTMLElement {
     dialog.showModal();
 
     dialog.addEventListener("close", () => {
-      this._close();
+      this.#close();
     });
 
     const form = dialog.querySelector("#upload-form") as HTMLFormElement;
@@ -423,11 +423,11 @@ export class UploadDialogCustomElement extends HTMLElement {
 
     const updateFileLabel = () => {
       if (!fileLabel) return;
-      const count = this._selectedFiles.length;
+      const count = this.#selectedFiles.length;
       if (count === 0) {
         fileLabel.textContent = "No files selected";
       } else if (count === 1) {
-        fileLabel.textContent = this._selectedFiles[0].name;
+        fileLabel.textContent = this.#selectedFiles[0].name;
       } else {
         fileLabel.textContent = `${count} files selected`;
       }
@@ -435,14 +435,14 @@ export class UploadDialogCustomElement extends HTMLElement {
 
     const updateSubmitState = () => {
       if (submitBtn) {
-        const disabled = this._isSubmitting || this._selectedFiles.length === 0;
+        const disabled = this.#isSubmitting || this.#selectedFiles.length === 0;
         submitBtn.disabled = disabled;
-        submitBtn.innerHTML = this._isSubmitting
+        submitBtn.innerHTML = this.#isSubmitting
           ? '<span class="upload-dialog-loading" aria-hidden="true"></span>'
           : "Upload";
       }
       if (fileInput) {
-        fileInput.disabled = this._isSubmitting;
+        fileInput.disabled = this.#isSubmitting;
       }
     };
 
@@ -451,8 +451,8 @@ export class UploadDialogCustomElement extends HTMLElement {
       listGeneration++;
       const gen = listGeneration;
       fileListEl.replaceChildren();
-      for (let i = 0; i < this._selectedFiles.length; i++) {
-        const file = this._selectedFiles[i];
+      for (let i = 0; i < this.#selectedFiles.length; i++) {
+        const file = this.#selectedFiles[i];
         const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
         const li = document.createElement("li");
         li.className = "upload-dialog-file-item";
@@ -474,7 +474,7 @@ export class UploadDialogCustomElement extends HTMLElement {
         id3Target.textContent = "Loading…";
         const index = i;
         removeBtn.addEventListener("click", () => {
-          this._selectedFiles.splice(index, 1);
+          this.#selectedFiles.splice(index, 1);
           updateFileList();
           updateFileLabel();
           updateSubmitState();
@@ -530,7 +530,7 @@ export class UploadDialogCustomElement extends HTMLElement {
 
     fileInput?.addEventListener("change", () => {
       if (fileInput.files && fileInput.files.length > 0) {
-        this._selectedFiles = Array.from(fileInput.files);
+        this.#selectedFiles = Array.from(fileInput.files);
         fileInput.value = "";
         updateFileLabel();
         updateFileList();
@@ -540,7 +540,7 @@ export class UploadDialogCustomElement extends HTMLElement {
 
     form?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      this._isSubmitting = true;
+      this.#isSubmitting = true;
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML =
@@ -549,7 +549,7 @@ export class UploadDialogCustomElement extends HTMLElement {
       if (fileInput) fileInput.disabled = true;
 
       const formData = new FormData();
-      for (const f of this._selectedFiles) {
+      for (const f of this.#selectedFiles) {
         formData.append("files", f);
       }
 
@@ -563,13 +563,13 @@ export class UploadDialogCustomElement extends HTMLElement {
           globalThis.location.href = "/";
         } else {
           console.error("Upload failed:", response.statusText);
-          this._isSubmitting = false;
-          if (this._dialog?.isConnected) updateSubmitState();
+          this.#isSubmitting = false;
+          if (this.#dialog?.isConnected) updateSubmitState();
         }
       } catch (error) {
         console.error("Upload error:", error);
-        this._isSubmitting = false;
-        if (this._dialog?.isConnected) updateSubmitState();
+        this.#isSubmitting = false;
+        if (this.#dialog?.isConnected) updateSubmitState();
       }
     });
   }
