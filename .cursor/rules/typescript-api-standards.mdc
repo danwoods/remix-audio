@@ -1,0 +1,78 @@
+---
+description: TypeScript API design, exports, JSDoc, and private fields
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# TypeScript API Standards
+
+## Exported Functions: Max 2 Args + Options Object
+
+- Public API functions take 0–2 required arguments, plus (if needed) an **options object** (max 3 total).
+- Put optional parameters in the options object.
+- A single optional param outside the options object may be acceptable if it's unlikely more will be added.
+- The options argument is the only one that may be a plain `Object`.
+- Other arguments can be objects if they're distinguishable at runtime (e.g. `Array`, `Map`, `Date`, custom class, or object with `Symbol.iterator`).
+- Function arguments may be reordered when one is a callback (e.g. `Deno.serve`, `Deno.test`, `Deno.addSignalListener`).
+
+```ts
+// ❌ BAD - too many positional args
+export function fetchTracks(db: DB, limit: number, offset: number, sort: string, filter?: Filter) {}
+
+// ✅ GOOD
+export function fetchTracks(db: DB, options?: FetchTracksOptions) {}
+```
+
+## Export Interfaces Used in Public API
+
+Export any interface used as a parameter or return type of an exported member.
+
+```ts
+// ✅ GOOD - FetchTracksOptions is exported because fetchTracks is exported
+export interface FetchTracksOptions {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  filter?: Filter;
+}
+export function fetchTracks(db: DB, options?: FetchTracksOptions) {}
+```
+
+## JSDoc
+
+- Use JSDoc for public API documentation.
+- Use **markdown** in JSDoc; do **not** use HTML tags.
+- Put code examples in markdown fenced code blocks.
+
+```ts
+/** Fetches tracks from the database.
+ *
+ * @param db - The database connection
+ * @param options - Optional query parameters
+ * @returns A promise resolving to the track list
+ *
+ * ```ts
+ * import { fetchTracks } from "./tracks.ts";
+ * const tracks = await fetchTracks(db, { limit: 10 });
+ * ```
+ */
+export async function fetchTracks(db: DB, options?: FetchTracksOptions) {}
+```
+
+## Prefer `#` Over `private`
+
+Use private fields (`#`) instead of the `private` keyword. Private fields are enforced at runtime; `private` is compile-time only.
+
+```ts
+// ❌ BAD
+class MyClass {
+  private value = 0;
+  private doThing() {}
+}
+
+// ✅ GOOD
+class MyClass {
+  #value = 0;
+  #doThing() {}
+}
+```

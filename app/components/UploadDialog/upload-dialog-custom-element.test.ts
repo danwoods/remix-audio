@@ -12,7 +12,7 @@
  *
  * 1. Element lifecycle: creation, shadow root, trigger button
  * 2. Observed attributes
- * 3. Dialog open/close behavior (when trigger clicked, dialog appended to body)
+ * 3. Dialog open/close behavior (when trigger clicked, dialog appended to shadow root)
  * 4. Native dialog API: close event cleanup; backdrop click closes the dialog
  *
  * ## Manual verification checklist
@@ -25,8 +25,9 @@
  * 5. Title: "Upload files" visible in the header.
  * 6. Close: hover shows background; Tab focus shows focus-visible ring; click closes.
  * 7. File input: styled drop zone; "No files selected" or file names; choosing files updates state.
- * 8. Submit: blue primary button; disabled when no files; hover/active states; focus-visible ring; loading spinner when submitting.
- * 9. Escape / backdrop click: still closes the dialog.
+ * 8. File list: shows names and sizes; after a moment ID3 (artist, album, title, track, cover); remove works; submit sends the listed files.
+ * 9. Submit: blue primary button; disabled when no files; hover/active states; focus-visible ring; loading spinner when submitting.
+ * 10. Escape / backdrop click: still closes the dialog.
  */
 
 import { assert, assertEquals, assertExists } from "@std/assert";
@@ -37,18 +38,19 @@ import { assert, assertEquals, assertExists } from "@std/assert";
 
 let templateHTML = "";
 const shadowRootAppendChildCalls: unknown[] = [];
+const shadowRootRemoveChildCalls: unknown[] = [];
 let mockTriggerButton: Partial<HTMLButtonElement> | null = null;
 let triggerClickHandler: (() => void) | null = null;
-let bodyAppendChildCalls: unknown[] = [];
-let bodyRemoveChildCalls: unknown[] = [];
 let dialogClickHandler: ((e: { target: unknown }) => void) | null = null;
 let dialogCloseHandler: (() => void) | null = null;
 
-/** File input mock for regression test: FormData must be built before disabling. */
+/** File input mock for regression test and file list tests. */
 let mockFileInput: {
   disabled: boolean;
   files: File[];
-  addEventListener: () => void;
+  value: string;
+  addEventListener: (type: string, fn: () => void) => void;
+  _changeHandler?: () => void;
 } | null = null;
 
 /** Form mock for regression test: stores submit handler. */
@@ -63,7 +65,12 @@ function createMockDialog() {
   const fileInput = {
     disabled: false,
     files: [] as File[],
-    addEventListener: () => {},
+    value: "",
+    addEventListener(type: string, fn: () => void) {
+      if (type === "change") {
+        (fileInput as { _changeHandler?: () => void })._changeHandler = fn;
+      }
+    },
   };
   mockFileInput = fileInput;
 
@@ -89,6 +96,27 @@ function createMockDialog() {
     innerHTML: "",
   };
 
+  const submitBtnMock = {
+    addEventListener: () => {},
+    disabled: false,
+    innerHTML: "",
+  };
+
+  const fileListChildren: unknown[] = [];
+  const fileListEl = {
+    _children: fileListChildren,
+    get children() {
+      return fileListChildren;
+    },
+    replaceChildren() {
+      fileListChildren.length = 0;
+    },
+    appendChild(child: unknown) {
+      fileListChildren.push(child);
+      return child;
+    },
+  };
+
   const dialog = {
     style: { cssText: "" },
     innerHTML: "",
@@ -106,7 +134,9 @@ function createMockDialog() {
     querySelector(sel: string) {
       if (sel === "#upload-form") return form;
       if (sel === "#files") return fileInput;
-      if (sel === "#close-btn" || sel === "#submit-btn") return genericNode;
+      if (sel === "#file-list") return fileListEl;
+      if (sel === "#close-btn") return genericNode;
+      if (sel === "#submit-btn") return submitBtnMock;
       return null;
     },
   };
@@ -121,24 +151,20 @@ function setupDOMEnvironment() {
   triggerClickHandler = null;
   dialogClickHandler = null;
   dialogCloseHandler = null;
-  bodyAppendChildCalls = [];
-  bodyRemoveChildCalls = [];
+  shadowRootAppendChildCalls.length = 0;
+  shadowRootRemoveChildCalls.length = 0;
 
   mockTriggerButton = {
     id: "trigger",
+    style: { cssText: "" } as unknown as CSSStyleDeclaration,
     addEventListener: (type: string, fn: (e?: Event) => void) => {
       if (type === "click") triggerClickHandler = fn as () => void;
     },
   };
 
   const mockBody = {
-    appendChild: (node: unknown) => {
-      bodyAppendChildCalls.push(node);
-      (node as { parentNode: unknown }).parentNode = mockBody;
-    },
-    removeChild: (node: unknown) => {
-      bodyRemoveChildCalls.push(node);
-    },
+    appendChild: () => {},
+    removeChild: () => {},
     parentNode: null as unknown as ParentNode,
   };
 
@@ -167,6 +193,63 @@ function setupDOMEnvironment() {
       if (tagName === "dialog") {
         return createMockDialog() as unknown as HTMLDialogElement;
       }
+      if (tagName === "li") {
+        const children: unknown[] = [];
+        const li = {
+          dataset: {} as Record<string, string>,
+          className: "",
+          append(...args: unknown[]) {
+            children.push(...args);
+          },
+          _children: children,
+          getAttribute(name: string) {
+            if (name === "data-file-key") return li.dataset.fileKey ?? null;
+            return null;
+          },
+          querySelector(sel: string) {
+            if (sel === "[data-id3-target]") return children[3] ?? null;
+            return null;
+          },
+        };
+        return li as unknown as HTMLElement;
+      }
+      if (tagName === "span") {
+        return {
+          className: "",
+          textContent: "",
+          addEventListener: () => {},
+        } as unknown as HTMLElement;
+      }
+      if (tagName === "div") {
+        return {
+          className: "",
+          textContent: "",
+          dataset: {} as Record<string, string>,
+          replaceChildren: () => {},
+          appendChild: () => {},
+          setAttribute: () => {},
+          querySelector: () => null,
+        } as unknown as HTMLElement;
+      }
+      if (tagName === "button") {
+        const button: {
+          type: string;
+          className: string;
+          setAttribute: () => void;
+          innerHTML: string;
+          addEventListener: (type: string, fn: () => void) => void;
+          _clickHandler?: () => void;
+        } = {
+          type: "",
+          className: "",
+          setAttribute: () => {},
+          innerHTML: "",
+          addEventListener(type: string, fn: () => void) {
+            if (type === "click") button._clickHandler = fn;
+          },
+        };
+        return button as unknown as HTMLElement;
+      }
       return {} as HTMLElement;
     },
     addEventListener: () => {},
@@ -176,19 +259,27 @@ function setupDOMEnvironment() {
 
   globalThis.HTMLElement = class HTMLElement {
     shadowRoot: ShadowRoot | null = null;
+    private _attrs: Record<string, string> = {};
 
-    hasAttribute(_name: string) {
-      return false;
+    hasAttribute(name: string) {
+      return name in this._attrs;
     }
-    getAttribute(_name: string) {
-      return null;
+    getAttribute(name: string) {
+      return this._attrs[name] ?? null;
+    }
+    setAttribute(name: string, value: string) {
+      this._attrs[name] = value;
     }
 
     attachShadow(_init: ShadowRootInit) {
       const shadow = {
         appendChild(child: unknown) {
           shadowRootAppendChildCalls.push(child);
+          (child as { parentNode: unknown }).parentNode = shadow;
           return child;
+        },
+        removeChild(child: unknown) {
+          shadowRootRemoveChildCalls.push(child);
         },
         getElementById(id: string) {
           return id === "trigger" ? mockTriggerButton : null;
@@ -239,24 +330,53 @@ Deno.test("UploadDialogCustomElement - creates shadow root with trigger button",
   assertExists(trigger);
 });
 
-Deno.test("UploadDialogCustomElement - observedAttributes includes class", () => {
+Deno.test("UploadDialogCustomElement - observedAttributes includes class and buttonStyle", () => {
   /**
-   * Tests that the element observes the class attribute for styling.
+   * Tests that the element observes class and buttonStyle for styling.
    */
   assertEquals(
     UploadDialogCustomElement.observedAttributes.includes("class"),
     true,
   );
+  assertEquals(
+    UploadDialogCustomElement.observedAttributes.includes("buttonStyle"),
+    true,
+  );
 });
 
-Deno.test("UploadDialogCustomElement - dialog close removes it from body", () => {
+Deno.test("UploadDialogCustomElement - attributeChangedCallback applies buttonStyle to trigger", () => {
+  /**
+   * Tests that when buttonStyle attribute changes, attributeChangedCallback
+   * applies the style to the trigger button (browser calls this automatically).
+   */
+  const element = new UploadDialogCustomElement();
+  element.connectedCallback();
+  const trigger = element.shadowRoot!.getElementById("trigger") as {
+    style: { cssText: string };
+  };
+  assertExists(trigger);
+  assertExists(trigger.style);
+  element.setAttribute("buttonStyle", "width: 100px; height: 50px");
+  element.attributeChangedCallback(
+    "buttonStyle",
+    "",
+    "width: 100px; height: 50px",
+  );
+  assertEquals(
+    trigger.style.cssText,
+    "width: 100px; height: 50px",
+    "trigger style should be applied from buttonStyle attribute",
+  );
+});
+
+Deno.test("UploadDialogCustomElement - dialog close removes it from shadow root", () => {
   /**
    * Tests that when the native dialog is closed (Escape, close button, or
    * backdrop click all call dialog.close()), the 'close' event runs and
-   * the dialog is removed from the body.
+   * the dialog is removed from the shadow root.
    */
-  bodyAppendChildCalls = [];
-  bodyRemoveChildCalls = [];
+  shadowRootAppendChildCalls.length = 0;
+  shadowRootRemoveChildCalls.length = 0;
   const element = new UploadDialogCustomElement();
   element.connectedCallback();
   assertExists(
@@ -265,27 +385,27 @@ Deno.test("UploadDialogCustomElement - dialog close removes it from body", () =>
   );
   triggerClickHandler!();
   assertEquals(
-    bodyAppendChildCalls.length,
-    1,
-    "dialog should be appended to body",
+    shadowRootAppendChildCalls.length,
+    2,
+    "shadow root should have template and dialog appended",
   );
-  const dialog = bodyAppendChildCalls[0] as { close: () => void };
+  const dialog = shadowRootAppendChildCalls[1] as { close: () => void };
   assertExists(dialog.close, "dialog should have close()");
   dialog.close();
   assertEquals(
-    bodyRemoveChildCalls.length,
+    shadowRootRemoveChildCalls.length,
     1,
-    "dialog should be removed from body when closed",
+    "dialog should be removed from shadow root when closed",
   );
 });
 
 Deno.test("UploadDialogCustomElement - backdrop click closes the dialog", () => {
   /**
    * Tests that clicking the backdrop (the dialog element itself) while open
-   * calls dialog.close() and removes the dialog from the body.
+   * calls dialog.close() and removes the dialog from the shadow root.
    */
-  bodyAppendChildCalls = [];
-  bodyRemoveChildCalls = [];
+  shadowRootAppendChildCalls.length = 0;
+  shadowRootRemoveChildCalls.length = 0;
   const element = new UploadDialogCustomElement();
   element.connectedCallback();
   assertExists(
@@ -298,16 +418,16 @@ Deno.test("UploadDialogCustomElement - backdrop click closes the dialog", () => 
     "dialog click handler should be registered when dialog opens",
   );
   assertEquals(
-    bodyAppendChildCalls.length,
-    1,
-    "dialog should be appended to body",
+    shadowRootAppendChildCalls.length,
+    2,
+    "shadow root should have template and dialog appended",
   );
-  const dialog = bodyAppendChildCalls[0];
+  const dialog = shadowRootAppendChildCalls[1];
   dialogClickHandler!({ target: dialog });
   assertEquals(
-    bodyRemoveChildCalls.length,
+    shadowRootRemoveChildCalls.length,
     1,
-    "dialog should be removed from body on backdrop click",
+    "dialog should be removed from shadow root on backdrop click",
   );
 });
 
@@ -317,7 +437,7 @@ Deno.test("UploadDialogCustomElement - dialog markup includes styling and title"
    * and styles (title, box-shadow, focus-visible, primary button color) to
    * guard against regressions that remove them.
    */
-  bodyAppendChildCalls = [];
+  shadowRootAppendChildCalls.length = 0;
   const element = new UploadDialogCustomElement();
   element.connectedCallback();
   assertExists(
@@ -326,11 +446,11 @@ Deno.test("UploadDialogCustomElement - dialog markup includes styling and title"
   );
   triggerClickHandler!();
   assertEquals(
-    bodyAppendChildCalls.length,
-    1,
-    "dialog should be appended to body",
+    shadowRootAppendChildCalls.length,
+    2,
+    "shadow root should have template and dialog appended",
   );
-  const dialog = bodyAppendChildCalls[0] as { innerHTML: string };
+  const dialog = shadowRootAppendChildCalls[1] as { innerHTML: string };
   const html = dialog.innerHTML;
   assert(
     html.includes("Upload files"),
@@ -350,54 +470,121 @@ Deno.test("UploadDialogCustomElement - dialog markup includes styling and title"
   );
 });
 
+Deno.test("UploadDialogCustomElement - file input restricts to audio uploads", () => {
+  /**
+   * Tests that the file input has accept="audio/*" so the file picker
+   * only offers audio file types.
+   */
+  shadowRootAppendChildCalls.length = 0;
+  const element = new UploadDialogCustomElement();
+  element.connectedCallback();
+  assertExists(
+    triggerClickHandler,
+    "trigger click handler should be registered",
+  );
+  triggerClickHandler!();
+  assertEquals(
+    shadowRootAppendChildCalls.length,
+    2,
+    "shadow root should have template and dialog appended",
+  );
+  const dialog = shadowRootAppendChildCalls[1] as { innerHTML: string };
+  const html = dialog.innerHTML;
+  assert(
+    html.includes('accept="audio/*"'),
+    'file input should have accept="audio/*" to restrict to audio uploads only',
+  );
+});
+
+Deno.test("UploadDialogCustomElement - file list updated when files selected", () => {
+  /**
+   * Tests that when the user selects files (change event), the file list
+   * is updated and submit becomes enabled.
+   */
+  shadowRootAppendChildCalls.length = 0;
+  const element = new UploadDialogCustomElement();
+  element.connectedCallback();
+  assertExists(triggerClickHandler);
+  triggerClickHandler!();
+  const dialog = shadowRootAppendChildCalls[1] as {
+    querySelector: (s: string) => { _children: unknown[] };
+  };
+  const fileListEl = dialog.querySelector("#file-list");
+  assertExists(fileListEl);
+  assertExists(mockFileInput);
+  assertExists(mockFileInput._changeHandler);
+  const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
+  mockFileInput.files = [mockFile];
+  mockFileInput._changeHandler!();
+  assertEquals(
+    fileListEl._children.length,
+    1,
+    "file list should have one item after selecting one file",
+  );
+});
+
+Deno.test("UploadDialogCustomElement - remove file updates list and disables submit", () => {
+  /**
+   * Tests that clicking remove on a file updates the list and disables
+   * submit when no files remain.
+   */
+  shadowRootAppendChildCalls.length = 0;
+  const element = new UploadDialogCustomElement();
+  element.connectedCallback();
+  assertExists(triggerClickHandler);
+  triggerClickHandler!();
+  const dialog = shadowRootAppendChildCalls[1] as {
+    querySelector: (s: string) => unknown;
+  };
+  const fileListEl = dialog.querySelector("#file-list") as {
+    _children: unknown[];
+  };
+  const submitBtn = dialog.querySelector("#submit-btn") as {
+    disabled: boolean;
+  };
+  assertExists(mockFileInput);
+  assertExists(mockFileInput._changeHandler);
+  const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
+  mockFileInput.files = [mockFile];
+  mockFileInput._changeHandler!();
+  assertEquals(fileListEl._children.length, 1);
+  const li = fileListEl._children[0] as { _children: unknown[] };
+  const removeBtn = li._children[2] as { _clickHandler?: () => void };
+  assertExists(removeBtn._clickHandler);
+  removeBtn._clickHandler!();
+  assertEquals(
+    fileListEl._children.length,
+    0,
+    "file list should be empty after remove",
+  );
+  assert(
+    submitBtn.disabled,
+    "submit should be disabled when no files remain",
+  );
+});
+
 Deno.test(
-  "UploadDialogCustomElement - regression: FormData is built before file input is disabled so fetch receives files",
+  "UploadDialogCustomElement - regression: FormData is built from selected files so fetch receives files",
   async () => {
     /**
-     * Regression test for upload 400 "No files provided". The client must
-     * build FormData(form) before setting fileInput.disabled = true, because
-     * disabled form controls are omitted from FormData.
+     * Regression test for upload 400 "No files provided". Submit builds
+     * FormData from _selectedFiles (populated when user selects files).
+     * We simulate file selection by firing the change handler, then submit.
      */
-    interface BodyWithGetAll {
-      getAll(k: string): File[];
-    }
-    let capturedBody: BodyWithGetAll | null = null;
-    const OriginalFormData = globalThis.FormData;
+    let capturedBody: FormData | null = null;
     const OriginalFetch = globalThis.fetch;
-
-    class MockFormData {
-      constructor(form: unknown) {
-        const f = form as {
-          querySelector: (s: string) => { disabled: boolean; files: File[] };
-        };
-        const input = f.querySelector("#files");
-        const disabled = input?.disabled ?? true;
-        const files = input?.files ?? [];
-        const list = Array.isArray(files) ? files : [...files];
-        (this as unknown as { _getAll: (k: string) => File[] })._getAll = (
-          k: string,
-        ) => (k === "files" && !disabled ? list : []);
-      }
-      getAll(k: string): File[] {
-        return (this as unknown as { _getAll: (k: string) => File[] })._getAll(
-          k,
-        );
-      }
-    }
-    (globalThis as { FormData: typeof FormData }).FormData =
-      MockFormData as unknown as typeof FormData;
 
     (globalThis as { fetch: typeof fetch }).fetch = function (
       _url: unknown,
       init?: RequestInit,
     ) {
-      capturedBody = (init?.body as BodyWithGetAll) ?? null;
+      capturedBody = (init?.body as FormData) ?? null;
       return Promise.resolve(
         new Response(null, { status: 303, headers: { Location: "/" } }),
       );
     };
 
-    bodyAppendChildCalls = [];
+    shadowRootAppendChildCalls.length = 0;
     const element = new UploadDialogCustomElement();
     element.connectedCallback();
     assertExists(triggerClickHandler);
@@ -409,7 +596,13 @@ Deno.test(
     assertExists(mockFileInput, "file input should exist");
     const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
     mockFileInput.files = [mockFile];
-    mockFileInput.disabled = false;
+    mockFileInput.value = "";
+    assertExists(
+      mockFileInput._changeHandler,
+      "change handler should be registered",
+    );
+    mockFileInput._changeHandler!();
+
     await mockFormWithSubmit!._submitHandler!({
       preventDefault: () => {},
     } as Event);
@@ -418,14 +611,13 @@ Deno.test(
       capturedBody,
       "fetch should be called with body",
     );
-    const body = capturedBody as BodyWithGetAll;
+    const body = capturedBody as FormData;
     assertEquals(
       body.getAll("files").length,
       1,
-      "FormData passed to fetch must include files (build FormData before disabling file input)",
+      "FormData passed to fetch must include selected files",
     );
 
-    (globalThis as { FormData: typeof FormData }).FormData = OriginalFormData;
     (globalThis as { fetch: typeof fetch }).fetch = OriginalFetch;
   },
 );

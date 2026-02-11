@@ -13,6 +13,10 @@ import { handleIndexHtml } from "./handlers/index.html.ts";
 import { loadEnv } from "./utils/loadEnv.ts";
 import { handleAlbumCover } from "./handlers/album.cover.ts";
 import { handleAlbumHtml } from "./handlers/album.html.ts";
+import { createLogger } from "../app/util/logger.ts";
+
+// Create logger instance for server
+const logger = createLogger("Server");
 
 // --- Environment & router setup ---
 await loadEnv();
@@ -50,6 +54,7 @@ console.log(`🔊 BoomBox server running on http://localhost:${port}`);
 
 Deno.serve({ port }, async (req: Request) => {
   const url = new URL(req.url);
+  logger.debug("Request URL", { url: url.toString() });
 
   // Static assets from build directory (CORS enabled)
   if (url.pathname.startsWith("/build/")) {
@@ -61,7 +66,7 @@ Deno.serve({ port }, async (req: Request) => {
         headers: { "Content-Type": contentType },
       });
     } catch (error) {
-      console.error(`Failed to serve static file ${url.pathname}:`, error);
+      logger.error(`Failed to serve static file ${url.pathname}:`, error);
       return new Response("Not Found", {
         status: 404,
       });
@@ -77,8 +82,11 @@ Deno.serve({ port }, async (req: Request) => {
       return new Response(file, {
         headers: { "Content-Type": contentType },
       });
-    } catch {
-      return new Response("Not Found", { status: 404 });
+    } catch (error) {
+      logger.error(`Failed to serve static file ${url.pathname}:`, error);
+      return new Response("Not Found", {
+        status: 404,
+      });
     }
   }
 
@@ -89,8 +97,11 @@ Deno.serve({ port }, async (req: Request) => {
       return new Response(file, {
         headers: { "Content-Type": "image/x-icon" },
       });
-    } catch {
-      return new Response("Not Found", { status: 404 });
+    } catch (error) {
+      logger.error(`Failed to serve static file ${url.pathname}:`, error);
+      return new Response("Not Found", {
+        status: 404,
+      });
     }
   }
 
@@ -101,7 +112,8 @@ Deno.serve({ port }, async (req: Request) => {
       return new Response(file, {
         headers: { "Content-Type": "text/css" },
       });
-    } catch {
+    } catch (error) {
+      logger.error(`Failed to serve static file ${url.pathname}:`, error);
       return new Response("Not Found", {
         status: 404,
       });
