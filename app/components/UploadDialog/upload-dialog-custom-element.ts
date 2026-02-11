@@ -1,8 +1,9 @@
 /** @file Custom element for the upload dialog.
  *
- * Renders a trigger button that opens a modal for file uploads. The modal is
- * appended to document.body (like the original FilePicker) so document CSS
- * (daisyUI modal, btn, etc.) applies. Uses heroicons-style SVGs for plus and close.
+ * Renders a trigger button that opens a modal for file uploads. Uses the native
+ * <dialog> API (showModal() / close()) for focus trapping, Escape handling, and
+ * ::backdrop. The dialog is appended to document.body so document-level styles
+ * apply. Uses heroicons-style SVGs for plus and close.
  */
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
@@ -11,7 +12,7 @@ const template = document.createElement("template");
 
 /** Plus circle icon (heroicons 24 solid). */
 const plusCircleSvg =
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 9a.75.75 0 0 0-1.5 0v2.25H9a.75.75 0 0 0 0 1.5h2.25V15a.75.75 0 0 0 1.5 0v-2.25H15a.75.75 0 0 0 0-1.5h-2.25V9Z" clip-rule="evenodd" /></svg>`;
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 9a.75.75 0 0 0-1.5 0v2.25H9a.75.75 0 0 0 0 1.5h2.25V15a.75.75 0 0 0 1.5 0v-2.25H15a.75.75 0 0 0 0-1.5h-2.25V9Z" clip-rule="evenodd" /></svg>`;
 
 template.innerHTML = `
   <style>
@@ -33,6 +34,10 @@ template.innerHTML = `
     button:focus {
       outline: none;
     }
+    #trigger svg {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
   </style>
   <button type="button" aria-label="add files" id="trigger">
     ${plusCircleSvg}
@@ -45,14 +50,14 @@ template.innerHTML = `
  * Custom element for the upload dialog.
  *
  * Provides a trigger button that opens a modal for selecting and uploading files.
- * The modal is rendered into document.body so document-level styles (daisyUI)
- * apply. Supports optional trigger button classes via the `class` attribute.
+ * The modal is rendered into document.body so document-level styles apply.
+ * Supports optional trigger styling via the `class` and `buttonStyle` attributes.
  *
  * @customElement upload-dialog-custom-element
  *
  * @example
  * ```html
- * <upload-dialog-custom-element class="btn btn-ghost btn-circle max-md:hidden"></upload-dialog-custom-element>
+ * <upload-dialog-custom-element></upload-dialog-custom-element>
  * ```
  */
 export class UploadDialogCustomElement extends HTMLElement {
@@ -61,8 +66,7 @@ export class UploadDialogCustomElement extends HTMLElement {
   private _showUploadUI = false;
   private _isSubmitting = false;
   private _hasDroppedFiles = false;
-  private _dialogContainer: HTMLDivElement | null = null;
-  private _keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _dialog: HTMLDialogElement | null = null;
 
   constructor() {
     super();
@@ -108,81 +112,239 @@ export class UploadDialogCustomElement extends HTMLElement {
     this._renderDialog();
   };
 
-  /** Hide modal and cleanup. */
+  /** Hide modal and cleanup. Called from dialog 'close' event (Escape, close button, backdrop). */
   private _close() {
-    if (this._keydownHandler) {
-      document.removeEventListener("keydown", this._keydownHandler);
-      this._keydownHandler = null;
-    }
     this._showUploadUI = false;
     this._hasDroppedFiles = false;
     this._isSubmitting = false;
-    if (this._dialogContainer?.parentNode) {
-      this._dialogContainer.parentNode.removeChild(this._dialogContainer);
+    if (this._dialog?.parentNode) {
+      this._dialog.parentNode.removeChild(this._dialog);
     }
-    this._dialogContainer = null;
+    this._dialog = null;
   }
 
   private _renderDialog() {
-    if (!this._showUploadUI || this._dialogContainer) return;
+    if (!this._showUploadUI || this._dialog) return;
 
-    const container = document.createElement("div");
-    this._dialogContainer = container;
-    container.style.cssText =
-      "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,0.5);";
+    const dialog = document.createElement("dialog");
+    this._dialog = dialog;
 
     /** X mark icon (heroicons 24 solid). */
     const xMarkSvg =
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-4"><path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>`;
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>`;
 
-    container.innerHTML = `
-      <dialog open class="modal" style="margin:0 auto;max-width:min(32rem,90vw);width:100%;position:relative;">
-        <form method="post" enctype="multipart/form-data" id="upload-form">
-          <div class="modal-box bg-base-300 flex flex-col justify-center rounded">
-            <div class="flex justify-end">
-              <button class="btn" type="button" id="close-btn" aria-label="close">${xMarkSvg}</button>
-            </div>
-            <div class="p-4">
+    dialog.innerHTML = `
+      <style>
+        dialog {
+          margin: 0 auto;
+          max-width: min(32rem, 90vw);
+          width: 100%;
+          position: relative;
+          font-family: inherit;
+          color: #fff;
+          background: transparent;
+          border: none;
+          padding: 0;
+        }
+        dialog::backdrop {
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(4px);
+        }
+        .upload-dialog-box {
+          background: #121212;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 0.5rem;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 1.25rem 1.5rem;
+          overflow: hidden;
+        }
+        .upload-dialog-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .upload-dialog-title {
+          font-size: 1.125rem;
+          font-weight: 400;
+          margin: 0;
+        }
+        .upload-dialog-close-btn {
+          background: transparent;
+          border: none;
+          color: inherit;
+          cursor: pointer;
+          padding: 0.5rem;
+          border-radius: 0.25rem;
+          transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .upload-dialog-close-btn:hover {
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .upload-dialog-close-btn:focus {
+          outline: none;
+        }
+        .upload-dialog-close-btn:focus-visible {
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
+        }
+        .upload-dialog-close-btn svg {
+          width: 1rem;
+          height: 1rem;
+        }
+        .upload-dialog-body {
+          padding: 0;
+        }
+        .upload-dialog-drop-zone {
+          position: relative;
+          display: block;
+          padding: 1.25rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 2px dashed rgba(255, 255, 255, 0.2);
+          border-radius: 0.5rem;
+          text-align: center;
+          cursor: pointer;
+          transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+            background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .upload-dialog-drop-zone:hover {
+          border-color: rgba(255, 255, 255, 0.35);
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .upload-dialog-file-input {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          cursor: pointer;
+        }
+        .upload-dialog-file-label {
+          display: block;
+          font-size: 0.875rem;
+          color: rgba(255, 255, 255, 0.7);
+          margin-top: 0.25rem;
+        }
+        .upload-dialog-footer {
+          margin-top: 1.5rem;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .upload-dialog-submit {
+          padding: 0.5rem 1.25rem;
+          background: var(--color-blue-500, #3b82f6);
+          color: #fff;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-family: inherit;
+          font-size: 1rem;
+          transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1),
+            transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .upload-dialog-submit:hover:not(:disabled) {
+          background: oklch(67% 0.214 259.815);
+        }
+        .upload-dialog-submit:active:not(:disabled) {
+          transform: scale(0.98);
+        }
+        .upload-dialog-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .upload-dialog-submit:focus {
+          outline: none;
+        }
+        .upload-dialog-submit:focus-visible {
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
+        }
+        @keyframes upload-dialog-spin {
+          to { transform: rotate(360deg); }
+        }
+        .upload-dialog-loading {
+          display: inline-block;
+          width: 1rem;
+          height: 1rem;
+          border: 2px solid currentColor;
+          border-right-color: transparent;
+          border-radius: 50%;
+          animation: upload-dialog-spin 0.6s linear infinite;
+          vertical-align: middle;
+        }
+      </style>
+      <form method="post" enctype="multipart/form-data" id="upload-form">
+        <div class="upload-dialog-box">
+          <div class="upload-dialog-header">
+            <h2 class="upload-dialog-title" id="upload-dialog-title">Upload files</h2>
+            <button class="upload-dialog-close-btn" type="button" id="close-btn" aria-label="close">${xMarkSvg}</button>
+          </div>
+          <div class="upload-dialog-body">
+            <div class="upload-dialog-drop-zone">
               <input
                 id="files"
                 type="file"
                 name="files"
                 multiple
-                class="file-input w-full"
+                class="upload-dialog-file-input"
               />
+              <span aria-hidden="true">Choose files</span>
+              <span class="upload-dialog-file-label" id="file-label">No files selected</span>
             </div>
+          </div>
+          <div class="upload-dialog-footer">
             <button
               type="submit"
               id="submit-btn"
-              class="btn mt-6"
+              class="upload-dialog-submit"
             >
-              ${
+            ${
       this._isSubmitting
-        ? '<span class="loading loading-spinner"></span>'
+        ? '<span class="upload-dialog-loading" aria-hidden="true"></span>'
         : "Upload"
     }
             </button>
           </div>
-        </form>
-      </dialog>
+        </div>
+      </form>
     `;
 
-    document.body.appendChild(container);
+    document.body.appendChild(dialog);
+    dialog.showModal();
 
-    const form = container.querySelector("#upload-form") as HTMLFormElement;
-    const closeBtn = container.querySelector("#close-btn") as HTMLButtonElement;
-    const fileInput = container.querySelector("#files") as HTMLInputElement;
-    const submitBtn = container.querySelector(
+    dialog.addEventListener("close", () => {
+      this._close();
+    });
+
+    const form = dialog.querySelector("#upload-form") as HTMLFormElement;
+    const closeBtn = dialog.querySelector("#close-btn") as HTMLButtonElement;
+    const fileInput = dialog.querySelector("#files") as HTMLInputElement;
+    const fileLabel = dialog.querySelector("#file-label") as HTMLSpanElement;
+    const submitBtn = dialog.querySelector(
       "#submit-btn",
     ) as HTMLButtonElement;
+
+    const updateFileLabel = () => {
+      if (!fileLabel || !fileInput?.files) return;
+      const count = fileInput.files.length;
+      if (count === 0) {
+        fileLabel.textContent = "No files selected";
+      } else if (count === 1) {
+        fileLabel.textContent = fileInput.files[0].name;
+      } else {
+        fileLabel.textContent = `${count} files selected`;
+      }
+    };
 
     const updateSubmitState = () => {
       if (submitBtn) {
         const disabled = this._isSubmitting || !this._hasDroppedFiles;
         submitBtn.disabled = disabled;
-        submitBtn.classList.toggle("disabled", disabled);
         submitBtn.innerHTML = this._isSubmitting
-          ? '<span class="loading loading-spinner"></span>'
+          ? '<span class="upload-dialog-loading" aria-hidden="true"></span>'
           : "Upload";
       }
       if (fileInput) {
@@ -191,25 +353,22 @@ export class UploadDialogCustomElement extends HTMLElement {
     };
 
     updateSubmitState();
+    updateFileLabel();
 
-    const close = () => {
-      this._close();
-    };
-
-    closeBtn?.addEventListener("click", close);
-
-    container.addEventListener("click", (e) => {
-      if (e.target === container) close();
+    closeBtn?.addEventListener("click", () => {
+      dialog.close();
     });
 
-    this._keydownHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("keydown", this._keydownHandler);
+    dialog.addEventListener("click", (e) => {
+      if (e.target === dialog) {
+        dialog.close();
+      }
+    });
 
     fileInput?.addEventListener("change", () => {
       if (fileInput.files && fileInput.files.length > 0) {
         this._hasDroppedFiles = true;
+        updateFileLabel();
         updateSubmitState();
       }
     });
@@ -219,8 +378,8 @@ export class UploadDialogCustomElement extends HTMLElement {
       this._isSubmitting = true;
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.classList.add("disabled");
-        submitBtn.innerHTML = '<span class="loading loading-spinner"></span>';
+        submitBtn.innerHTML =
+          '<span class="upload-dialog-loading" aria-hidden="true"></span>';
       }
       // Build FormData before disabling the file input: disabled controls are
       // not successful and are omitted from FormData.

@@ -13,10 +13,23 @@
  * 1. Element lifecycle: creation, shadow root, trigger button
  * 2. Observed attributes
  * 3. Dialog open/close behavior (when trigger clicked, dialog appended to body)
- * 4. Escape key and backdrop click close the dialog
+ * 4. Native dialog API: close event cleanup; backdrop click closes the dialog
+ *
+ * ## Manual verification checklist
+ *
+ * After changing dialog styling or markup, run the app and confirm:
+ * 1. Start app: `deno task start` (or `dev`), open in a browser.
+ * 2. Open the upload dialog (click the upload trigger).
+ * 3. Backdrop: darker overlay; optional blur.
+ * 4. Panel: dark background (#121212), white text, visible shadow and border.
+ * 5. Title: "Upload files" visible in the header.
+ * 6. Close: hover shows background; Tab focus shows focus-visible ring; click closes.
+ * 7. File input: styled drop zone; "No files selected" or file names; choosing files updates state.
+ * 8. Submit: blue primary button; disabled when no files; hover/active states; focus-visible ring; loading spinner when submitting.
+ * 9. Escape / backdrop click: still closes the dialog.
  */
 
-import { assertEquals, assertExists } from "@std/assert";
+import { assert, assertEquals, assertExists } from "@std/assert";
 
 // ============================================================================
 // MOCK STATE
@@ -26,10 +39,10 @@ let templateHTML = "";
 const shadowRootAppendChildCalls: unknown[] = [];
 let mockTriggerButton: Partial<HTMLButtonElement> | null = null;
 let triggerClickHandler: (() => void) | null = null;
-let documentKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 let bodyAppendChildCalls: unknown[] = [];
 let bodyRemoveChildCalls: unknown[] = [];
-let containerClickHandler: ((e: { target: unknown }) => void) | null = null;
+let dialogClickHandler: ((e: { target: unknown }) => void) | null = null;
+let dialogCloseHandler: (() => void) | null = null;
 
 /** File input mock for regression test: FormData must be built before disabling. */
 let mockFileInput: {
@@ -46,7 +59,7 @@ let mockFormWithSubmit: {
   action: string;
 } | null = null;
 
-function createMockContainer() {
+function createMockDialog() {
   const fileInput = {
     disabled: false,
     files: [] as File[],
@@ -76,21 +89,28 @@ function createMockContainer() {
     innerHTML: "",
   };
 
-  const container = {
+  const dialog = {
     style: { cssText: "" },
     innerHTML: "",
     parentNode: null as unknown as ParentNode,
-    addEventListener: (type: string, fn: (e: { target: unknown }) => void) => {
-      if (type === "click") containerClickHandler = fn;
+    addEventListener(type: string, fn: (e?: { target: unknown }) => void) {
+      if (type === "click") {
+        dialogClickHandler = fn as (e: { target: unknown }) => void;
+      }
+      if (type === "close") dialogCloseHandler = fn as () => void;
     },
-    querySelector: (sel: string) => {
+    close() {
+      if (dialogCloseHandler) dialogCloseHandler();
+    },
+    showModal: () => {},
+    querySelector(sel: string) {
       if (sel === "#upload-form") return form;
       if (sel === "#files") return fileInput;
       if (sel === "#close-btn" || sel === "#submit-btn") return genericNode;
       return null;
     },
   };
-  return container;
+  return dialog;
 }
 
 // ============================================================================
@@ -99,8 +119,8 @@ function createMockContainer() {
 
 function setupDOMEnvironment() {
   triggerClickHandler = null;
-  documentKeydownHandler = null;
-  containerClickHandler = null;
+  dialogClickHandler = null;
+  dialogCloseHandler = null;
   bodyAppendChildCalls = [];
   bodyRemoveChildCalls = [];
 
@@ -144,20 +164,13 @@ function setupDOMEnvironment() {
           content: mockTemplateContent,
         } as unknown as HTMLTemplateElement;
       }
-      if (tagName === "div") {
-        return createMockContainer() as unknown as HTMLDivElement;
+      if (tagName === "dialog") {
+        return createMockDialog() as unknown as HTMLDialogElement;
       }
       return {} as HTMLElement;
     },
-    addEventListener: (type: string, handler: (e: KeyboardEvent) => void) => {
-      if (type === "keydown") documentKeydownHandler = handler;
-    },
-    removeEventListener: (
-      _type: string,
-      handler: (e: KeyboardEvent) => void,
-    ) => {
-      if (handler === documentKeydownHandler) documentKeydownHandler = null;
-    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
     body: mockBody,
   } as unknown as Document;
 
@@ -236,10 +249,11 @@ Deno.test("UploadDialogCustomElement - observedAttributes includes class", () =>
   );
 });
 
-Deno.test("UploadDialogCustomElement - Escape key closes the dialog", () => {
+Deno.test("UploadDialogCustomElement - dialog close removes it from body", () => {
   /**
-   * Tests that pressing Escape while the dialog is open closes it and
-   * removes the dialog container from the body.
+   * Tests that when the native dialog is closed (Escape, close button, or
+   * backdrop click all call dialog.close()), the 'close' event runs and
+   * the dialog is removed from the body.
    */
   bodyAppendChildCalls = [];
   bodyRemoveChildCalls = [];
@@ -250,27 +264,25 @@ Deno.test("UploadDialogCustomElement - Escape key closes the dialog", () => {
     "trigger click handler should be registered",
   );
   triggerClickHandler!();
-  assertExists(
-    documentKeydownHandler,
-    "keydown handler should be registered when dialog opens",
-  );
   assertEquals(
     bodyAppendChildCalls.length,
     1,
-    "dialog container should be appended to body",
+    "dialog should be appended to body",
   );
-  documentKeydownHandler!({ key: "Escape" } as KeyboardEvent);
+  const dialog = bodyAppendChildCalls[0] as { close: () => void };
+  assertExists(dialog.close, "dialog should have close()");
+  dialog.close();
   assertEquals(
     bodyRemoveChildCalls.length,
     1,
-    "dialog container should be removed from body on Escape",
+    "dialog should be removed from body when closed",
   );
 });
 
 Deno.test("UploadDialogCustomElement - backdrop click closes the dialog", () => {
   /**
-   * Tests that clicking the backdrop (container) while the dialog is open
-   * closes it and removes the dialog container from the body.
+   * Tests that clicking the backdrop (the dialog element itself) while open
+   * calls dialog.close() and removes the dialog from the body.
    */
   bodyAppendChildCalls = [];
   bodyRemoveChildCalls = [];
@@ -282,20 +294,59 @@ Deno.test("UploadDialogCustomElement - backdrop click closes the dialog", () => 
   );
   triggerClickHandler!();
   assertExists(
-    containerClickHandler,
-    "container click handler should be registered when dialog opens",
+    dialogClickHandler,
+    "dialog click handler should be registered when dialog opens",
   );
   assertEquals(
     bodyAppendChildCalls.length,
     1,
-    "dialog container should be appended to body",
+    "dialog should be appended to body",
   );
-  const container = bodyAppendChildCalls[0];
-  containerClickHandler!({ target: container });
+  const dialog = bodyAppendChildCalls[0];
+  dialogClickHandler!({ target: dialog });
   assertEquals(
     bodyRemoveChildCalls.length,
     1,
-    "dialog container should be removed from body on backdrop click",
+    "dialog should be removed from body on backdrop click",
+  );
+});
+
+Deno.test("UploadDialogCustomElement - dialog markup includes styling and title", () => {
+  /**
+   * Asserts that the generated dialog template includes the expected structure
+   * and styles (title, box-shadow, focus-visible, primary button color) to
+   * guard against regressions that remove them.
+   */
+  bodyAppendChildCalls = [];
+  const element = new UploadDialogCustomElement();
+  element.connectedCallback();
+  assertExists(
+    triggerClickHandler,
+    "trigger click handler should be registered",
+  );
+  triggerClickHandler!();
+  assertEquals(
+    bodyAppendChildCalls.length,
+    1,
+    "dialog should be appended to body",
+  );
+  const dialog = bodyAppendChildCalls[0] as { innerHTML: string };
+  const html = dialog.innerHTML;
+  assert(
+    html.includes("Upload files"),
+    "dialog markup should include title 'Upload files'",
+  );
+  assert(
+    html.includes("box-shadow"),
+    "dialog markup should include box-shadow in styles",
+  );
+  assert(
+    html.includes("focus-visible"),
+    "dialog markup should include focus-visible in styles",
+  );
+  assert(
+    html.includes("--color-blue-500") || html.includes("#3b82f6"),
+    "dialog markup should include primary button color (--color-blue-500 or fallback)",
   );
 });
 
