@@ -1,10 +1,11 @@
-/** @file Browser-only ID3 (audio metadata) for File objects.
+/** @file Browser-only ID3 (audio metadata) for File objects and URLs.
  *
  * Uses id3js only (zero Node deps, no music-metadata). Safe to import from
  * client bundle; does not pull in node:stream or music-metadata.
+ * Exports getID3TagsFromFile and getID3TagsFromURL.
  */
 
-import { fromFile } from "id3js";
+import { fromFile, fromUrl } from "id3js";
 
 /** Normalized ID3 tags (same shape as {@linkcode ../util/id3.ts ID3Tags}). */
 export type ID3Tags = {
@@ -37,6 +38,46 @@ function imageValueToDataUrl(
   return `data:${mime};base64,${btoa(binaryString)}`;
 }
 
+/** Raw tag shape from id3js (fromFile or fromUrl). */
+type RawTag = {
+  title?: string | null;
+  album?: string | null;
+  artist?: string | null;
+  track?: number | string | null;
+  images?: Array<{ mime?: string | null; data?: ArrayBuffer }> | null;
+};
+
+function normalizeTag(tag: RawTag): ID3Tags {
+  const title = (tag.title ?? "").trim() || "Unknown";
+  const album = (tag.album ?? "").trim() || "Unknown";
+  const artist = (tag.artist ?? "").trim() || "Unknown";
+
+  let trackNumber = 0;
+  if (tag.track != null) {
+    const t = tag.track;
+    trackNumber = typeof t === "number" ? t : parseInt(String(t), 10) || 0;
+  }
+
+  let image: string | undefined;
+  if (Array.isArray(tag.images) && tag.images.length > 0) {
+    const first = tag.images[0];
+    if (first?.data) {
+      image = imageValueToDataUrl({
+        mime: first.mime ?? null,
+        data: first.data,
+      });
+    }
+  }
+
+  return {
+    title,
+    album,
+    trackNumber,
+    artist,
+    image,
+  };
+}
+
 /**
  * Get normalized ID3 tags from a File in the browser.
  * BROWSER-ONLY: uses id3js.fromFile. In non-browser environments returns null.
@@ -53,35 +94,31 @@ export const getID3TagsFromFile = async (
   try {
     const tag = await fromFile(file);
     if (!tag) return null;
+    return normalizeTag(tag as RawTag);
+  } catch {
+    return null;
+  }
+};
 
-    const title = (tag.title ?? "").trim() || "Unknown";
-    const album = (tag.album ?? "").trim() || "Unknown";
-    const artist = (tag.artist ?? "").trim() || "Unknown";
-
-    let trackNumber = 0;
-    if ("track" in tag && tag.track != null) {
-      const t = tag.track;
-      trackNumber = typeof t === "number" ? t : parseInt(String(t), 10) || 0;
-    }
-
-    let image: string | undefined;
-    if ("images" in tag && Array.isArray(tag.images) && tag.images.length > 0) {
-      const first = tag.images[0];
-      if (first?.data) {
-        image = imageValueToDataUrl({
-          mime: first.mime ?? null,
-          data: first.data,
-        });
-      }
-    }
-
-    return {
-      title,
-      album,
-      trackNumber,
-      artist,
-      image,
-    };
+/**
+ * Get normalized ID3 tags from an audio file URL in the browser.
+ * BROWSER-ONLY: uses id3js.fromUrl. In non-browser environments returns null.
+ * Fetches the URL and parses ID3 metadata (title, artist, album, cover art).
+ *
+ * @param url - URL of the audio file (e.g. S3 track URL). Must be CORS-enabled
+ *   if the file is on a different origin.
+ * @returns ID3Tags or null if not in browser, parse fails, or fetch fails
+ */
+export const getID3TagsFromURL = async (
+  url: string,
+): Promise<ID3Tags | null> => {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return null;
+  }
+  try {
+    const tag = await fromUrl(encodeURI(url));
+    if (!tag) return null;
+    return normalizeTag(tag as RawTag);
   } catch {
     return null;
   }

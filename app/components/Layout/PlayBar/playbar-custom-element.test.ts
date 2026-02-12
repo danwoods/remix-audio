@@ -56,6 +56,30 @@
 
 import { assert, assertEquals, assertExists } from "@std/assert";
 
+// Polyfill MediaMetadata for Deno (needed when Media Session API is mocked)
+if (typeof globalThis.MediaMetadata === "undefined") {
+  (globalThis as unknown as { MediaMetadata: typeof MediaMetadata })
+    .MediaMetadata = class MediaMetadata {
+      title: string;
+      artist: string;
+      album: string;
+      artwork: MediaImage[];
+      constructor(
+        init?: {
+          title?: string;
+          artist?: string;
+          album?: string;
+          artwork?: MediaImage[];
+        },
+      ) {
+        this.title = init?.title ?? "";
+        this.artist = init?.artist ?? "";
+        this.album = init?.album ?? "";
+        this.artwork = init?.artwork ?? [];
+      }
+    };
+}
+
 // ============================================================================
 // MOCK STATE MANAGEMENT
 // ============================================================================
@@ -1878,6 +1902,69 @@ Deno.test("PlaybarCustomElement - should set audio currentTime when seek event i
     seekTime,
     "Audio currentTime should be set to seek event detail.time",
   );
+});
+
+Deno.test("PlaybarCustomElement - seekAudioBy is no-op when duration is not finite", async () => {
+  /**
+   * Tests that when Media Session triggers seek (e.g. lock screen forward),
+   * and duration is not yet finite (e.g. during loading), seekAudioBy returns
+   * early without resetting currentTime to 0.
+   */
+  const actionHandlers: Record<string, ((details?: unknown) => void) | null> =
+    {};
+  const mockMediaSession = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler(
+      action: string,
+      handler: ((details?: unknown) => void) | null,
+    ) {
+      actionHandlers[action] = handler;
+    },
+    setPositionState: () => {},
+  };
+  const origNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...origNavigator, mediaSession: mockMediaSession },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const element = createTestElement();
+    element.connectedCallback();
+    element.setAttribute(
+      "data-current-track-url",
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert(audioElement !== null);
+    const initialCurrentTime = 50;
+    (audioElement as { currentTime: number }).currentTime = initialCurrentTime;
+    Object.defineProperty(audioElement, "duration", {
+      get: () => NaN,
+      configurable: true,
+    });
+
+    const seekForwardHandler = actionHandlers["seekforward"];
+    assert(
+      seekForwardHandler !== null && typeof seekForwardHandler === "function",
+    );
+    seekForwardHandler({ seekOffset: 10 });
+
+    assertEquals(
+      (audioElement as { currentTime: number }).currentTime,
+      initialCurrentTime,
+      "currentTime should be unchanged when duration is NaN",
+    );
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  }
 });
 
 Deno.test("PlaybarCustomElement - should handle play() errors gracefully", async () => {

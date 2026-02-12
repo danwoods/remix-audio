@@ -2,8 +2,15 @@
 
 import {
   getAllAlbumTracks,
+  getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
 } from "../../../util/track.ts";
+import { getID3TagsFromURL } from "../../../util/id3.browser.ts";
+import {
+  type MediaSessionCallbacks,
+  MediaSessionController,
+  type MediaSessionMetadata,
+} from "../../../util/media-session.ts";
 import "../../../icons/play/index.ts";
 import "../../../icons/pause/index.ts";
 import "../../../icons/prev/index.ts";
@@ -211,6 +218,8 @@ template.innerHTML = `
  * - Parses track information from the URL format: `{number}__{name}.{ext}`
  * - Updates the UI when attributes change (including progress bar on timeupdate)
  * - Hides itself when no track is set (using `translate-y-full` class)
+ * - Integrates with the Media Session API for lock screen / notification controls
+ *   (play, pause, next, previous, seek), using ID3 tags and album cover from track URL
  *
  * All player logic is self-contained within this element. External code should
  * control playback by setting attributes, not by calling methods.
@@ -245,6 +254,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private boundHandlePlayNext: (event: Event) => void;
   private boundHandlePlayPrev: (event: Event) => void;
   private boundHandleSeek: (event: Event) => void;
+  private mediaSession: MediaSessionController | null = null;
 
   constructor() {
     super();
@@ -262,6 +272,9 @@ export class PlaybarCustomElement extends HTMLElement {
 
   connectedCallback() {
     this.createAudioElement();
+    this.mediaSession = new MediaSessionController(
+      this.createMediaSessionCallbacks(),
+    );
     this.updateAttributes();
     this.render();
     // Listen for play-toggle event from player-controls-custom-element
@@ -274,6 +287,8 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.mediaSession?.destroy();
+    this.mediaSession = null;
     // Remove event listeners on disconnect
     this.removeEventListener("play-toggle", this.boundHandlePlayToggle);
     this.removeEventListener("play-next", this.boundHandlePlayNext);
@@ -359,12 +374,30 @@ export class PlaybarCustomElement extends HTMLElement {
     }
   }
 
+  private createMediaSessionCallbacks(): MediaSessionCallbacks {
+    return {
+      onPlay: () => this.playToggle(this.currentTrackUrl ?? undefined),
+      onPause: () => this.pause(),
+      onStop: () => this.playToggle(),
+      onNextTrack: () => this.playNext(),
+      onPreviousTrack: () => this.playPrev(),
+      onSeekBackward: (d) => this.seekAudioBy(-d.seekOffset),
+      onSeekForward: (d) => this.seekAudioBy(d.seekOffset),
+      onSeekTo: (d) => {
+        if (this.audioElement) {
+          this.audioElement.currentTime = d.seekTime;
+        }
+      },
+    };
+  }
+
   private updateAudioSource() {
     if (!this.audioElement) return;
 
     if (this.currentTrackUrl) {
       this.audioElement.src = this.currentTrackUrl;
       this.nextTrackLoaded = false;
+      this.updateMediaSessionFromTrack(this.currentTrackUrl);
       // After setting source, update playback state when metadata is loaded
       const handleLoadedMetadata = () => {
         // Check current playing state, not the captured one
@@ -384,13 +417,57 @@ export class PlaybarCustomElement extends HTMLElement {
     } else {
       this.audioElement.src = "";
       this.audioElement.pause();
+      this.mediaSession?.updateMetadata(null);
+      this.mediaSession?.updatePlaybackState("none");
     }
+  }
+
+  /**
+   * Fetches ID3 tags from the track URL and updates Media Session metadata.
+   * Used for lock screen / notification controls (title, artist, album, artwork).
+   * Guards against race where the user switches tracks before the fetch completes.
+   */
+  private async updateMediaSessionFromTrack(trackUrl: string): Promise<void> {
+    const tags = await getID3TagsFromURL(trackUrl);
+    if (this.currentTrackUrl !== trackUrl) return;
+
+    let albumUrl: string | null = null;
+    try {
+      const data = getParentDataFromTrackUrl(trackUrl);
+      albumUrl = data.albumUrl;
+    } catch {
+      // Invalid URL format
+    }
+
+    const metadata: MediaSessionMetadata = {
+      title: tags?.title ?? "Unknown",
+      artist: tags?.artist ?? "Unknown",
+      album: tags?.album ?? "Unknown",
+      artworkUrl: tags?.image ??
+        (albumUrl ? `${albumUrl}/cover.jpeg` : undefined),
+    };
+    this.mediaSession?.updateMetadata(metadata);
+  }
+
+  /**
+   * Seeks the audio element by deltaSeconds (positive = forward, negative = backward).
+   * Clamps to [0, duration]. No-ops if no audio element or duration is not yet finite.
+   */
+  private seekAudioBy(deltaSeconds: number): void {
+    if (!this.audioElement) return;
+    const duration = this.audioElement.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    this.audioElement.currentTime = Math.max(
+      0,
+      Math.min(duration, this.audioElement.currentTime + deltaSeconds),
+    );
   }
 
   private updateAudioPlayback() {
     if (!this.audioElement || !this.audioElement.src) return;
 
     if (this.isPlaying && this.currentTrackUrl) {
+      this.mediaSession?.updatePlaybackState("playing");
       this.audioElement.play().catch((error) => {
         console.error("Failed to play audio:", error);
         this.isPlaying = false;
@@ -399,6 +476,9 @@ export class PlaybarCustomElement extends HTMLElement {
       });
       this.nextTrackLoaded = false;
     } else {
+      this.mediaSession?.updatePlaybackState(
+        this.currentTrackUrl ? "paused" : "none",
+      );
       this.audioElement.pause();
     }
   }
@@ -406,6 +486,13 @@ export class PlaybarCustomElement extends HTMLElement {
   private handleTimeUpdate(event: Event) {
     const audio = event.target as HTMLAudioElement;
     this.updateProgressIndicator(audio);
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      this.mediaSession?.updatePositionState(
+        audio.currentTime,
+        audio.duration,
+        1,
+      );
+    }
     if (
       !this.nextTrackLoaded &&
       !Number.isNaN(audio.duration) &&
