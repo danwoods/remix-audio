@@ -37,12 +37,18 @@ import { assert, assertEquals, assertExists } from "@std/assert";
 // ============================================================================
 
 let templateHTML = "";
+/** Last template HTML that looks like the dialog (contains upload-form). */
+let dialogTemplateHTML = "";
 const shadowRootAppendChildCalls: unknown[] = [];
 const shadowRootRemoveChildCalls: unknown[] = [];
 let mockTriggerButton: Partial<HTMLButtonElement> | null = null;
 let triggerClickHandler: (() => void) | null = null;
 let dialogClickHandler: ((e: { target: unknown }) => void) | null = null;
 let dialogCloseHandler: (() => void) | null = null;
+let fileListRemoveHandler:
+  | ((e: CustomEvent<{ fileKey: string }>) => void)
+  | null = null;
+let fileItemRemoveClickHandler: (() => void) | null = null;
 
 /** File input mock for regression test and file list tests. */
 let mockFileInput: {
@@ -113,14 +119,32 @@ function createMockDialog() {
     },
     appendChild(child: unknown) {
       fileListChildren.push(child);
+      (child as { parentElement?: unknown }).parentElement = fileListEl;
       return child;
+    },
+    removeChild(child: unknown) {
+      const idx = fileListChildren.indexOf(child);
+      if (idx >= 0) fileListChildren.splice(idx, 1);
+      (child as { parentElement?: unknown }).parentElement = null;
+      return child;
+    },
+    addEventListener(
+      type: string,
+      fn: (e: CustomEvent<{ fileKey: string }>) => void,
+    ) {
+      if (type === "upload-dialog-remove") fileListRemoveHandler = fn;
     },
   };
 
   const dialog = {
     style: { cssText: "" },
-    innerHTML: "",
     parentNode: null as unknown as ParentNode,
+    appendChild(_child: unknown) {
+      return _child;
+    },
+    get innerHTML() {
+      return dialogTemplateHTML || templateHTML;
+    },
     addEventListener(type: string, fn: (e?: { target: unknown }) => void) {
       if (type === "click") {
         dialogClickHandler = fn as (e: { target: unknown }) => void;
@@ -151,6 +175,8 @@ function setupDOMEnvironment() {
   triggerClickHandler = null;
   dialogClickHandler = null;
   dialogCloseHandler = null;
+  fileListRemoveHandler = null;
+  fileItemRemoveClickHandler = null;
   shadowRootAppendChildCalls.length = 0;
   shadowRootRemoveChildCalls.length = 0;
 
@@ -168,10 +194,29 @@ function setupDOMEnvironment() {
     parentNode: null as unknown as ParentNode,
   };
 
+  const fileItemNameEl = { textContent: "" };
+  const fileItemSizeEl = { textContent: "" };
+  const fileItemRemoveBtn = {
+    addEventListener(_type: string, fn: () => void) {
+      if (_type === "click") fileItemRemoveClickHandler = fn as () => void;
+    },
+    setAttribute: () => {},
+  };
+  const fileItemId3Target = {
+    textContent: "Loading…",
+    replaceChildren: () => {},
+    appendChild: () => {},
+  };
   const mockTemplateContent = {
     cloneNode: (_deep: boolean) => ({
-      getElementById: (id: string) =>
-        id === "trigger" ? mockTriggerButton : null,
+      getElementById: (id: string) => {
+        if (id === "trigger") return mockTriggerButton;
+        if (id === "name") return fileItemNameEl;
+        if (id === "size") return fileItemSizeEl;
+        if (id === "remove") return fileItemRemoveBtn;
+        if (id === "id3-target") return fileItemId3Target;
+        return null;
+      },
       querySelector: () => null,
       childNodes: [],
     }),
@@ -183,6 +228,7 @@ function setupDOMEnvironment() {
         return {
           set innerHTML(value: string) {
             templateHTML = value;
+            if (value.includes("upload-form")) dialogTemplateHTML = value;
           },
           get innerHTML() {
             return templateHTML;
@@ -192,6 +238,31 @@ function setupDOMEnvironment() {
       }
       if (tagName === "dialog") {
         return createMockDialog() as unknown as HTMLDialogElement;
+      }
+      if (tagName === "upload-dialog-file-item") {
+        let _file: File | null = null;
+        let _fileKey = "";
+        const fileItem = {
+          set file(value: File | null) {
+            _file = value;
+            if (value) {
+              _fileKey = `${value.name}-${value.size}-${value.lastModified}`;
+            }
+          },
+          get file() {
+            return _file;
+          },
+          parentElement: null as unknown as ParentNode,
+          _simulateRemove() {
+            fileListRemoveHandler?.(
+              {
+                target: fileItem,
+                detail: { fileKey: _fileKey },
+              } as unknown as CustomEvent<{ fileKey: string }>,
+            );
+          },
+        };
+        return fileItem as unknown as HTMLElement;
       }
       if (tagName === "li") {
         const children: unknown[] = [];
@@ -260,6 +331,7 @@ function setupDOMEnvironment() {
   globalThis.HTMLElement = class HTMLElement {
     shadowRoot: ShadowRoot | null = null;
     private _attrs: Record<string, string> = {};
+    private _listeners: Record<string, ((e: Event) => void)[]> = {};
 
     hasAttribute(name: string) {
       return name in this._attrs;
@@ -269,6 +341,16 @@ function setupDOMEnvironment() {
     }
     setAttribute(name: string, value: string) {
       this._attrs[name] = value;
+    }
+    addEventListener(type: string, fn: (e: Event) => void) {
+      if (!this._listeners[type]) this._listeners[type] = [];
+      this._listeners[type].push(fn);
+    }
+    removeEventListener(_type: string, _fn: (e: Event) => void) {}
+    dispatchEvent(e: Event) {
+      const fns = this._listeners[(e as CustomEvent).type] ?? [];
+      for (const fn of fns) fn(e);
+      return true;
     }
 
     attachShadow(_init: ShadowRootInit) {
@@ -282,7 +364,11 @@ function setupDOMEnvironment() {
           shadowRootRemoveChildCalls.push(child);
         },
         getElementById(id: string) {
-          return id === "trigger" ? mockTriggerButton : null;
+          if (id === "trigger") return mockTriggerButton;
+          const lastChild = shadowRootAppendChildCalls[
+            shadowRootAppendChildCalls.length - 1
+          ] as { getElementById?: (id: string) => unknown } | undefined;
+          return lastChild?.getElementById?.(id) ?? null;
         },
         querySelector: () => null,
         addEventListener: () => {},
@@ -305,6 +391,9 @@ setupDOMEnvironment();
 
 const { UploadDialogCustomElement } = await import(
   "./upload-dialog-custom-element.ts"
+);
+const { UploadDialogFileItemCustomElement } = await import(
+  "./upload-dialog-file-item-custom-element.ts"
 );
 
 // ============================================================================
@@ -548,10 +637,9 @@ Deno.test("UploadDialogCustomElement - remove file updates list and disables sub
   mockFileInput.files = [mockFile];
   mockFileInput._changeHandler!();
   assertEquals(fileListEl._children.length, 1);
-  const li = fileListEl._children[0] as { _children: unknown[] };
-  const removeBtn = li._children[2] as { _clickHandler?: () => void };
-  assertExists(removeBtn._clickHandler);
-  removeBtn._clickHandler!();
+  const fileItem = fileListEl._children[0] as { _simulateRemove?: () => void };
+  assertExists(fileItem._simulateRemove);
+  fileItem._simulateRemove!();
   assertEquals(
     fileListEl._children.length,
     0,
@@ -560,6 +648,57 @@ Deno.test("UploadDialogCustomElement - remove file updates list and disables sub
   assert(
     submitBtn.disabled,
     "submit should be disabled when no files remain",
+  );
+});
+
+Deno.test("UploadDialogFileItemCustomElement - renders file name and size when file is set", () => {
+  const element = new UploadDialogFileItemCustomElement();
+  const file = new File(["content"], "test.mp3", {
+    type: "audio/mpeg",
+    lastModified: 12345,
+  });
+  Object.defineProperty(file, "size", { value: 1024 });
+  element.file = file;
+  element.connectedCallback();
+  const nameEl = element.shadowRoot?.getElementById("name") as
+    | { textContent: string }
+    | null;
+  const sizeEl = element.shadowRoot?.getElementById("size") as
+    | { textContent: string }
+    | null;
+  assertExists(nameEl);
+  assertExists(sizeEl);
+  assertEquals(nameEl.textContent, "test.mp3");
+  assertEquals(sizeEl.textContent, "1.0 KB");
+});
+
+Deno.test("UploadDialogFileItemCustomElement - dispatches upload-dialog-remove when remove is clicked", () => {
+  let capturedDetail: { fileKey: string } | null = null;
+  fileItemRemoveClickHandler = null;
+  const element = new UploadDialogFileItemCustomElement();
+  const file = new File(["x"], "song.mp3", {
+    type: "audio/mpeg",
+    lastModified: 99999,
+  });
+  Object.defineProperty(file, "size", { value: 512 });
+  element.file = file;
+  element.connectedCallback();
+  element.addEventListener(
+    "upload-dialog-remove",
+    (e) => {
+      capturedDetail = (e as CustomEvent<{ fileKey: string }>).detail;
+    },
+  );
+  assertExists(
+    fileItemRemoveClickHandler,
+    "remove button click handler should be registered",
+  );
+  (fileItemRemoveClickHandler as () => void)();
+  assertExists(capturedDetail, "upload-dialog-remove should be dispatched");
+  assertEquals(
+    (capturedDetail as { fileKey: string }).fileKey,
+    "song.mp3-512-99999",
+    "event detail should include fileKey",
   );
 });
 
