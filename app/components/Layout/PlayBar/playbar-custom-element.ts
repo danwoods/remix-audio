@@ -451,13 +451,12 @@ export class PlaybarCustomElement extends HTMLElement {
 
   /**
    * Seeks the audio element by deltaSeconds (positive = forward, negative = backward).
-   * Clamps to [0, duration]. No-ops if no audio element.
+   * Clamps to [0, duration]. No-ops if no audio element or duration is not yet finite.
    */
   private seekAudioBy(deltaSeconds: number): void {
     if (!this.audioElement) return;
-    const duration = Number.isFinite(this.audioElement.duration)
-      ? this.audioElement.duration
-      : 0;
+    const duration = this.audioElement.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
     this.audioElement.currentTime = Math.max(
       0,
       Math.min(duration, this.audioElement.currentTime + deltaSeconds),
