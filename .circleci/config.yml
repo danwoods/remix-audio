@@ -16,7 +16,7 @@ jobs:
             echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
       - run:
           name: Build
-          command: deno task build
+          command: mkdir build && deno task build
 
   test:
     docker:
