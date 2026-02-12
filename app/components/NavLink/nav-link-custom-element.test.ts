@@ -17,7 +17,7 @@ import { Event, parseHTML } from "linkedom";
 const LINKEDOM_HTML = `<!DOCTYPE html>
 <html>
 <head></head>
-<body><main></main></body>
+<body><nav></nav><main></main></body>
 </html>`;
 
 const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
@@ -122,7 +122,9 @@ function setupDOMEnvironment(options?: {
   preventDefaultCalled = false;
 
   // Reset DOM state
+  const nav = linkedomDocument.querySelector("nav");
   const main = linkedomDocument.querySelector("main");
+  if (nav) nav.innerHTML = "";
   if (main) main.innerHTML = "";
   linkedomDocument.title = "";
 
@@ -196,6 +198,21 @@ function setupDOMEnvironment(options?: {
 
 function getMain(): HTMLElement | null {
   return linkedomDocument.querySelector("main");
+}
+
+/** Creates a nav-link in the DOM with optional attributes. Uses document.createElement
+ * and appendChild so connectedCallback fires naturally when the element is connected. */
+function createNavLink(
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const nav = linkedomDocument.querySelector("nav");
+  if (!nav) throw new Error("nav element not found");
+  const el = linkedomDocument.createElement("nav-link");
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
+  nav.appendChild(el);
+  return el as HTMLElement;
 }
 
 function createClickEvent(
@@ -276,12 +293,9 @@ Deno.test(
       ),
     });
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.connectedCallback();
+    createNavLink();
 
     assertExists(popstateListener, "popstate listener should be registered");
     (popstateListener as (ev?: Event) => void)();
@@ -331,13 +345,12 @@ Deno.test(
         Promise.resolve({ ok: false, status: 503 }) as Promise<Response>,
     });
 
-    const { NavLinkCustomElement, _testResetPopstateState } = await import(
+    const { _testResetPopstateState } = await import(
       "./nav-link-custom-element.ts"
     );
     _testResetPopstateState();
 
-    const el = new NavLinkCustomElement();
-    el.connectedCallback();
+    createNavLink();
 
     assertExists(popstateListener, "popstate listener should be registered");
 
@@ -365,13 +378,9 @@ Deno.test(
   async () => {
     setupDOMEnvironment();
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el);
 
@@ -394,13 +403,9 @@ Deno.test(
   async () => {
     setupDOMEnvironment();
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "https://example.com/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "https://example.com/" });
 
     dispatchClick(el);
 
@@ -422,13 +427,9 @@ Deno.test(
   async () => {
     setupDOMEnvironment();
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el, { metaKey: true });
 
@@ -450,12 +451,9 @@ Deno.test(
   async () => {
     setupDOMEnvironment();
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.connectedCallback();
+    const el = createNavLink();
 
     assertEquals(
       el.getAttribute("tabindex"),
@@ -475,13 +473,9 @@ Deno.test(
   async () => {
     setupDOMEnvironment();
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchKeydown(el);
 
@@ -500,13 +494,9 @@ Deno.test(
   async () => {
     setupDOMEnvironment();
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "https://example.com/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "https://example.com/" });
 
     dispatchKeydown(el);
 
@@ -541,13 +531,9 @@ Deno.test(
         Promise.resolve({ ok: false, status: 500 }) as Promise<Response>,
     });
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el);
 
@@ -585,13 +571,9 @@ Deno.test(
         } as Response),
     });
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el);
 
@@ -619,13 +601,9 @@ Deno.test(
       linkedomDocument.head.appendChild(meta);
     }
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el);
 
@@ -667,13 +645,9 @@ Deno.test(
       linkedomDocument.head.appendChild(meta);
     }
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el);
 
@@ -718,13 +692,9 @@ Deno.test(
         ),
     });
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/artists/foo/albums/bar");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/artists/foo/albums/bar" });
 
     dispatchClick(el);
 
@@ -761,13 +731,9 @@ Deno.test(
     existingStyle.textContent = ".old { color: red; }";
     linkedomDocument.head.appendChild(existingStyle);
 
-    const { NavLinkCustomElement } = await import(
-      "./nav-link-custom-element.ts"
-    );
+    await import("./nav-link-custom-element.ts");
 
-    const el = new NavLinkCustomElement();
-    el.setAttribute("href", "/");
-    el.connectedCallback();
+    const el = createNavLink({ href: "/" });
 
     dispatchClick(el);
 
