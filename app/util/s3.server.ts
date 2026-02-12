@@ -5,6 +5,7 @@
  */
 import type { Files } from "./files.ts";
 
+import type { ID3Tags } from "./id3.ts";
 import { getID3Tags } from "./id3.ts";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import {
@@ -251,12 +252,14 @@ export async function uploadStreamToS3(
 /**
  * Handler for streaming files to S3. Extracts ID3 data from
  * files to organize into artist/album bucket structure.
+ * Optional metadataOverride from client can override artist, album, title, trackNumber.
  * This replaces the Remix UploadHandler interface.
  */
 export async function handleS3Upload(
   name: string,
   contentType: string,
   data: AsyncIterable<Uint8Array>,
+  metadataOverride?: Partial<ID3Tags>,
 ): Promise<string | undefined> {
   logger.info(`handleS3Upload called`, {
     name,
@@ -348,6 +351,19 @@ export async function handleS3Upload(
       `Failed to extract metadata from audio file: ${errorMessage}`,
     );
   }
+
+  if (metadataOverride) {
+    // Empty overrides must not replace server defaults: when client sends ""
+    // (e.g. getID3TagsFromFile returns null for non-MP3), spreading would
+    // overwrite "Unknown" with "" and produce S3 keys like //1__ which
+    // file listing skips (!artist || !album)
+    const filtered = { ...metadataOverride };
+    if (filtered.artist === "") delete filtered.artist;
+    if (filtered.album === "") delete filtered.album;
+    if (filtered.title === "") delete filtered.title;
+    id3Tags = { ...id3Tags, ...filtered };
+  }
+  id3Tags.trackNumber = Math.max(1, id3Tags.trackNumber ?? 1);
 
   // 2. Handle cover image
   if (id3Tags.image) {

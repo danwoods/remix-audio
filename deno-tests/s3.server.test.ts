@@ -2,7 +2,7 @@
  * Run from app/util/ with: deno test --import-map=import_map.s3_test.json s3.server.test.ts --allow-env --no-check
  * Or use: deno task test:s3
  */
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { setGetID3TagsReturn } from "./server/s3.server.test-mocks/id3.ts";
 import {
   clearSendCalls as clearS3SendCalls,
@@ -199,5 +199,56 @@ Deno.test("handleS3Upload - should handle files without cover images", async () 
   assertEquals(
     (audioUploadCalls[0].command as { input: { Key: string } }).input.Key,
     "Test Artist/Test Album/1__Test Song",
+  );
+});
+
+Deno.test("handleS3Upload - empty string metadata overrides do not replace server defaults", async () => {
+  /**
+   * Regression: when client sends empty strings (e.g. getID3TagsFromFile
+   * returns null for non-MP3), spreading metadataOverride would overwrite
+   * server's "Unknown" with "". This produced S3 keys like //1__ and
+   * file listing skipped them (!artist || !album). Empty overrides must
+   * be ignored so server defaults apply.
+   */
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior(defaultSendBehavior);
+  setGetID3TagsReturn({
+    artist: "Unknown",
+    album: "Unknown",
+    title: "Unknown",
+    trackNumber: 1,
+  });
+
+  const mockData = [new Uint8Array([1, 2, 3])];
+  await handleS3Upload(
+    "files",
+    "audio/mpeg",
+    (async function* () {
+      for (const chunk of mockData) {
+        yield chunk;
+      }
+    })(),
+    {
+      artist: "",
+      album: "",
+      title: "",
+      trackNumber: 1,
+    },
+  );
+
+  const audioUploadCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key !==
+        "Test Artist/Test Album/cover.jpeg",
+  );
+  assertEquals(audioUploadCalls.length, 1);
+  const key = (audioUploadCalls[0].command as { input: { Key: string } }).input
+    .Key;
+  assert(
+    !key.includes("//") && key.startsWith("Unknown/Unknown/"),
+    `S3 key must use "Unknown" not empty strings; got: ${key}`,
   );
 });

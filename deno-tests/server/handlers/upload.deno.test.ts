@@ -134,6 +134,37 @@ Deno.test({
           "Should handle multiple files",
         );
       });
+
+      await t.step("accepts FormData with metadata overrides", async () => {
+        const file = new File(["content"], "test.mp3", {
+          type: "audio/mpeg",
+        });
+        const formData = new FormData();
+        formData.append("files", file);
+        formData.append(
+          "metadata:0",
+          JSON.stringify({
+            artist: "Override Artist",
+            album: "Override Album",
+            title: "Override Title",
+            trackNumber: 5,
+          }),
+        );
+
+        const req = new Request("http://localhost:8000/", {
+          method: "POST",
+          body: formData,
+          headers: { Authorization: createAdminAuthHeader() },
+        });
+
+        const response = await handleUpload(req);
+
+        assertEquals(
+          [303, 500].includes(response.status),
+          true,
+          "Should accept metadata override without crashing",
+        );
+      });
     } finally {
       // Restore original environment variables
       if (originalUser === undefined) {
