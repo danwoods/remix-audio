@@ -208,7 +208,9 @@ function setupDOMEnvironment() {
   };
 
   const mockBody = {
-    appendChild: () => {},
+    appendChild(node: unknown) {
+      (node as { parentNode?: unknown }).parentNode = mockBody;
+    },
     removeChild: () => {},
     parentNode: null as unknown as ParentNode,
   };
@@ -329,6 +331,25 @@ function setupDOMEnvironment() {
           querySelector: () => null,
         } as unknown as HTMLElement;
       }
+      if (tagName === "input") {
+        return {
+          setAttribute: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          type: "text",
+          value: "",
+          id: "",
+          min: "",
+        } as unknown as HTMLElement;
+      }
+      if (tagName === "label") {
+        return {
+          htmlFor: "",
+          textContent: "",
+          appendChild: () => {},
+          setAttribute: () => {},
+        } as unknown as HTMLElement;
+      }
       if (tagName === "button") {
         const button: {
           type: string;
@@ -359,6 +380,10 @@ function setupDOMEnvironment() {
     shadowRoot: ShadowRoot | null = null;
     private _attrs: Record<string, string> = {};
     private _listeners: Record<string, ((e: Event) => void)[]> = {};
+    parentNode: ParentNode | null = null;
+    get isConnected(): boolean {
+      return this.parentNode != null;
+    }
 
     hasAttribute(name: string) {
       return name in this._attrs;
@@ -976,4 +1001,26 @@ Deno.test("UploadDialogFileItemCustomElement - metadata getter returns editable 
   assertEquals(typeof meta.title, "string");
   assertEquals(typeof meta.trackNumber, "number");
   assert(meta.trackNumber >= 1, "trackNumber should be at least 1");
+});
+
+Deno.test("UploadDialogFileItemCustomElement - metadata uses Unknown when ID3 returns null", async () => {
+  /**
+   * When getID3TagsFromFile returns null (Deno has no window), metadata must
+   * use "Unknown" not "" so server does not get empty overrides that produce
+   * invalid S3 keys (//1__) and invisible files.
+   */
+  const element = new UploadDialogFileItemCustomElement();
+  document.body.appendChild(element);
+  element.connectedCallback();
+  const file = new File(["x"], "nocover.wav", {
+    type: "audio/wav",
+    lastModified: 22222,
+  });
+  Object.defineProperty(file, "size", { value: 128 });
+  element.file = file;
+  await new Promise((r) => setTimeout(r, 100));
+  const meta = element.metadata;
+  assertEquals(meta.artist, "Unknown");
+  assertEquals(meta.album, "Unknown");
+  assertEquals(meta.title, "Unknown");
 });

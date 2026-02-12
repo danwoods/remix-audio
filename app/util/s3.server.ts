@@ -353,7 +353,15 @@ export async function handleS3Upload(
   }
 
   if (metadataOverride) {
-    id3Tags = { ...id3Tags, ...metadataOverride };
+    // Empty overrides must not replace server defaults: when client sends ""
+    // (e.g. getID3TagsFromFile returns null for non-MP3), spreading would
+    // overwrite "Unknown" with "" and produce S3 keys like //1__ which
+    // file listing skips (!artist || !album)
+    const filtered = { ...metadataOverride };
+    if (filtered.artist === "") delete filtered.artist;
+    if (filtered.album === "") delete filtered.album;
+    if (filtered.title === "") delete filtered.title;
+    id3Tags = { ...id3Tags, ...filtered };
   }
   id3Tags.trackNumber = Math.max(1, id3Tags.trackNumber ?? 1);
 

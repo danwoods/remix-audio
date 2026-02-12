@@ -252,9 +252,12 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
       if (!this.isConnected || !id3Target) return;
       id3Target.replaceChildren();
 
-      const artist = tags?.artist?.trim() ?? "";
-      const album = tags?.album?.trim() ?? "";
-      const title = tags?.title?.trim() ?? "";
+      // Use "Unknown" when ID3 fails or returns null (non-MP3, parse error).
+      // Empty strings would override server defaults on upload and produce invalid
+      // S3 keys (//1__) that file listing skips (!artist || !album)
+      const artist = tags?.artist?.trim() || "Unknown";
+      const album = tags?.album?.trim() || "Unknown";
+      const title = tags?.title?.trim() || "Unknown";
       const trackNumber = Math.max(1, tags?.trackNumber ?? 1);
       const image = tags?.image;
 
