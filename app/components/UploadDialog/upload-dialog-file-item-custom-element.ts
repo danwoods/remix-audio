@@ -15,34 +15,42 @@ const template = document.createElement("template");
 template.innerHTML = `
   <style>
     :host {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      gap: 0.75rem;
-      padding: 0.5rem 0;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      grid-template-rows: auto auto;
+      gap: 0.5rem 1rem;
+      padding: 0.75rem 1rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 0.875rem;
+      font-size: var(--text-sm, 0.875rem);
     }
     :host(:last-child) {
       border-bottom: none;
     }
     .upload-dialog-file-item-name {
-      flex: 1;
+      grid-column: 1;
+      grid-row: 1;
       min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: rgba(255, 255, 255, 0.9);
     }
     .upload-dialog-file-item-size {
+      grid-column: 2;
+      grid-row: 1;
       color: rgba(255, 255, 255, 0.5);
-      flex-shrink: 0;
     }
     .upload-dialog-file-item-remove {
+      grid-column: 3;
+      grid-row: 1;
+      align-self: start;
       background: transparent;
       border: none;
       color: inherit;
       cursor: pointer;
       padding: 0.25rem;
       border-radius: 0.25rem;
-      transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      transition: background var(--default-transition-duration, 150ms) var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1));
     }
     .upload-dialog-file-item-remove:hover {
       background: rgba(255, 255, 255, 0.08);
@@ -54,25 +62,38 @@ template.innerHTML = `
       outline: 2px solid currentColor;
       outline-offset: 2px;
     }
+    @media (prefers-reduced-motion: reduce) {
+      .upload-dialog-file-item-remove {
+        transition: none;
+      }
+    }
     .upload-dialog-file-item-remove trash-icon {
       width: 1rem;
       height: 1rem;
       display: block;
     }
     .upload-dialog-file-item-id3 {
-      flex: 1 1 100%;
+      grid-column: 1 / -1;
+      grid-row: 2;
+      min-width: 0;
       font-size: 0.75rem;
       color: rgba(255, 255, 255, 0.6);
-      margin-top: 0.25rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+    .upload-dialog-file-item-id3-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .upload-dialog-file-item-id3 img {
       width: 2.5rem;
       height: 2.5rem;
       object-fit: cover;
       border-radius: 0.25rem;
+      flex-shrink: 0;
     }
   </style>
   <span class="upload-dialog-file-item-name" id="name"></span>
@@ -175,7 +196,10 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
           img.setAttribute("aria-hidden", "true");
           id3Target.appendChild(img);
         }
-        id3Target.appendChild(document.createTextNode(text || "—"));
+        const textSpan = document.createElement("span");
+        textSpan.className = "upload-dialog-file-item-id3-text";
+        textSpan.textContent = text || "—";
+        id3Target.appendChild(textSpan);
       } else {
         id3Target.textContent = "No metadata";
       }

@@ -23,7 +23,6 @@
     "@std/assert": "https://deno.land/std@0.208.0/assert/mod.ts"
   },
   "tasks": {
-    "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --watch server/main.ts",
     "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys server/main.ts",
     "build": "deno task build:custom-elements",
     "build:docs": "deno doc --html --name='Remix Audio Components' --output=./docs doc.exports.ts",

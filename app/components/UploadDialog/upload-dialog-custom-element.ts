@@ -66,7 +66,7 @@ dialogTemplate.innerHTML = `
     }
     dialog::backdrop {
       background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
     }
     .upload-dialog-box {
       background: #121212;
@@ -75,7 +75,7 @@ dialogTemplate.innerHTML = `
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 1.25rem 1.5rem;
       overflow: hidden;
     }
@@ -83,21 +83,27 @@ dialogTemplate.innerHTML = `
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 1rem;
       margin-bottom: 1rem;
     }
     .upload-dialog-title {
-      font-size: 1.125rem;
-      font-weight: 400;
+      font-size: var(--text-lg, 1.125rem);
+      font-weight: 500;
       margin: 0;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .upload-dialog-close-btn {
+      flex-shrink: 0;
+      margin-left: auto;
       background: transparent;
       border: none;
       color: inherit;
       cursor: pointer;
       padding: 0.5rem;
       border-radius: 0.25rem;
-      transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      transition: background var(--default-transition-duration, 150ms) var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1));
+      width: auto;
     }
     .upload-dialog-close-btn:hover {
       background: rgba(255, 255, 255, 0.08);
@@ -115,19 +121,22 @@ dialogTemplate.innerHTML = `
       display: block;
     }
     .upload-dialog-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
       padding: 0;
     }
     .upload-dialog-drop-zone {
       position: relative;
       display: block;
-      padding: 1.25rem;
+      padding: 1.5rem;
       background: rgba(255, 255, 255, 0.05);
       border: 2px dashed rgba(255, 255, 255, 0.2);
       border-radius: 0.5rem;
       text-align: center;
       cursor: pointer;
-      transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
-        background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      transition: border-color var(--default-transition-duration, 150ms) var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1)),
+        background var(--default-transition-duration, 150ms) var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1));
     }
     .upload-dialog-drop-zone:hover {
       border-color: rgba(255, 255, 255, 0.35);
@@ -141,11 +150,16 @@ dialogTemplate.innerHTML = `
       height: 100%;
       cursor: pointer;
     }
+    .upload-dialog-drop-zone-primary {
+      display: block;
+      font-size: var(--text-base, 1rem);
+      font-weight: 500;
+    }
     .upload-dialog-file-label {
       display: block;
-      font-size: 0.875rem;
-      color: rgba(255, 255, 255, 0.7);
-      margin-top: 0.25rem;
+      font-size: var(--text-sm, 0.875rem);
+      color: rgba(255, 255, 255, 0.65);
+      margin-top: 0.375rem;
     }
     .upload-dialog-footer {
       margin-top: 1.5rem;
@@ -153,7 +167,7 @@ dialogTemplate.innerHTML = `
       justify-content: flex-end;
     }
     .upload-dialog-submit {
-      padding: 0.5rem 1.25rem;
+      padding: 0.625rem 1.5rem;
       background: var(--color-blue-500, #3b82f6);
       color: #fff;
       border: none;
@@ -161,11 +175,12 @@ dialogTemplate.innerHTML = `
       cursor: pointer;
       font-family: inherit;
       font-size: 1rem;
-      transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1),
-        transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      font-weight: 500;
+      transition: background var(--default-transition-duration, 150ms) var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1)),
+        transform var(--default-transition-duration, 150ms) var(--default-transition-timing-function, cubic-bezier(0.4, 0, 0.2, 1));
     }
     .upload-dialog-submit:hover:not(:disabled) {
-      background: oklch(67% 0.214 259.815);
+      background: color-mix(in oklch, var(--color-blue-500, #3b82f6) 85%, white);
     }
     .upload-dialog-submit:active:not(:disabled) {
       transform: scale(0.98);
@@ -194,15 +209,25 @@ dialogTemplate.innerHTML = `
       animation: upload-dialog-spin 0.6s linear infinite;
       vertical-align: middle;
     }
+    @media (prefers-reduced-motion: reduce) {
+      .upload-dialog-loading {
+        animation: none;
+      }
+      .upload-dialog-submit:active:not(:disabled) {
+        transform: none;
+      }
+    }
     .upload-dialog-file-list {
       list-style: none;
-      margin: 1rem 0 0;
+      margin: 0;
       padding: 0;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
       max-height: 12rem;
       overflow-y: auto;
     }
     .upload-dialog-file-list upload-dialog-file-item {
-      display: block;
+      display: grid;
     }
   </style>
   <form method="post" enctype="multipart/form-data" id="upload-form">
@@ -221,7 +246,7 @@ dialogTemplate.innerHTML = `
             accept="audio/*"
             class="upload-dialog-file-input"
           />
-          <span aria-hidden="true">Choose files</span>
+          <span class="upload-dialog-drop-zone-primary" aria-hidden="true">Choose files</span>
           <span class="upload-dialog-file-label" id="file-label">No files selected</span>
         </div>
         <div id="file-list" class="upload-dialog-file-list" role="list" aria-label="Selected files"></div>
