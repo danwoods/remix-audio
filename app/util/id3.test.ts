@@ -1,7 +1,7 @@
-/** @file Tests for getID3Tags (ID3 metadata extraction) */
+/** @file Tests for ID3 metadata extraction (getID3Tags, getID3TagsFromFile, getID3TagsFromURL) */
 import { assert, assertEquals } from "@std/assert";
 import { getID3Tags } from "./id3.ts";
-import { getID3TagsFromFile } from "./id3.browser.ts";
+import { getID3TagsFromFile, getID3TagsFromURL } from "./id3.browser.ts";
 
 const testMp3Url = new URL("../../test_data/test.mp3", import.meta.url);
 
@@ -24,5 +24,17 @@ Deno.test("getID3Tags - mp3", async () => {
 Deno.test("getID3TagsFromFile - returns null in non-browser environment", async () => {
   const file = new File(["not audio"], "fake.mp3", { type: "audio/mpeg" });
   const result = await getID3TagsFromFile(file);
+  assertEquals(result, null);
+});
+
+Deno.test("getID3TagsFromURL - returns null in non-browser environment", async () => {
+  const result = await getID3TagsFromURL(
+    "https://example.com/artist/album/01__Track.mp3",
+  );
+  assertEquals(result, null);
+});
+
+Deno.test("getID3TagsFromURL - returns null when URL is invalid or unreachable", async () => {
+  const result = await getID3TagsFromURL("not-a-valid-url");
   assertEquals(result, null);
 });
