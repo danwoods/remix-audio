@@ -707,6 +707,60 @@ Deno.test("UploadDialogCustomElement - remove file updates list and disables sub
   );
 });
 
+Deno.test("UploadDialogCustomElement - removing one of two duplicate-key files removes only that one", () => {
+  /**
+   * Regression: When two files share the same name, size, and lastModified,
+   * fileKey is identical. handleRemove must remove by DOM index, not filter
+   * by fileKey, or both would be removed from the array while only one DOM
+   * element is removed, causing desync.
+   */
+  shadowRootAppendChildCalls.length = 0;
+  const element = new UploadDialogCustomElement();
+  element.connectedCallback();
+  assertExists(triggerClickHandler);
+  triggerClickHandler!();
+  const dialog = shadowRootAppendChildCalls[1] as {
+    querySelector: (s: string) => unknown;
+  };
+  const fileListEl = dialog.querySelector("#file-list") as {
+    _children: unknown[];
+  };
+  const submitBtn = dialog.querySelector("#submit-btn") as {
+    disabled: boolean;
+  };
+  assertExists(mockFileInput);
+  assertExists(mockFileInput._changeHandler);
+  const file1 = new File(["a"], "dup.mp3", {
+    type: "audio/mpeg",
+    lastModified: 11111,
+  });
+  const file2 = new File(["b"], "dup.mp3", {
+    type: "audio/mpeg",
+    lastModified: 11111,
+  });
+  Object.defineProperty(file1, "size", { value: 1024 });
+  Object.defineProperty(file2, "size", { value: 1024 });
+  mockFileInput.files = [file1, file2];
+  mockFileInput._changeHandler!();
+  assertEquals(
+    fileListEl._children.length,
+    2,
+    "should have two file items",
+  );
+  const firstItem = fileListEl._children[0] as { _simulateRemove?: () => void };
+  assertExists(firstItem._simulateRemove);
+  firstItem._simulateRemove!();
+  assertEquals(
+    fileListEl._children.length,
+    1,
+    "only one item should remain after removing the first",
+  );
+  assert(
+    !submitBtn.disabled,
+    "submit should stay enabled with one file remaining",
+  );
+});
+
 Deno.test("UploadDialogFileItemCustomElement - renders file name and size when file is set", () => {
   const element = new UploadDialogFileItemCustomElement();
   const file = new File(["content"], "test.mp3", {

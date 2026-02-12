@@ -413,13 +413,14 @@ export class UploadDialogCustomElement extends HTMLElement {
     };
 
     const handleRemove = (e: Event) => {
-      const ev = e as CustomEvent<{ fileKey: string }>;
-      const { fileKey } = ev.detail;
-      this.#selectedFiles = this.#selectedFiles.filter(
-        (f) => `${f.name}-${f.size}-${f.lastModified}` !== fileKey,
-      );
-      const item = ev.target as HTMLElement;
-      item.parentElement?.removeChild(item);
+      const item = e.target as HTMLElement;
+      const parent = item.parentElement;
+      if (!parent) return;
+      const index = Array.from(parent.children).indexOf(item);
+      if (index >= 0 && index < this.#selectedFiles.length) {
+        this.#selectedFiles = this.#selectedFiles.filter((_, i) => i !== index);
+        parent.removeChild(item);
+      }
       updateFileLabel();
       updateSubmitState();
     };
