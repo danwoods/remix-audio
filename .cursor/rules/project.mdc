@@ -20,3 +20,7 @@ This codebase does not cut corners. NEVER do things like commiting/pushing with 
 This codebase uses a custom HTML element approach to building UIs.
 
 This codebase uses icons based on svg from https://heroicons.com
+
+The codebase uses standard CSS, no Tailwind classes.
+
+Any global styling (eg: typography, spacing, utility classes used in multiple places) should be kept in app.css
