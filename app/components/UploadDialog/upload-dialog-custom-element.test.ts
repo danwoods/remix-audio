@@ -67,6 +67,12 @@ let mockFormWithSubmit: {
   action: string;
 } | null = null;
 
+/** Error element mock for error handling tests. */
+let mockUploadErrorEl: {
+  textContent: string;
+  hidden: boolean;
+} | null = null;
+
 function createMockDialog() {
   const fileInput = {
     disabled: false,
@@ -142,6 +148,12 @@ function createMockDialog() {
     },
   };
 
+  const uploadErrorEl = {
+    textContent: "",
+    hidden: true,
+  };
+  mockUploadErrorEl = uploadErrorEl;
+
   const dialog = {
     style: { cssText: "" },
     parentNode: null as unknown as ParentNode,
@@ -165,6 +177,7 @@ function createMockDialog() {
       if (sel === "#upload-form") return form;
       if (sel === "#files") return fileInput;
       if (sel === "#file-list") return fileListEl;
+      if (sel === "#upload-error") return uploadErrorEl;
       if (sel === "#close-btn") return genericNode;
       if (sel === "#submit-btn") return submitBtnMock;
       return null;
@@ -571,6 +584,10 @@ Deno.test("UploadDialogCustomElement - dialog markup includes styling and title"
     html.includes("--color-blue-500") || html.includes("#3b82f6"),
     "dialog markup should include primary button color (--color-blue-500 or fallback)",
   );
+  assert(
+    html.includes('id="upload-error"'),
+    "dialog markup should include upload-error element for error display",
+  );
 });
 
 Deno.test("UploadDialogCustomElement - file input restricts to audio uploads", () => {
@@ -715,6 +732,154 @@ Deno.test("UploadDialogFileItemCustomElement - dispatches upload-dialog-remove w
     "event detail should include fileKey",
   );
 });
+
+Deno.test(
+  "UploadDialogCustomElement - shows server error message when upload fails",
+  async () => {
+    /**
+     * Tests that when the server returns a non-ok response (e.g. 500), the
+     * error message from the response body is shown in the upload-error element.
+     */
+    const OriginalFetch = globalThis.fetch;
+    (globalThis as { fetch: typeof fetch }).fetch = function () {
+      return Promise.resolve(
+        new Response("Upload failed for all files: S3 connection error", {
+          status: 500,
+        }),
+      );
+    };
+
+    shadowRootAppendChildCalls.length = 0;
+    const element = new UploadDialogCustomElement();
+    element.connectedCallback();
+    assertExists(triggerClickHandler);
+    triggerClickHandler!();
+    assertExists(mockFormWithSubmit);
+    assertExists(mockFileInput);
+    assertExists(mockFileInput._changeHandler);
+    const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
+    mockFileInput.files = [mockFile];
+    mockFileInput.value = "";
+    mockFileInput._changeHandler!();
+
+    await mockFormWithSubmit!._submitHandler!({
+      preventDefault: () => {},
+    } as Event);
+
+    assertExists(
+      mockUploadErrorEl,
+      "upload error element should exist when dialog is open",
+    );
+    assertEquals(
+      mockUploadErrorEl.textContent,
+      "Upload failed for all files: S3 connection error",
+      "error message from server should be shown",
+    );
+    assert(
+      !mockUploadErrorEl.hidden,
+      "error element should be visible when error occurs",
+    );
+
+    (globalThis as { fetch: typeof fetch }).fetch = OriginalFetch;
+  },
+);
+
+Deno.test(
+  "UploadDialogCustomElement - shows network error message when fetch throws",
+  async () => {
+    /**
+     * Tests that when fetch throws (network error, etc.), a user-friendly
+     * message is shown in the upload-error element.
+     */
+    const OriginalFetch = globalThis.fetch;
+    (globalThis as { fetch: typeof fetch }).fetch = function () {
+      return Promise.reject(new Error("Failed to fetch"));
+    };
+
+    shadowRootAppendChildCalls.length = 0;
+    const element = new UploadDialogCustomElement();
+    element.connectedCallback();
+    assertExists(triggerClickHandler);
+    triggerClickHandler!();
+    assertExists(mockFormWithSubmit);
+    assertExists(mockFileInput);
+    assertExists(mockFileInput._changeHandler);
+    const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
+    mockFileInput.files = [mockFile];
+    mockFileInput.value = "";
+    mockFileInput._changeHandler!();
+
+    await mockFormWithSubmit!._submitHandler!({
+      preventDefault: () => {},
+    } as Event);
+
+    assertExists(mockUploadErrorEl);
+    assertEquals(
+      mockUploadErrorEl.textContent,
+      "Failed to fetch",
+      "error message from thrown Error should be shown",
+    );
+    assert(!mockUploadErrorEl.hidden, "error element should be visible");
+
+    (globalThis as { fetch: typeof fetch }).fetch = OriginalFetch;
+  },
+);
+
+Deno.test(
+  "UploadDialogCustomElement - clears error when user selects new files",
+  async () => {
+    /**
+     * Tests that when an error is shown and the user selects new files,
+     * the error is cleared so they can retry without seeing stale messages.
+     */
+    const OriginalFetch = globalThis.fetch;
+    (globalThis as { fetch: typeof fetch }).fetch = function () {
+      return Promise.resolve(
+        new Response("Server error", { status: 500 }),
+      );
+    };
+
+    shadowRootAppendChildCalls.length = 0;
+    const element = new UploadDialogCustomElement();
+    element.connectedCallback();
+    assertExists(triggerClickHandler);
+    triggerClickHandler!();
+    assertExists(mockFormWithSubmit);
+    assertExists(mockFileInput);
+    assertExists(mockFileInput._changeHandler);
+    const mockFile = new File(["x"], "test.mp3", { type: "audio/mpeg" });
+    mockFileInput.files = [mockFile];
+    mockFileInput.value = "";
+    mockFileInput._changeHandler!();
+    await mockFormWithSubmit!._submitHandler!({
+      preventDefault: () => {},
+    } as Event);
+
+    assertEquals(
+      mockUploadErrorEl?.textContent,
+      "Server error",
+      "error should be shown after failed submit",
+    );
+    assert(!mockUploadErrorEl?.hidden);
+
+    const newFile = new File(["y"], "song2.mp3", { type: "audio/mpeg" });
+    mockFileInput.files = [newFile];
+    mockFileInput.value = "";
+    mockFileInput._changeHandler!();
+
+    assertEquals(
+      mockUploadErrorEl?.textContent,
+      "",
+      "error should be cleared when user selects new files",
+    );
+    assert(
+      mockUploadErrorEl?.hidden,
+      "error element should be hidden when cleared",
+    );
+
+    (globalThis as { fetch: typeof fetch }).fetch = OriginalFetch;
+  },
+);
 
 Deno.test(
   "UploadDialogCustomElement - regression: FormData is built from selected files so fetch receives files",

@@ -229,6 +229,17 @@ dialogTemplate.innerHTML = `
     .upload-dialog-file-list upload-dialog-file-item {
       display: grid;
     }
+    .upload-dialog-error {
+      padding: 0.75rem 1rem;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 0.5rem;
+      color: #fca5a5;
+      font-size: var(--text-sm, 0.875rem);
+    }
+    .upload-dialog-error[hidden] {
+      display: none;
+    }
   </style>
   <form method="post" enctype="multipart/form-data" id="upload-form">
     <div class="upload-dialog-box">
@@ -250,6 +261,7 @@ dialogTemplate.innerHTML = `
           <span class="upload-dialog-file-label" id="file-label">No files selected</span>
         </div>
         <div id="file-list" class="upload-dialog-file-list" role="list" aria-label="Selected files"></div>
+        <div id="upload-error" class="upload-dialog-error" role="alert" aria-live="polite" hidden></div>
       </div>
       <div class="upload-dialog-footer">
         <button
@@ -424,6 +436,22 @@ export class UploadDialogCustomElement extends HTMLElement {
       }
     };
 
+    const clearError = () => {
+      const errorEl = dialog.querySelector("#upload-error") as HTMLElement;
+      if (errorEl) {
+        errorEl.hidden = true;
+        errorEl.textContent = "";
+      }
+    };
+
+    const showError = (message: string) => {
+      const errorEl = dialog.querySelector("#upload-error") as HTMLElement;
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.hidden = false;
+      }
+    };
+
     fileListEl?.addEventListener("upload-dialog-remove", handleRemove);
 
     updateSubmitState();
@@ -442,6 +470,7 @@ export class UploadDialogCustomElement extends HTMLElement {
 
     fileInput?.addEventListener("change", () => {
       if (fileInput.files && fileInput.files.length > 0) {
+        clearError();
         this.#selectedFiles = Array.from(fileInput.files);
         fileInput.value = "";
         updateFileLabel();
@@ -452,6 +481,7 @@ export class UploadDialogCustomElement extends HTMLElement {
 
     form?.addEventListener("submit", async (e) => {
       e.preventDefault();
+      clearError();
       this.#isSubmitting = true;
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -481,11 +511,19 @@ export class UploadDialogCustomElement extends HTMLElement {
         if (response.ok) {
           globalThis.location.href = "/";
         } else {
+          const errorText = await response.text();
+          const message = errorText.trim() || response.statusText ||
+            "Upload failed";
+          showError(message);
           console.error("Upload failed:", response.statusText);
           this.#isSubmitting = false;
           if (this.#dialog?.isConnected) updateSubmitState();
         }
       } catch (error) {
+        const message = error instanceof Error
+          ? error.message
+          : "Network error. Please check your connection and try again.";
+        showError(message);
         console.error("Upload error:", error);
         this.#isSubmitting = false;
         if (this.#dialog?.isConnected) updateSubmitState();
