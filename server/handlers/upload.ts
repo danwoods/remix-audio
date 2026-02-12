@@ -5,6 +5,7 @@
  * authentication (same Basic Auth as GET `/admin`). Unauthenticated requests
  * receive 401 with a Basic Auth challenge.
  */
+import type { ID3Tags } from "../../app/util/id3.ts";
 import { getUploadedFiles, handleS3Upload } from "../../app/util/s3.server.ts";
 import { requireAdminAuth } from "../utils/basicAuth.ts";
 
@@ -45,15 +46,27 @@ export async function handleUpload(req: Request): Promise<Response> {
       return new Response("No files provided", { status: 400 });
     }
 
+    const metadataOverrides: Array<Partial<ID3Tags> | undefined> = [];
+    for (let i = 0;; i++) {
+      const raw = formData.get(`metadata:${i}`);
+      if (raw == null) break;
+      try {
+        metadataOverrides[i] = JSON.parse(raw as string) as Partial<ID3Tags>;
+      } catch {
+        metadataOverrides[i] = undefined;
+      }
+    }
+
     const errors: string[] = [];
     let successCount = 0;
 
-    // Process each file
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       if (file instanceof File) {
         try {
           const data = formDataToAsyncIterable(file);
-          await handleS3Upload("files", file.type, data);
+          const override = metadataOverrides[i];
+          await handleS3Upload("files", file.type, data, override);
           successCount++;
         } catch (error) {
           const errorMessage = error instanceof Error

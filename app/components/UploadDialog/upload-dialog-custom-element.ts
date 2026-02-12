@@ -45,7 +45,7 @@ template.innerHTML = `
       display: block;
     }
   </style>
-  <button type="button" aria-label="add files" id="trigger">
+  <button type="button" aria-label="add files" id="trigger" title="Add files">
     <plus-circle-icon class="size-6"></plus-circle-icon>
   </button>
 `;
@@ -304,10 +304,10 @@ export class UploadDialogCustomElement extends HTMLElement {
       trigger.addEventListener("click", this.#onTriggerClick);
     }
 
-    if (this.hasAttribute("buttonStyle")) {
+    if (trigger && this.hasAttribute("buttonStyle")) {
       const buttonStyle = this.getAttribute("buttonStyle");
       if (buttonStyle) {
-        trigger!.style.cssText = buttonStyle;
+        trigger.style.cssText = buttonStyle;
       }
     }
   }
@@ -461,8 +461,15 @@ export class UploadDialogCustomElement extends HTMLElement {
       if (fileInput) fileInput.disabled = true;
 
       const formData = new FormData();
-      for (const f of this.#selectedFiles) {
-        formData.append("files", f);
+      const fileItems = fileListEl?.querySelectorAll(
+        "upload-dialog-file-item",
+      ) as NodeListOf<UploadDialogFileItemCustomElement>;
+      for (let i = 0; i < this.#selectedFiles.length; i++) {
+        formData.append("files", this.#selectedFiles[i]);
+        const item = fileItems?.[i];
+        if (item?.metadata) {
+          formData.append(`metadata:${i}`, JSON.stringify(item.metadata));
+        }
       }
 
       try {

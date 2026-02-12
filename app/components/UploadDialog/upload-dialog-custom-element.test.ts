@@ -128,6 +128,12 @@ function createMockDialog() {
       (child as { parentElement?: unknown }).parentElement = null;
       return child;
     },
+    querySelectorAll(sel: string) {
+      if (sel === "upload-dialog-file-item") {
+        return fileListChildren as unknown[];
+      }
+      return [];
+    },
     addEventListener(
       type: string,
       fn: (e: CustomEvent<{ fileKey: string }>) => void,
@@ -251,6 +257,14 @@ function setupDOMEnvironment() {
           },
           get file() {
             return _file;
+          },
+          get metadata() {
+            return {
+              artist: "Test Artist",
+              album: "Test Album",
+              title: "Test Title",
+              trackNumber: 1,
+            };
           },
           parentElement: null as unknown as ParentNode,
           _simulateRemove() {
@@ -756,7 +770,45 @@ Deno.test(
       1,
       "FormData passed to fetch must include selected files",
     );
+    const metadata0 = body.get("metadata:0");
+    assertExists(
+      metadata0,
+      "FormData should include metadata:0 when file items exist",
+    );
+    const parsed = JSON.parse(metadata0 as string) as {
+      artist: string;
+      album: string;
+      title: string;
+      trackNumber: number;
+    };
+    assertEquals(parsed.artist, "Test Artist");
+    assertEquals(parsed.album, "Test Album");
+    assertEquals(parsed.title, "Test Title");
+    assertEquals(parsed.trackNumber, 1);
 
     (globalThis as { fetch: typeof fetch }).fetch = OriginalFetch;
   },
 );
+
+Deno.test("UploadDialogFileItemCustomElement - metadata getter returns editable values and trackNumber clamps to 1", async () => {
+  /**
+   * Tests that when ID3 loads (or returns null), the metadata getter returns
+   * the current values and trackNumber is at least 1.
+   */
+  const element = new UploadDialogFileItemCustomElement();
+  const file = new File(["x"], "track.mp3", {
+    type: "audio/mpeg",
+    lastModified: 11111,
+  });
+  Object.defineProperty(file, "size", { value: 256 });
+  element.file = file;
+  element.connectedCallback();
+  await new Promise((r) => setTimeout(r, 50));
+  const meta = element.metadata;
+  assertExists(meta, "metadata getter should return object");
+  assertEquals(typeof meta.artist, "string");
+  assertEquals(typeof meta.album, "string");
+  assertEquals(typeof meta.title, "string");
+  assertEquals(typeof meta.trackNumber, "number");
+  assert(meta.trackNumber >= 1, "trackNumber should be at least 1");
+});

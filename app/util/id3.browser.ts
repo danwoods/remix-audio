@@ -15,6 +15,14 @@ export type ID3Tags = {
   trackNumber: number;
 };
 
+/** Editable ID3 fields sent from upload dialog to server. */
+export type ID3TagsEditable = {
+  artist: string;
+  album: string;
+  title: string;
+  trackNumber: number;
+};
+
 function imageValueToDataUrl(
   img: { mime: string | null; data: ArrayBuffer },
 ): string {

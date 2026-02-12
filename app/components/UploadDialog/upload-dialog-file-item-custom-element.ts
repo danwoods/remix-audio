@@ -1,13 +1,17 @@
 /** @file Custom element for a single file row in the upload dialog.
  *
  * Displays file name, size, a remove button, and loads ID3 metadata (artist,
- * album, title, track, cover art) asynchronously. Dispatches `upload-dialog-remove`
- * when the remove button is clicked.
+ * album, title, track, cover art) asynchronously. Artist, album, title, and
+ * track number are editable. Dispatches `upload-dialog-remove` when the remove
+ * button is clicked.
  */
 
 import "../../icons/trash/index.ts";
 import { formatFileSize } from "../../util/format.ts";
-import { getID3TagsFromFile } from "../../util/id3.browser.ts";
+import {
+  getID3TagsFromFile,
+  type ID3TagsEditable,
+} from "../../util/id3.browser.ts";
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
 
@@ -79,14 +83,9 @@ template.innerHTML = `
       font-size: 0.75rem;
       color: rgba(255, 255, 255, 0.6);
       display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .upload-dialog-file-item-id3-text {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 0.75rem;
     }
     .upload-dialog-file-item-id3 img {
       width: 2.5rem;
@@ -94,6 +93,45 @@ template.innerHTML = `
       object-fit: cover;
       border-radius: 0.25rem;
       flex-shrink: 0;
+    }
+    .upload-dialog-file-item-id3-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-width: 0;
+      flex: 1;
+    }
+    .upload-dialog-file-item-id3-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .upload-dialog-file-item-id3-row label {
+      flex-shrink: 0;
+      width: 3.5rem;
+      color: rgba(255, 255, 255, 0.65);
+    }
+    .upload-dialog-file-item-id3-row input {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 0.25rem;
+      color: inherit;
+      font-family: inherit;
+    }
+    .upload-dialog-file-item-id3-row input:focus {
+      outline: none;
+    }
+    .upload-dialog-file-item-id3-row input:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
+    }
+    .upload-dialog-file-item-id3-row input[type="number"] {
+      width: 3.5rem;
+      flex: none;
     }
   </style>
   <span class="upload-dialog-file-item-name" id="name"></span>
@@ -117,6 +155,13 @@ template.innerHTML = `
 export class UploadDialogFileItemCustomElement extends HTMLElement {
   #file: File | null = null;
   #fileKey = "";
+  #metadata: ID3TagsEditable = {
+    artist: "",
+    album: "",
+    title: "",
+    trackNumber: 1,
+  };
+  #id3InputUnsubscribe: (() => void)[] = [];
 
   constructor() {
     super();
@@ -137,6 +182,8 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
     if (removeBtn) {
       removeBtn.removeEventListener("click", this.#onRemoveClick);
     }
+    for (const fn of this.#id3InputUnsubscribe) fn();
+    this.#id3InputUnsubscribe = [];
   }
 
   /**
@@ -159,6 +206,11 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
     return this.#fileKey;
   }
 
+  /** Current editable metadata (for upload dialog to collect on submit). */
+  get metadata(): ID3TagsEditable {
+    return { ...this.#metadata };
+  }
+
   #onRemoveClick = () => {
     this.dispatchEvent(
       new CustomEvent("upload-dialog-remove", {
@@ -167,6 +219,20 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
       }),
     );
   };
+
+  #syncMetadataFromInputs(
+    artistInput: HTMLInputElement,
+    albumInput: HTMLInputElement,
+    titleInput: HTMLInputElement,
+    trackInput: HTMLInputElement,
+  ) {
+    this.#metadata = {
+      artist: artistInput.value.trim(),
+      album: albumInput.value.trim(),
+      title: titleInput.value.trim(),
+      trackNumber: Math.max(1, parseInt(trackInput.value, 10) || 1),
+    };
+  }
 
   #render(file: File) {
     const nameEl = this.shadowRoot!.getElementById("name");
@@ -179,30 +245,115 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
     if (removeBtn) removeBtn.setAttribute("aria-label", `Remove ${file.name}`);
     if (id3Target) id3Target.textContent = "Loading…";
 
+    for (const fn of this.#id3InputUnsubscribe) fn();
+    this.#id3InputUnsubscribe = [];
+
     getID3TagsFromFile(file).then((tags) => {
       if (!this.isConnected || !id3Target) return;
       id3Target.replaceChildren();
-      if (tags) {
-        const parts: string[] = [];
-        if (tags.artist) parts.push(tags.artist);
-        if (tags.album) parts.push(tags.album);
-        if (tags.title) parts.push(tags.title);
-        if (tags.trackNumber) parts.push(tags.trackNumber.toString());
-        const text = parts.join(" · ");
-        if (tags.image) {
-          const img = document.createElement("img");
-          img.src = tags.image;
-          img.alt = "";
-          img.setAttribute("aria-hidden", "true");
-          id3Target.appendChild(img);
-        }
-        const textSpan = document.createElement("span");
-        textSpan.className = "upload-dialog-file-item-id3-text";
-        textSpan.textContent = text || "—";
-        id3Target.appendChild(textSpan);
-      } else {
-        id3Target.textContent = "No metadata";
+
+      const artist = tags?.artist?.trim() ?? "";
+      const album = tags?.album?.trim() ?? "";
+      const title = tags?.title?.trim() ?? "";
+      const trackNumber = Math.max(1, tags?.trackNumber ?? 1);
+      const image = tags?.image;
+
+      this.#metadata = { artist, album, title, trackNumber };
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "upload-dialog-file-item-id3";
+
+      if (image) {
+        const img = document.createElement("img");
+        img.src = image;
+        img.alt = "";
+        img.setAttribute("aria-hidden", "true");
+        wrapper.appendChild(img);
       }
+
+      const fields = document.createElement("div");
+      fields.className = "upload-dialog-file-item-id3-fields";
+
+      const artistRow = document.createElement("div");
+      artistRow.className = "upload-dialog-file-item-id3-row";
+      const artistLabel = document.createElement("label");
+      artistLabel.htmlFor = "artist-input";
+      artistLabel.textContent = "Artist";
+      const artistInput = document.createElement("input");
+      artistInput.id = "artist-input";
+      artistInput.type = "text";
+      artistInput.value = artist;
+      artistInput.setAttribute("aria-label", "Artist");
+      artistRow.appendChild(artistLabel);
+      artistRow.appendChild(artistInput);
+      fields.appendChild(artistRow);
+
+      const albumRow = document.createElement("div");
+      albumRow.className = "upload-dialog-file-item-id3-row";
+      const albumLabel = document.createElement("label");
+      albumLabel.htmlFor = "album-input";
+      albumLabel.textContent = "Album";
+      const albumInput = document.createElement("input");
+      albumInput.id = "album-input";
+      albumInput.type = "text";
+      albumInput.value = album;
+      albumInput.setAttribute("aria-label", "Album");
+      albumRow.appendChild(albumLabel);
+      albumRow.appendChild(albumInput);
+      fields.appendChild(albumRow);
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "upload-dialog-file-item-id3-row";
+      const titleLabel = document.createElement("label");
+      titleLabel.htmlFor = "title-input";
+      titleLabel.textContent = "Title";
+      const titleInput = document.createElement("input");
+      titleInput.id = "title-input";
+      titleInput.type = "text";
+      titleInput.value = title;
+      titleInput.setAttribute("aria-label", "Title");
+      titleRow.appendChild(titleLabel);
+      titleRow.appendChild(titleInput);
+      fields.appendChild(titleRow);
+
+      const trackRow = document.createElement("div");
+      trackRow.className = "upload-dialog-file-item-id3-row";
+      const trackLabel = document.createElement("label");
+      trackLabel.htmlFor = "track-input";
+      trackLabel.textContent = "Track";
+      const trackInput = document.createElement("input");
+      trackInput.id = "track-input";
+      trackInput.type = "number";
+      trackInput.min = "1";
+      trackInput.value = String(trackNumber);
+      trackInput.setAttribute("aria-label", "Track number");
+      trackRow.appendChild(trackLabel);
+      trackRow.appendChild(trackInput);
+      fields.appendChild(trackRow);
+
+      const sync = () =>
+        this.#syncMetadataFromInputs(
+          artistInput,
+          albumInput,
+          titleInput,
+          trackInput,
+        );
+
+      const onInput = () => sync();
+      artistInput.addEventListener("input", onInput);
+      albumInput.addEventListener("input", onInput);
+      titleInput.addEventListener("input", onInput);
+      trackInput.addEventListener("input", onInput);
+
+      this.#id3InputUnsubscribe.push(() => {
+        artistInput.removeEventListener("input", onInput);
+        albumInput.removeEventListener("input", onInput);
+        titleInput.removeEventListener("input", onInput);
+        trackInput.removeEventListener("input", onInput);
+      });
+
+      wrapper.appendChild(fields);
+      id3Target.appendChild(wrapper);
     });
   }
 }
