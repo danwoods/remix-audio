@@ -12,6 +12,8 @@ jobs:
             curl -fsSL https://deno.land/x/install/install.sh | sh
             export DENO_INSTALL="$HOME/.deno"
             export PATH="$DENO_INSTALL/bin:$PATH"
+            echo 'export DENO_INSTALL="$HOME/.deno"' >> $BASH_ENV
+            echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
       - run:
           name: Build
           command: deno task build
@@ -27,6 +29,8 @@ jobs:
             curl -fsSL https://deno.land/x/install/install.sh | sh
             export DENO_INSTALL="$HOME/.deno"
             export PATH="$DENO_INSTALL/bin:$PATH"
+            echo 'export DENO_INSTALL="$HOME/.deno"' >> $BASH_ENV
+            echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
       - run:
           name: Test
           command: deno task test:all
