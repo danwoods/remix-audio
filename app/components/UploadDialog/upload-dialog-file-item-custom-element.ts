@@ -322,10 +322,10 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
       const trackRow = document.createElement("div");
       trackRow.className = "upload-dialog-file-item-id3-row";
       const trackLabel = document.createElement("label");
-      trackLabel.htmlFor = "track-input";
+      trackLabel.htmlFor = "track-number-input";
       trackLabel.textContent = "Track";
       const trackInput = document.createElement("input");
-      trackInput.id = "track-input";
+      trackInput.id = "track-number-input";
       trackInput.type = "number";
       trackInput.min = "1";
       trackInput.value = String(trackNumber);
