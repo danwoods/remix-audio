@@ -2,6 +2,7 @@
 import { isFragmentRequest, renderPage } from "../ssr.ts";
 import { getUploadedFiles } from "../../app/util/s3.server.ts";
 import { getAdminAuthStatus, requireAdminAuth } from "../utils/basicAuth.ts";
+import { maybeHandleJsonDataRequest } from "../utils/jsonData.ts";
 
 import albumRowWithTitleHtml from "../../app/components/AlbumRow/album-row-with-title-html.ts";
 import { getAlbumIdsByRecent } from "../../app/util/files.ts";
@@ -42,6 +43,13 @@ export async function handleIndexHtml(
 
     const redirectUrl = new URL("/", req.url).toString();
     return Response.redirect(redirectUrl, 302);
+  }
+
+  const maybeJsonResponse = await maybeHandleJsonDataRequest(req, {
+    level: "root",
+  });
+  if (maybeJsonResponse) {
+    return maybeJsonResponse;
   }
 
   const files = await getUploadedFiles();
