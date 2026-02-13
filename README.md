@@ -217,14 +217,34 @@ Run the full test suite:
 deno task test:all
 ```
 
-This runs: `test:doc`, `test:components`, `test:util`, and `test:server` (Deno
-tests under `deno-tests/`).
+This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
+`test:server` (Deno tests under `deno-tests/`).
 
 - **Server / integration tests**: `deno-tests/` — see
   [deno-tests/README.md](deno-tests/README.md) for structure and how to run
   individual tests.
 - **Component tests**: `deno test app/components/ --no-check`
 - **Util tests**: `deno test app/util --no-check --allow-env --allow-read`
+
+---
+
+## Release automation
+
+- Application version is tracked in `deno.json` under `version`.
+- A release helper script (`scripts/release.ts`) reads conventional commits
+  since the previous semantic version tag and calculates the next version:
+  - `BREAKING CHANGE` or `!` in the commit header: **major**
+  - `feat`: **minor**
+  - `fix` / `perf` / `revert`: **patch**
+- CircleCI runs the release job only on `main` after tests pass. When a bump is
+  required, it updates `deno.json`, commits `chore(release): vX.Y.Z`, creates
+  tag `vX.Y.Z`, and pushes both commit and tag to `main`.
+
+Local dry run:
+
+```bash
+deno run --allow-read --allow-run scripts/release.ts --dry-run
+```
 
 ---
 
@@ -249,6 +269,7 @@ tests under `deno-tests/`).
 ├── build/                  # Build output
 │   └── main.js             # Custom elements bundle (from deno task build)
 ├── deno-tests/             # Deno tests (router, handlers, SSR, utils)
+├── scripts/                # CI/release scripts
 ├── public/                 # Static assets (e.g. favicon)
 ├── test_data/              # Test audio files (see test_data/README.md)
 ├── docs/                   # Generated API docs (deno task build:docs)
