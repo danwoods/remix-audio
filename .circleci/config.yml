@@ -35,6 +35,59 @@ jobs:
           name: Test
           command: deno task test:all
 
+  release:
+    docker:
+      - image: cimg/base:2024.01
+    steps:
+      - checkout
+      - run:
+          name: Install Deno
+          command: |
+            curl -fsSL https://deno.land/x/install/install.sh | sh
+            export DENO_INSTALL="$HOME/.deno"
+            export PATH="$DENO_INSTALL/bin:$PATH"
+            echo 'export DENO_INSTALL="$HOME/.deno"' >> $BASH_ENV
+            echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
+      - run:
+          name: Prepare git for release
+          command: |
+            git fetch --unshallow --tags origin main || git fetch --tags origin main
+            git checkout -B main "$CIRCLE_SHA1"
+            git config user.name "circleci-release-bot"
+            git config user.email "circleci-release-bot@users.noreply.github.com"
+
+            PUSH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+            if [ -n "$PUSH_TOKEN" ]; then
+              git remote set-url origin "https://x-access-token:${PUSH_TOKEN}@github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git"
+            fi
+      - run:
+          name: Bump version, tag, and push
+          command: |
+            NEXT_VERSION="$(deno run --allow-read --allow-write --allow-run scripts/release.ts || true)"
+            NEXT_VERSION="${NEXT_VERSION//$'\n'/}"
+
+            if [ -z "$NEXT_VERSION" ]; then
+              echo "No semantic version bump required."
+              exit 0
+            fi
+
+            RELEASE_TAG="v${NEXT_VERSION}"
+            if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+              echo "Tag $RELEASE_TAG already exists. Skipping release."
+              exit 0
+            fi
+
+            git add deno.json
+            if git diff --cached --quiet; then
+              echo "No deno.json changes to commit."
+              exit 0
+            fi
+
+            git commit -m "chore(release): ${RELEASE_TAG} [skip ci]"
+            git tag "$RELEASE_TAG"
+            git push origin HEAD:main
+            git push origin "$RELEASE_TAG"
+
 workflows:
   build_and_test:
     jobs:
@@ -42,3 +95,9 @@ workflows:
       - test:
           requires:
             - build
+      - release:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
