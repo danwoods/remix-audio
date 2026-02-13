@@ -130,3 +130,31 @@ Deno.test("Router respects HTTP methods", async () => {
   assertEquals(getCalled, false);
   assertEquals(postCalled, true);
 });
+
+Deno.test("Router matches album JSON route before album HTML route", async () => {
+  const router = new Router();
+  let jsonCalled = false;
+  let albumCalled = false;
+
+  router.add({
+    pattern: "/artists/:artistId/albums/:albumId/_json",
+    handler: () => {
+      jsonCalled = true;
+      return new Response("json");
+    },
+  });
+  router.add({
+    pattern: "/artists/:artistId/albums/:albumId",
+    handler: () => {
+      albumCalled = true;
+      return new Response("album");
+    },
+  });
+
+  const req = new Request("http://localhost:8000/artists/A/albums/B/_json");
+  const response = await router.handle(req);
+  assertEquals(response.status, 200);
+  assertEquals(await response.text(), "json");
+  assertEquals(jsonCalled, true);
+  assertEquals(albumCalled, false);
+});

@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/_json/schema",
+  "title": "BoomBox Data Export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "dataFormatVersion",
+    "compiledAt",
+    "schemaUrl",
+    "scope",
+    "data"
+  ],
+  "properties": {
+    "dataFormatVersion": {
+      "const": "1.0.0"
+    },
+    "compiledAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "schemaUrl": {
+      "type": "string",
+      "const": "/_json/schema"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "data": {
+      "$ref": "#/$defs/data"
+    }
+  },
+  "$defs": {
+    "scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "level"
+          ],
+          "properties": {
+            "level": {
+              "const": "root"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "level",
+            "artistId"
+          ],
+          "properties": {
+            "level": {
+              "const": "artist"
+            },
+            "artistId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "level",
+            "artistId",
+            "albumId"
+          ],
+          "properties": {
+            "level": {
+              "const": "album"
+            },
+            "artistId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "albumId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artists",
+        "totals"
+      ],
+      "properties": {
+        "artists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artist"
+          }
+        },
+        "totals": {
+          "$ref": "#/$defs/totals"
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artists",
+        "albums",
+        "tracks"
+      ],
+      "properties": {
+        "artists": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "albums": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tracks": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "artist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "localUrl",
+        "localJsonUrl",
+        "albumCount",
+        "albums"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "localUrl": {
+          "type": "string",
+          "pattern": "^/artists/[^/]+$"
+        },
+        "localJsonUrl": {
+          "type": "string",
+          "pattern": "^/artists/[^/]+/_json$"
+        },
+        "albumCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "albums": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/album"
+          }
+        }
+      }
+    },
+    "album": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "artistId",
+        "localUrl",
+        "localJsonUrl",
+        "coverUrl",
+        "trackCount",
+        "tracks"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artistId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "localUrl": {
+          "type": "string",
+          "pattern": "^/artists/[^/]+/albums/[^/]+$"
+        },
+        "localJsonUrl": {
+          "type": "string",
+          "pattern": "^/artists/[^/]+/albums/[^/]+/_json$"
+        },
+        "coverUrl": {
+          "type": "string",
+          "pattern": "^/artists/[^/]+/albums/[^/]+/cover$"
+        },
+        "trackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/track"
+          }
+        }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "trackNumber",
+        "url",
+        "lastModified"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trackNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "lastModified": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { createLogger } from "../../app/util/logger.ts";
 import type { FragmentMetaItem } from "../ssr.ts";
 import { escapeAttr, isFragmentRequest, renderPage } from "../ssr.ts";
 import { getAdminAuthStatus } from "../utils/basicAuth.ts";
+import { maybeHandleJsonDataRequest } from "../utils/jsonData.ts";
 
 const logger = createLogger("Album HTML");
 
@@ -31,6 +32,15 @@ export async function handleAlbumHtml(
 
   if (!artistId || !albumId) {
     return new Response("Missing artist or album ID", { status: 400 });
+  }
+
+  const maybeJsonResponse = await maybeHandleJsonDataRequest(req, {
+    level: "album",
+    artistId,
+    albumId,
+  });
+  if (maybeJsonResponse) {
+    return maybeJsonResponse;
   }
 
   const files = await getUploadedFiles();

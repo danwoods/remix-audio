@@ -172,6 +172,42 @@ changes are required for new routes; only the server handler must support
 
 ---
 
+## JSON data export API
+
+BoomBox also exposes a cache-friendly JSON export intended for external
+aggregators that pull metadata from multiple BoomBox instances.
+
+### Endpoints
+
+- `GET /_json` or `GET /?format=json` — full library export.
+- `GET /artists/:artistId/_json` — artist-scoped export.
+- `GET /artists/:artistId/albums/:albumId/_json` or
+  `GET /artists/:artistId/albums/:albumId?format=json` — album-scoped export.
+- `GET /_json/schema` — JSON Schema for the export format.
+
+### Response contract
+
+Each data export response includes:
+
+- `dataFormatVersion` (starts at `"1.0.0"`) — schema/data format version
+  (separate from app/software version).
+- `compiledAt` — UTC date-time when this payload snapshot was compiled.
+- `scope` — one of `root`, `artist`, or `album`.
+- `data` — normalized artists/albums/tracks data from S3.
+
+### Cache behavior
+
+Data export responses include:
+
+- `Cache-Control: public, max-age=300, stale-while-revalidate=60`
+- `ETag`
+- `Last-Modified`
+
+Conditional requests with `If-None-Match` return `304 Not Modified` when
+applicable.
+
+---
+
 ## Building
 
 - **Custom elements bundle** (required for the UI):
@@ -284,9 +320,13 @@ deno run --allow-read --allow-run scripts/release.ts --dry-run
 | Method + path                                  | Description                                            |
 | ---------------------------------------------- | ------------------------------------------------------ |
 | `GET /`                                        | Home page (admin UI shown when logged in via `/admin`) |
+| `GET /_json`                                   | Full library JSON export                               |
+| `GET /_json/schema`                            | JSON Schema for export payload                         |
 | `GET /admin`                                   | Admin login (Basic Auth); redirects to `/` on success  |
 | `POST /`                                       | File upload (requires admin Basic Auth)                |
+| `GET /artists/:artistId/_json`                 | Artist-scoped JSON export                              |
 | `GET /artists/:artistId/albums/:albumId`       | Album detail page                                      |
+| `GET /artists/:artistId/albums/:albumId/_json` | Album-scoped JSON export                               |
 | `GET /artists/:artistId/albums/:albumId/cover` | Album cover image (from first track’s ID3)             |
 
 Static assets: `/build/*`, `/assets/*` (if present), `/favicon.ico`, `/app.css`.

@@ -13,6 +13,8 @@ import { handleIndexHtml } from "./handlers/index.html.ts";
 import { loadEnv } from "./utils/loadEnv.ts";
 import { handleAlbumCover } from "./handlers/album.cover.ts";
 import { handleAlbumHtml } from "./handlers/album.html.ts";
+import { handleArtistJsonData } from "./handlers/artist.json.ts";
+import { handleJsonSchema } from "./handlers/json.schema.ts";
 import { createLogger } from "../app/util/logger.ts";
 
 // Create logger instance for server
@@ -24,11 +26,27 @@ const router = new Router();
 
 // App routes (HTML)
 router.add({ pattern: "/", handler: handleIndexHtml, method: "GET" });
+router.add({ pattern: "/_json", handler: handleIndexHtml, method: "GET" });
+router.add({
+  pattern: "/_json/schema",
+  handler: handleJsonSchema,
+  method: "GET",
+});
 router.add({ pattern: "/admin", handler: handleIndexHtml, method: "GET" });
 router.add({ pattern: "/", handler: handleUpload, method: "POST" });
 router.add({
+  pattern: "/artists/:artistId/_json",
+  handler: handleArtistJsonData,
+  method: "GET",
+});
+router.add({
   pattern: "/artists/:artistId/albums/:albumId/cover",
   handler: handleAlbumCover,
+  method: "GET",
+});
+router.add({
+  pattern: "/artists/:artistId/albums/:albumId/_json",
+  handler: handleAlbumHtml,
   method: "GET",
 });
 router.add({
