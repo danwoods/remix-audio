@@ -1,339 +1,282 @@
-/**
- * @file Tests for ProgressIndicatorCustomElement
+/** @file Tests for ProgressIndicatorCustomElement
  *
- * This test suite covers the track progress / scrub bar custom element
- * used in the playbar. The element displays current position and emits
- * seek events when the user clicks or drags.
+ * Covers the track progress / scrub bar: fill width from data-current-time/data-duration,
+ * seek event on pointerdown and keydown ArrowRight, and document listener cleanup on disconnect.
+ *
+ * Uses linkedom for a real DOM environment; wires document/window to globalThis
+ * so the component can run in Deno.
  */
 
 import { assertEquals, assertExists } from "@std/assert";
+import { parseHTML } from "linkedom";
+
+// ============================================================================
+// LINKEDOM SETUP (created once, reused across tests)
+// ============================================================================
+
+const LINKEDOM_HTML = `<!DOCTYPE html>
+<html>
+<head></head>
+<body></body>
+</html>`;
+
+const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
+  LINKEDOM_HTML,
+  "http://localhost:8000/",
+);
 
 // ============================================================================
 // MOCK STATE
 // ============================================================================
 
-let elementAttributes: { [key: string]: string } = {};
-let fillStyleWidth = "";
-let wrapAriaValuenow = "";
-let wrapListeners: Array<{ type: string; handler: EventListener }> = [];
-let documentPointerListeners: Array<{ type: string; handler: EventListener }> =
-  [];
-let seekEventListeners: ((event: Event) => void)[] = [];
+/** Tracks document pointer listeners for cleanup verification. */
+const documentPointerListenerCount: { add: number; remove: number } = {
+  add: 0,
+  remove: 0,
+};
 
-function createMockFn<T extends (...args: unknown[]) => unknown>(
-  returnValue?: ReturnType<T>,
-): T & { calls: unknown[][]; called: boolean } {
-  const calls: unknown[][] = [];
-  const fn = ((...args: unknown[]) => {
-    calls.push(args);
-    return returnValue;
-  }) as T & { calls: unknown[][]; called: boolean };
-  fn.calls = calls;
-  fn.called = false;
-  Object.defineProperty(fn, "called", {
-    get: () => calls.length > 0,
-  });
-  return fn;
-}
+// ============================================================================
+// DOM SETUP (must run before importing the element module)
+// ============================================================================
 
-function setupDOMEnvironment() {
-  globalThis.document = {
-    addEventListener: (type: string, handler: EventListener) => {
+function setupDOMEnvironment(options?: {
+  /** When true, wraps document add/removeEventListener to track pointer listeners. */
+  trackDocumentPointerListeners?: boolean;
+}) {
+  documentPointerListenerCount.add = 0;
+  documentPointerListenerCount.remove = 0;
+
+  const body = linkedomDocument.body;
+  if (body) {
+    while (body.firstChild) body.removeChild(body.firstChild);
+  }
+
+  (globalThis as { document: Document }).document = linkedomDocument;
+  (globalThis as { window: Window }).window =
+    linkedomWindow as unknown as Window;
+  (globalThis as { customElements: CustomElementRegistry }).customElements =
+    linkedomWindow.customElements;
+  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
+    linkedomWindow.HTMLElement;
+  (globalThis as { Event: typeof Event }).Event = linkedomWindow.Event;
+  (globalThis as { CustomEvent: typeof CustomEvent }).CustomEvent =
+    linkedomWindow.CustomEvent;
+  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
+    .setTimeout.bind(linkedomWindow);
+  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
+    linkedomWindow.clearTimeout.bind(linkedomWindow);
+
+  if (options?.trackDocumentPointerListeners) {
+    const origAdd = linkedomDocument.addEventListener.bind(linkedomDocument);
+    const origRemove = linkedomDocument.removeEventListener.bind(
+      linkedomDocument,
+    );
+    linkedomDocument.addEventListener = function (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: AddEventListenerOptions | boolean,
+    ) {
       if (type === "pointermove" || type === "pointerup") {
-        documentPointerListeners.push({ type, handler });
+        documentPointerListenerCount.add++;
       }
-    },
-    removeEventListener: (type: string, handler: EventListener) => {
-      const i = documentPointerListeners.findIndex(
-        (l) => l.type === type && l.handler === handler,
-      );
-      if (i !== -1) documentPointerListeners.splice(i, 1);
-    },
-    createElement: (tagName: string) => {
-      if (tagName === "template") {
-        return {
-          innerHTML: "",
-          content: {
-            cloneNode: () => ({
-              querySelector: (selector: string) => {
-                if (selector === ".progress-fill") {
-                  return {
-                    style: {
-                      get width() {
-                        return fillStyleWidth;
-                      },
-                      set width(v: string) {
-                        fillStyleWidth = v;
-                      },
-                    },
-                  };
-                }
-                if (selector === ".progress-wrap") {
-                  return {
-                    setAttribute: (name: string, value: string) => {
-                      if (name === "aria-valuenow") wrapAriaValuenow = value;
-                    },
-                    getAttribute: () => null,
-                    getBoundingClientRect: () => ({ left: 0, width: 100 }),
-                    addEventListener: (
-                      type: string,
-                      handler: EventListener,
-                    ) => {
-                      wrapListeners.push({ type, handler });
-                    },
-                    removeEventListener: (
-                      type: string,
-                      handler: EventListener,
-                    ) => {
-                      const i = wrapListeners.findIndex(
-                        (l) => l.type === type && l.handler === handler,
-                      );
-                      if (i !== -1) wrapListeners.splice(i, 1);
-                    },
-                    setPointerCapture: () => {},
-                  };
-                }
-                return null;
-              },
-            }),
-          },
-        } as unknown as HTMLTemplateElement;
-      }
-      return {} as unknown as HTMLElement;
-    },
-  } as unknown as Document;
-
-  globalThis.customElements = {
-    define: () => {},
-  } as unknown as CustomElementRegistry;
-
-  globalThis.HTMLElement = class HTMLElement {
-    shadowRoot: ShadowRoot | null = null;
-
-    constructor() {
-      this.shadowRoot = {
-        querySelector: (selector: string) => {
-          if (selector === ".progress-fill") {
-            return {
-              style: {
-                get width() {
-                  return fillStyleWidth;
-                },
-                set width(v: string) {
-                  fillStyleWidth = v;
-                },
-              },
-            };
-          }
-          if (selector === ".progress-wrap") {
-            return {
-              setAttribute: (name: string, value: string) => {
-                if (name === "aria-valuenow") wrapAriaValuenow = value;
-              },
-              getAttribute: () => null,
-              getBoundingClientRect: () => ({ left: 0, width: 100 }),
-              addEventListener: (type: string, handler: EventListener) => {
-                wrapListeners.push({ type, handler });
-              },
-              removeEventListener: (
-                type: string,
-                handler: EventListener,
-              ) => {
-                const i = wrapListeners.findIndex(
-                  (l) => l.type === type && l.handler === handler,
-                );
-                if (i !== -1) wrapListeners.splice(i, 1);
-              },
-              setPointerCapture: () => {},
-            };
-          }
-          return null;
-        },
-        appendChild: createMockFn(),
-      } as unknown as ShadowRoot;
-    }
-
-    addEventListener(
+      return origAdd(type, listener, options);
+    };
+    linkedomDocument.removeEventListener = function (
       type: string,
       listener: EventListenerOrEventListenerObject,
+      options?: EventListenerOptions | boolean,
     ) {
-      if (type === "seek" && typeof listener === "function") {
-        seekEventListeners.push(listener);
-      } else if (
-        type === "seek" &&
-        listener &&
-        typeof listener === "object" &&
-        "handleEvent" in listener
-      ) {
-        seekEventListeners.push((e) =>
-          (listener as EventListenerObject).handleEvent(e)
-        );
+      if (type === "pointermove" || type === "pointerup") {
+        documentPointerListenerCount.remove++;
       }
-    }
-
-    removeEventListener(
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-    ) {
-      if (type === "seek") {
-        const i = seekEventListeners.indexOf(
-          listener as (event: Event) => void,
-        );
-        if (i !== -1) seekEventListeners.splice(i, 1);
-      }
-    }
-
-    getAttribute(name: string) {
-      return elementAttributes[name] ?? null;
-    }
-
-    setAttribute(name: string, value: string) {
-      elementAttributes[name] = value;
-    }
-
-    attachShadow() {
-      return this.shadowRoot!;
-    }
-
-    dispatchEvent(event: Event): boolean {
-      if (event.type === "seek") {
-        seekEventListeners.forEach((listener) => {
-          try {
-            listener(event);
-          } catch (_e) {
-            // ignore
-          }
-        });
-      }
-      return true;
-    }
-  } as unknown as typeof HTMLElement;
-}
-
-function resetTestState() {
-  elementAttributes = {};
-  fillStyleWidth = "";
-  wrapAriaValuenow = "";
-  wrapListeners = [];
-  documentPointerListeners = [];
-  seekEventListeners = [];
+      return origRemove(type, listener, options);
+    };
+  }
 }
 
 // ============================================================================
-// MODULE IMPORT
+// TEST HELPERS
 // ============================================================================
 
-setupDOMEnvironment();
-const { ProgressIndicatorCustomElement } = await import(
-  "./progress-indicator-custom-element.ts"
-);
+/** Creates a progress-indicator element in the DOM with optional attributes. */
+function createProgressIndicator(
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const body = linkedomDocument.body;
+  if (!body) throw new Error("body not found");
+  const el = linkedomDocument.createElement(
+    "progress-indicator-custom-element",
+  );
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
+  body.appendChild(el);
+  return el as HTMLElement;
+}
 
-function createTestElement(): InstanceType<
-  typeof ProgressIndicatorCustomElement
-> {
-  resetTestState();
-  return new ProgressIndicatorCustomElement();
+function getProgressFill(el: HTMLElement): HTMLElement | null {
+  return el.shadowRoot?.querySelector(".progress-fill") as HTMLElement | null;
+}
+
+function getProgressWrap(el: HTMLElement): HTMLElement | null {
+  return el.shadowRoot?.querySelector(".progress-wrap") as HTMLElement | null;
+}
+
+/** Creates a pointerdown-like event for tests. Linkedom lacks PointerEvent. */
+function createPointerDownEvent(init: {
+  clientX: number;
+  button?: number;
+  pointerId?: number;
+}): Event {
+  const ev = new linkedomWindow.Event("pointerdown", {
+    bubbles: true,
+    cancelable: true,
+  });
+  return Object.assign(ev, {
+    clientX: init.clientX,
+    button: init.button ?? 0,
+    pointerId: init.pointerId ?? 0,
+  });
+}
+
+/** Creates a keydown event for tests. Linkedom may lack KeyboardEvent. */
+function createKeydownEvent(key: string): Event {
+  const ev = new linkedomWindow.Event("keydown", {
+    bubbles: true,
+    cancelable: true,
+  });
+  return Object.assign(ev, { key });
 }
 
 // ============================================================================
 // TESTS
 // ============================================================================
 
-Deno.test("ProgressIndicatorCustomElement - renders fill width from data-current-time and data-duration", () => {
-  const el = createTestElement();
-  el.setAttribute("data-current-time", "50");
-  el.setAttribute("data-duration", "100");
-  el.connectedCallback();
-  assertEquals(fillStyleWidth, "50%");
-  assertEquals(wrapAriaValuenow, "50");
-});
+Deno.test(
+  "ProgressIndicatorCustomElement - renders fill width from data-current-time and data-duration",
+  async () => {
+    setupDOMEnvironment();
+    await import("./progress-indicator-custom-element.ts");
 
-Deno.test("ProgressIndicatorCustomElement - dispatches seek event with detail.time on pointerdown", () => {
-  const el = createTestElement();
-  el.setAttribute("data-current-time", "0");
-  el.setAttribute("data-duration", "100");
-  el.connectedCallback();
+    const el = createProgressIndicator({
+      "data-current-time": "50",
+      "data-duration": "100",
+    });
+    const fill = getProgressFill(el);
+    const wrap = getProgressWrap(el);
 
-  let seekDetail: { time: number } | null = null;
-  el.addEventListener(
-    "seek",
-    ((e: Event) => {
+    assertExists(fill);
+    assertExists(wrap);
+    assertEquals(fill.style.width, "50%");
+    assertEquals(wrap.getAttribute("aria-valuenow"), "50");
+  },
+);
+
+Deno.test(
+  "ProgressIndicatorCustomElement - dispatches seek event with detail.time on pointerdown",
+  async () => {
+    setupDOMEnvironment();
+    await import("./progress-indicator-custom-element.ts");
+
+    const el = createProgressIndicator({
+      "data-current-time": "0",
+      "data-duration": "100",
+    });
+    const wrap = getProgressWrap(el);
+    assertExists(wrap);
+
+    // Patch getBoundingClientRect so clientX 50 maps to 50% = 50s
+    wrap.getBoundingClientRect = () => ({
+      left: 0,
+      width: 100,
+      top: 0,
+      right: 100,
+      bottom: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    let seekDetail: { time: number } | null = null;
+    el.addEventListener("seek", (e: Event) => {
       seekDetail = (e as CustomEvent<{ time: number }>).detail;
-    }) as EventListener,
-  );
+    });
 
-  const pointerdownHandler = wrapListeners.find((l) => l.type === "pointerdown")
-    ?.handler;
-  assertExists(pointerdownHandler);
-  const syntheticPointerEvent = {
-    button: 0,
-    clientX: 50,
-    pointerId: 0,
-    preventDefault: () => {},
-    target: { setPointerCapture: () => {} },
-  };
-  pointerdownHandler(syntheticPointerEvent as unknown as Event);
+    const pointerEvent = createPointerDownEvent({ clientX: 50 });
+    wrap.dispatchEvent(pointerEvent);
 
-  assertExists(seekDetail, "seek event should be dispatched");
-  assertEquals((seekDetail as { time: number }).time, 50);
-});
+    assertExists(seekDetail, "seek event should be dispatched");
+    assertEquals((seekDetail as { time: number }).time, 50);
+  },
+);
 
-Deno.test("ProgressIndicatorCustomElement - dispatches seek event on ArrowRight keydown", () => {
-  const el = createTestElement();
-  el.setAttribute("data-current-time", "50");
-  el.setAttribute("data-duration", "100");
-  el.connectedCallback();
+Deno.test(
+  "ProgressIndicatorCustomElement - dispatches seek event on ArrowRight keydown",
+  async () => {
+    setupDOMEnvironment();
+    await import("./progress-indicator-custom-element.ts");
 
-  let seekDetail: { time: number } | null = null;
-  el.addEventListener(
-    "seek",
-    ((e: Event) => {
+    const el = createProgressIndicator({
+      "data-current-time": "50",
+      "data-duration": "100",
+    });
+    const wrap = getProgressWrap(el);
+    assertExists(wrap);
+
+    let seekDetail: { time: number } | null = null;
+    el.addEventListener("seek", (e: Event) => {
       seekDetail = (e as CustomEvent<{ time: number }>).detail;
-    }) as EventListener,
-  );
+    });
 
-  const keydownHandler = wrapListeners.find((l) => l.type === "keydown")
-    ?.handler;
-  assertExists(keydownHandler);
-  const syntheticKeyEvent = {
-    key: "ArrowRight",
-    preventDefault: () => {},
-  };
-  keydownHandler(syntheticKeyEvent as unknown as Event);
+    const keyEvent = createKeydownEvent("ArrowRight");
+    wrap.dispatchEvent(keyEvent);
 
-  assertExists(seekDetail, "seek event should be dispatched");
-  assertEquals((seekDetail as { time: number }).time, 55);
-});
+    assertExists(seekDetail, "seek event should be dispatched");
+    assertEquals((seekDetail as { time: number }).time, 55);
+  },
+);
 
-Deno.test("ProgressIndicatorCustomElement - removes document pointer listeners on disconnect", () => {
-  const el = createTestElement();
-  el.setAttribute("data-current-time", "0");
-  el.setAttribute("data-duration", "100");
-  el.connectedCallback();
+Deno.test(
+  "ProgressIndicatorCustomElement - removes document pointer listeners on disconnect",
+  async () => {
+    setupDOMEnvironment({ trackDocumentPointerListeners: true });
+    await import("./progress-indicator-custom-element.ts");
 
-  const pointerdownHandler = wrapListeners.find((l) => l.type === "pointerdown")
-    ?.handler;
-  assertExists(pointerdownHandler);
-  const syntheticPointerEvent = {
-    button: 0,
-    clientX: 50,
-    pointerId: 0,
-    preventDefault: () => {},
-    target: { setPointerCapture: () => {} },
-  };
-  pointerdownHandler(syntheticPointerEvent as unknown as Event);
+    const el = createProgressIndicator({
+      "data-current-time": "0",
+      "data-duration": "100",
+    });
+    const wrap = getProgressWrap(el);
+    assertExists(wrap);
 
-  assertEquals(
-    documentPointerListeners.length,
-    2,
-    "pointermove and pointerup should be on document after pointerdown",
-  );
+    wrap.getBoundingClientRect = () => ({
+      left: 0,
+      width: 100,
+      top: 0,
+      right: 100,
+      bottom: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
 
-  el.disconnectedCallback();
+    const pointerEvent = createPointerDownEvent({ clientX: 50 });
+    wrap.dispatchEvent(pointerEvent);
 
-  assertEquals(
-    documentPointerListeners.length,
-    0,
-    "document pointer listeners should be removed on disconnect",
-  );
-});
+    assertEquals(
+      documentPointerListenerCount.add,
+      2,
+      "pointermove and pointerup should be on document after pointerdown",
+    );
+
+    linkedomDocument.body?.removeChild(el);
+
+    assertEquals(
+      documentPointerListenerCount.remove,
+      2,
+      "document pointer listeners should be removed on disconnect",
+    );
+  },
+);
