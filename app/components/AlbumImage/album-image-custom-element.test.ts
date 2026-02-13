@@ -5,10 +5,8 @@
  * from ID3 cover data. The element uses data-album-url to load the first track
  * of an album, extracts cover art via id3js, and displays it as a data URL.
  *
- * ## Test Structure
- *
- * Tests use Deno's built-in testing framework. DOM is mocked because Deno does
- * not provide a full DOM. The module is imported after DOM and fetch setup.
+ * Uses linkedom for a real DOM environment; wires document/window to globalThis
+ * so the component can run in Deno.
  *
  * ## Key Testing Areas
  *
@@ -20,18 +18,28 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
+import { parseHTML } from "linkedom";
+
+// ============================================================================
+// LINKEDOM SETUP (created once, reused across tests)
+// ============================================================================
+
+const LINKEDOM_HTML = `<!DOCTYPE html>
+<html>
+<head></head>
+<body></body>
+</html>`;
+
+const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
+  LINKEDOM_HTML,
+  "http://localhost:8000/",
+);
 
 // ============================================================================
 // MOCK STATE
 // ============================================================================
 
-let elementAttributes: { [key: string]: string } = {};
-const imgSetAttributeCalls: [string, string][] = [];
-const imgAddEventListenerCalls: [string, unknown][] = [];
-const imgRemoveEventListenerCalls: [string, unknown][] = [];
-let imgComplete = false;
-let imgNaturalHeight = 0;
-let mockFetchUrl: string | null = null;
+const fetchCalls: { url: string }[] = [];
 
 /** S3 list-type=2 XML with one track key. */
 const S3_LIST_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -40,131 +48,26 @@ const S3_LIST_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </ListBucketResult>`;
 
 // ============================================================================
-// MOCK HELPER
+// FETCH HELPERS
 // ============================================================================
 
-function createMockFn<T extends (...args: unknown[]) => unknown>(
-  returnValue?: ReturnType<T>,
-): T & { calls: unknown[][]; called: boolean } {
-  const calls: unknown[][] = [];
-  const fn = ((...args: unknown[]) => {
-    calls.push(args);
-    return returnValue;
-  }) as T & { calls: unknown[][]; called: boolean };
-  fn.calls = calls;
-  fn.called = false;
-  Object.defineProperty(fn, "called", {
-    get: () => calls.length > 0,
-  });
-  return fn;
+function parseFetchUrl(input: RequestInfo | URL): string {
+  return typeof input === "string"
+    ? input
+    : input instanceof URL
+    ? input.href
+    : (input as Request).url;
 }
 
-// ============================================================================
-// DOM SETUP (must run before importing the element module)
-// ============================================================================
-
-function setupDOMEnvironment() {
-  elementAttributes = {};
-  imgSetAttributeCalls.length = 0;
-  imgAddEventListenerCalls.length = 0;
-  imgRemoveEventListenerCalls.length = 0;
-  imgComplete = false;
-  imgNaturalHeight = 0;
-  mockFetchUrl = null;
-
-  const mockImg = {
-    setAttribute(name: string, value: string) {
-      imgSetAttributeCalls.push([name, value]);
-    },
-    getAttribute: createMockFn() as (name: string) => string | null,
-    addEventListener(type: string, listener: unknown) {
-      imgAddEventListenerCalls.push([type, listener]);
-    },
-    removeEventListener(type: string, listener: unknown) {
-      imgRemoveEventListenerCalls.push([type, listener]);
-    },
-    get complete() {
-      return imgComplete;
-    },
-    get naturalHeight() {
-      return imgNaturalHeight;
-    },
-  };
-
-  const mockShadowRoot = {
-    appendChild: createMockFn(),
-    querySelector(selector: string) {
-      if (selector === "img") return mockImg;
-      return null;
-    },
-    host: null as unknown as Element,
-    mode: "open" as ShadowRootMode,
-  };
-
-  const mockTemplateContent = {
-    cloneNode(_deep: boolean) {
-      return mockShadowRoot;
-    },
-  };
-
-  globalThis.document = {
-    createElement(tagName: string) {
-      if (tagName === "template") {
-        return {
-          innerHTML: "",
-          content: mockTemplateContent,
-        } as unknown as HTMLTemplateElement;
-      }
-      return {} as HTMLElement;
-    },
-    body: { appendChild: createMockFn(), removeChild: createMockFn() },
-  } as unknown as Document;
-
-  globalThis.customElements = {
-    define: () => {},
-  } as unknown as CustomElementRegistry;
-
-  globalThis.HTMLElement = class HTMLElement {
-    shadowRoot: ShadowRoot | null = null;
-
-    constructor() {
-      this.shadowRoot = mockShadowRoot as unknown as ShadowRoot;
-    }
-
-    attachShadow(_init: ShadowRootInit) {
-      return this.shadowRoot!;
-    }
-
-    getAttribute(name: string) {
-      return elementAttributes[name] ?? null;
-    }
-
-    setAttribute(name: string, value: string) {
-      elementAttributes[name] = value;
-    }
-
-    removeAttribute(name: string) {
-      delete elementAttributes[name];
-    }
-
-    addEventListener() {}
-    removeEventListener() {}
-    dispatchEvent() {
-      return true;
-    }
-    querySelector() {
-      return null;
-    }
-  } as unknown as typeof HTMLElement;
-
-  globalThis.fetch = ((url: string | URL | Request) => {
-    const urlStr = typeof url === "string"
-      ? url
-      : url instanceof URL
-      ? url.href
-      : url.url;
-    mockFetchUrl = urlStr;
-    if (urlStr.includes("list-type=2") && urlStr.includes("prefix=")) {
+/** Creates a fetch that records URLs to fetchCalls. Returns S3 list XML for
+ * list-type=2+prefix requests, 404 for MP3/other URLs. */
+function createS3MockFetch(): (
+  input: RequestInfo | URL,
+) => Promise<Response> {
+  return (input) => {
+    const url = parseFetchUrl(input);
+    fetchCalls.push({ url });
+    if (url.includes("list-type=2") && url.includes("prefix=")) {
       return Promise.resolve(
         new Response(S3_LIST_XML, {
           headers: { "Content-Type": "application/xml" },
@@ -172,163 +75,248 @@ function setupDOMEnvironment() {
       );
     }
     return Promise.resolve(new Response("", { status: 404 }));
-  }) as typeof fetch;
+  };
 }
 
 // ============================================================================
-// MODULE IMPORT (after DOM setup)
+// DOM SETUP (must run before importing the element module)
 // ============================================================================
 
-setupDOMEnvironment();
+function setupDOMEnvironment(options?: {
+  fetch?: (input: RequestInfo | URL) => Promise<Response>;
+}) {
+  fetchCalls.length = 0;
 
-const { AlbumImageCustomElement } = await import(
-  "./album-image-custom-element.ts"
+  const body = linkedomDocument.body;
+  if (body) {
+    while (body.firstChild) body.removeChild(body.firstChild);
+  }
+
+  (globalThis as { document: Document }).document = linkedomDocument;
+  (globalThis as { window: Window }).window =
+    linkedomWindow as unknown as Window;
+  (globalThis as { customElements: CustomElementRegistry }).customElements =
+    linkedomWindow.customElements;
+  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
+    linkedomWindow.HTMLElement;
+  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
+    .setTimeout.bind(linkedomWindow);
+  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
+    linkedomWindow.clearTimeout.bind(linkedomWindow);
+
+  globalThis.fetch = options?.fetch ?? createS3MockFetch();
+}
+
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+
+/** Creates an album-image element in the DOM with optional attributes. Uses
+ * document.createElement and appendChild so connectedCallback fires naturally. */
+function createAlbumImage(
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const body = linkedomDocument.body;
+  if (!body) throw new Error("body not found");
+  const el = linkedomDocument.createElement("album-image-custom-element");
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
+  body.appendChild(el);
+  return el as HTMLElement;
+}
+
+function getImg(el: HTMLElement): HTMLImageElement | null {
+  return (el.shadowRoot?.querySelector("img") ?? null) as
+    | HTMLImageElement
+    | null;
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+Deno.test(
+  "AlbumImageCustomElement - should create element with shadow root",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
+
+    const el = createAlbumImage();
+
+    assertExists(el);
+    assertEquals(el.constructor.name, "AlbumImageCustomElement");
+    assertExists(el.shadowRoot, "shadow root should exist (open mode)");
+  },
 );
 
-// ============================================================================
-// TEST HELPER
-// ============================================================================
+Deno.test(
+  "AlbumImageCustomElement - should have observedAttributes data-album-url and class",
+  async () => {
+    setupDOMEnvironment();
+    const { AlbumImageCustomElement } = await import(
+      "./album-image-custom-element.ts"
+    );
 
-function createTestElement(): InstanceType<typeof AlbumImageCustomElement> {
-  elementAttributes = {};
-  imgSetAttributeCalls.length = 0;
-  imgAddEventListenerCalls.length = 0;
-  imgRemoveEventListenerCalls.length = 0;
-  imgComplete = false;
-  imgNaturalHeight = 0;
-  mockFetchUrl = null;
+    assertEquals(AlbumImageCustomElement.observedAttributes, [
+      "data-album-url",
+      "class",
+    ]);
+  },
+);
 
-  const element = new AlbumImageCustomElement();
+Deno.test(
+  "AlbumImageCustomElement - should copy class from host to img on connect",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
 
-  const originalSetAttribute = element.setAttribute.bind(element);
-  element.setAttribute = (name: string, value: string) => {
-    const oldValue = element.getAttribute(name);
-    originalSetAttribute(name, value);
-    if (AlbumImageCustomElement.observedAttributes.includes(name)) {
-      element.attributeChangedCallback(name, oldValue, value);
-    }
-  };
+    const el = createAlbumImage({ class: "album-cover rounded" });
+    const img = getImg(el);
 
-  return element;
-}
+    assertExists(img);
+    assertEquals(
+      img.getAttribute("class"),
+      "album-cover rounded",
+      "img class should be set from host",
+    );
+  },
+);
 
-// ============================================================================
-// TEST SUITE: ELEMENT LIFECYCLE
-// ============================================================================
+Deno.test(
+  "AlbumImageCustomElement - should copy style from host to img on connect",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
 
-Deno.test("AlbumImageCustomElement - should create element with shadow root", () => {
-  const element = createTestElement();
-  assertExists(element);
-  assertEquals(element.constructor.name, "AlbumImageCustomElement");
-  assertExists(element.shadowRoot);
-  assertEquals(element.shadowRoot?.mode, "open");
-});
+    const el = createAlbumImage({
+      style: "width: 100%; border-radius: 4px;",
+    });
+    const img = getImg(el);
 
-Deno.test("AlbumImageCustomElement - should have observedAttributes data-album-url and class", () => {
-  assertEquals(AlbumImageCustomElement.observedAttributes, [
-    "data-album-url",
-    "class",
-  ]);
-});
+    assertExists(img);
+    assertEquals(
+      img.getAttribute("style"),
+      "width: 100%; border-radius: 4px;",
+      "img style should be set from host",
+    );
+  },
+);
 
-Deno.test("AlbumImageCustomElement - should copy class from host to img on connect", () => {
-  const element = createTestElement();
-  element.setAttribute("class", "album-cover rounded");
-  element.connectedCallback();
-  const classCalls = imgSetAttributeCalls.filter(([name]) => name === "class");
-  assertExists(
-    classCalls.find(([, value]) => value === "album-cover rounded"),
-    "img class should be set from host",
-  );
-});
+Deno.test(
+  "AlbumImageCustomElement - should update img class when class attribute changes",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
 
-Deno.test("AlbumImageCustomElement - should copy style from host to img on connect", () => {
-  const element = createTestElement();
-  element.setAttribute("style", "width: 100%; border-radius: 4px;");
-  element.connectedCallback();
-  const styleCalls = imgSetAttributeCalls.filter(([name]) => name === "style");
-  assertExists(
-    styleCalls.find(([, value]) =>
-      value === "width: 100%; border-radius: 4px;"
-    ),
-    "img style should be set from host",
-  );
-});
+    const el = createAlbumImage();
+    el.setAttribute("class", "new-class");
+    const img = getImg(el);
 
-Deno.test("AlbumImageCustomElement - should update img class when class attribute changes", () => {
-  const element = createTestElement();
-  element.connectedCallback();
-  imgSetAttributeCalls.length = 0;
-  element.setAttribute("class", "new-class");
-  const classCalls = imgSetAttributeCalls.filter(([name]) => name === "class");
-  assertExists(
-    classCalls.find(([, value]) => value === "new-class"),
-    "img class should update when host class changes",
-  );
-});
+    assertExists(img);
+    assertEquals(
+      img.getAttribute("class"),
+      "new-class",
+      "img class should update when host class changes",
+    );
+  },
+);
 
-Deno.test("AlbumImageCustomElement - should call loadAlbumImage on connect when data-album-url is set", async () => {
-  const element = createTestElement();
-  element.setAttribute(
-    "data-album-url",
-    "https://bucket.s3.region.amazonaws.com/ArtistId/AlbumId",
-  );
-  element.connectedCallback();
-  await new Promise((r) => setTimeout(r, 50));
-  assertExists(mockFetchUrl, "fetch should be called for S3 list");
-  assertEquals(
-    mockFetchUrl!.includes("list-type=2") &&
-      mockFetchUrl!.includes("prefix=ArtistId/AlbumId/"),
-    true,
-  );
-});
+Deno.test(
+  "AlbumImageCustomElement - should call loadAlbumImage on connect when data-album-url is set",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
 
-Deno.test("AlbumImageCustomElement - should not throw when disconnected", () => {
-  const element = createTestElement();
-  element.setAttribute(
-    "data-album-url",
-    "https://bucket.s3.region.amazonaws.com/ArtistId/AlbumId",
-  );
-  element.connectedCallback();
-  element.disconnectedCallback();
-});
+    createAlbumImage({
+      "data-album-url":
+        "https://bucket.s3.region.amazonaws.com/ArtistId/AlbumId",
+    });
 
-Deno.test("AlbumImageCustomElement - should not throw when connecting with no data-album-url", () => {
-  const element = createTestElement();
-  element.connectedCallback();
-  assertExists(element.shadowRoot);
-});
+    await new Promise((r) => setTimeout(r, 50));
 
-Deno.test("AlbumImageCustomElement - should not fetch when data-album-url has no artist/album path", async () => {
-  mockFetchUrl = null;
-  const element = createTestElement();
-  element.setAttribute(
-    "data-album-url",
-    "https://bucket.s3.region.amazonaws.com",
-  );
-  element.connectedCallback();
-  await new Promise((r) => setTimeout(r, 30));
-  const hadListFetch = mockFetchUrl !== null &&
-    mockFetchUrl.includes("list-type=2") &&
-    mockFetchUrl.includes("prefix=");
-  assertEquals(
-    hadListFetch,
-    false,
-    "should not call S3 list when URL has no artist/album segments",
-  );
-});
+    const hadListFetch = fetchCalls.some(
+      (c) =>
+        c.url.includes("list-type=2") &&
+        c.url.includes("prefix=ArtistId/AlbumId/"),
+    );
+    assertExists(
+      hadListFetch,
+      "fetch should be called for S3 list",
+    );
+  },
+);
 
-Deno.test("AlbumImageCustomElement - should trigger loadAlbumImage when data-album-url attribute changes", async () => {
-  const element = createTestElement();
-  element.connectedCallback();
-  mockFetchUrl = null;
-  element.setAttribute(
-    "data-album-url",
-    "https://bucket.s3.region.amazonaws.com/OtherArtist/OtherAlbum",
-  );
-  await new Promise((r) => setTimeout(r, 50));
-  assertExists(
-    mockFetchUrl,
-    "fetch should be called when data-album-url is set",
-  );
-});
+Deno.test(
+  "AlbumImageCustomElement - should not throw when disconnected",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
+
+    const el = createAlbumImage({
+      "data-album-url":
+        "https://bucket.s3.region.amazonaws.com/ArtistId/AlbumId",
+    });
+    linkedomDocument.body?.removeChild(el);
+  },
+);
+
+Deno.test(
+  "AlbumImageCustomElement - should not throw when connecting with no data-album-url",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
+
+    const el = createAlbumImage();
+    assertExists(el.shadowRoot);
+  },
+);
+
+Deno.test(
+  "AlbumImageCustomElement - should not fetch when data-album-url has no artist/album path",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
+
+    createAlbumImage({
+      "data-album-url": "https://bucket.s3.region.amazonaws.com",
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    const hadListFetch = fetchCalls.some(
+      (c) => c.url.includes("list-type=2") && c.url.includes("prefix="),
+    );
+    assertEquals(
+      hadListFetch,
+      false,
+      "should not call S3 list when URL has no artist/album segments",
+    );
+  },
+);
+
+Deno.test(
+  "AlbumImageCustomElement - should trigger loadAlbumImage when data-album-url attribute changes",
+  async () => {
+    setupDOMEnvironment();
+    await import("./album-image-custom-element.ts");
+
+    const el = createAlbumImage();
+    el.setAttribute(
+      "data-album-url",
+      "https://bucket.s3.region.amazonaws.com/OtherArtist/OtherAlbum",
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const hadListFetch = fetchCalls.some(
+      (c) =>
+        c.url.includes("list-type=2") &&
+        c.url.includes("prefix=OtherArtist/OtherAlbum/"),
+    );
+    assertExists(
+      hadListFetch,
+      "fetch should be called when data-album-url is set",
+    );
+  },
+);
