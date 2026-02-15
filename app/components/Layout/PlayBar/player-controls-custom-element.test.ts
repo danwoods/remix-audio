@@ -9,69 +9,25 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import {
+  createCustomElement,
+  createLinkedomEnv,
+  wireLinkedomToGlobal,
+} from "../../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
-
-// ============================================================================
-// DOM SETUP (must run before importing the element module)
-// ============================================================================
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 function setupDOMEnvironment() {
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
-
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { Event: typeof Event }).Event = linkedomWindow.Event;
-  (globalThis as { CustomEvent: typeof CustomEvent }).CustomEvent =
-    linkedomWindow.CustomEvent;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, { event: true });
 }
 
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
-
-/** Creates a player-controls element in the DOM with optional attributes.
- * Uses document.createElement and appendChild so connectedCallback fires
- * naturally. */
-function createPlayerControls(
-  attrs: Record<string, string> = {},
-): HTMLElement {
-  const body = linkedomDocument.body;
-  if (!body) throw new Error("body not found");
-  const el = linkedomDocument.createElement(
+function createPlayerControls(attrs: Record<string, string> = {}): HTMLElement {
+  return createCustomElement(
+    linkedomDocument,
     "player-controls-custom-element",
+    attrs,
   );
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
-  body.appendChild(el);
-  return el as HTMLElement;
 }
 
 function getPrevButton(el: HTMLElement): HTMLButtonElement | null {

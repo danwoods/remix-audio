@@ -8,36 +8,20 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import {
+  createCustomElement,
+  createLinkedomEnv,
+  wireLinkedomToGlobal,
+} from "../../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
-
-// ============================================================================
-// MOCK STATE
-// ============================================================================
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 /** Tracks document pointer listeners for cleanup verification. */
 const documentPointerListenerCount: { add: number; remove: number } = {
   add: 0,
   remove: 0,
 };
-
-// ============================================================================
-// DOM SETUP (must run before importing the element module)
-// ============================================================================
 
 function setupDOMEnvironment(options?: {
   /** When true, wraps document add/removeEventListener to track pointer listeners. */
@@ -46,25 +30,7 @@ function setupDOMEnvironment(options?: {
   documentPointerListenerCount.add = 0;
   documentPointerListenerCount.remove = 0;
 
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
-
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { Event: typeof Event }).Event = linkedomWindow.Event;
-  (globalThis as { CustomEvent: typeof CustomEvent }).CustomEvent =
-    linkedomWindow.CustomEvent;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, { event: true });
 
   if (options?.trackDocumentPointerListeners) {
     const origAdd = linkedomDocument.addEventListener.bind(linkedomDocument);
@@ -94,24 +60,14 @@ function setupDOMEnvironment(options?: {
   }
 }
 
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
-
-/** Creates a progress-indicator element in the DOM with optional attributes. */
 function createProgressIndicator(
   attrs: Record<string, string> = {},
 ): HTMLElement {
-  const body = linkedomDocument.body;
-  if (!body) throw new Error("body not found");
-  const el = linkedomDocument.createElement(
+  return createCustomElement(
+    linkedomDocument,
     "progress-indicator-custom-element",
+    attrs,
   );
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
-  body.appendChild(el);
-  return el as HTMLElement;
 }
 
 function getProgressFill(el: HTMLElement): HTMLElement | null {

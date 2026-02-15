@@ -18,22 +18,14 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import {
+  createCustomElement,
+  createLinkedomEnv,
+  wireLinkedomToGlobal,
+} from "../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 // ============================================================================
 // MOCK STATE
@@ -86,44 +78,17 @@ function setupDOMEnvironment(options?: {
   fetch?: (input: RequestInfo | URL) => Promise<Response>;
 }) {
   fetchCalls.length = 0;
-
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
-
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
-
-  globalThis.fetch = options?.fetch ?? createS3MockFetch();
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, {
+    fetch: options?.fetch ?? createS3MockFetch(),
+  });
 }
 
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
-
-/** Creates an album-image element in the DOM with optional attributes. Uses
- * document.createElement and appendChild so connectedCallback fires naturally. */
-function createAlbumImage(
-  attrs: Record<string, string> = {},
-): HTMLElement {
-  const body = linkedomDocument.body;
-  if (!body) throw new Error("body not found");
-  const el = linkedomDocument.createElement("album-image-custom-element");
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
-  body.appendChild(el);
-  return el as HTMLElement;
+function createAlbumImage(attrs: Record<string, string> = {}): HTMLElement {
+  return createCustomElement(
+    linkedomDocument,
+    "album-image-custom-element",
+    attrs,
+  );
 }
 
 function getImg(el: HTMLElement): HTMLImageElement | null {

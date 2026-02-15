@@ -7,21 +7,8 @@
  */
 
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import { parseHtmlFragment } from "../test.utils.ts";
 import horizontalRowWithTitleHtml from "./horizontal-row-with-title-html.ts";
-
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
-
-/** Parses an HTML string into a document for DOM-based assertions. */
-function parseHtmlFragment(html: string): Document {
-  const { document } = parseHTML(
-    `<!DOCTYPE html><html><head></head><body>${html}</body></html>`,
-    "http://localhost:8000/",
-  );
-  return document;
-}
 
 // ============================================================================
 // TESTS

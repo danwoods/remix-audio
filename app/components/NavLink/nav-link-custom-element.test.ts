@@ -8,22 +8,14 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { Event, parseHTML } from "linkedom";
+import { Event } from "linkedom";
+import { createLinkedomEnv } from "../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
+const NAVLINK_HTML = `<!DOCTYPE html>
+<html><head></head><body><nav></nav><main></main></body></html>`;
 
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body><nav></nav><main></main></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv(NAVLINK_HTML);
 
 // ============================================================================
 // MOCK STATE

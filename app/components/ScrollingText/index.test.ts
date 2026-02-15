@@ -10,22 +10,10 @@
  */
 
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import { createLinkedomEnv, wireLinkedomToGlobal } from "../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 // ============================================================================
 // MOCK STATE
@@ -52,24 +40,9 @@ function setupDOMEnvironment() {
   animationFrameIdCounter = 0;
   animationFrameCallbacks.clear();
 
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument);
 
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
-
-  // Polyfill requestAnimationFrame for linkedom (runs callbacks via setTimeout)
+  // Override RAF with custom implementation that tracks callbacks for tests
   (globalThis as { requestAnimationFrame: typeof requestAnimationFrame })
     .requestAnimationFrame = (callback: FrameRequestCallback) => {
       const id = ++animationFrameIdCounter;

@@ -14,22 +14,10 @@ import {
   assertExists,
   assertStringIncludes,
 } from "@std/assert";
-import { parseHTML } from "linkedom";
+import { createLinkedomEnv, wireLinkedomToGlobal } from "../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 // ============================================================================
 // MOCK STATE
@@ -146,11 +134,6 @@ function setupDOMEnvironment() {
   consoleWarnCalls = [];
   consoleErrorCalls = [];
 
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
-
   const originalWarn = console.warn;
   const originalError = console.error;
   console.warn = ((...args: unknown[]) => {
@@ -162,20 +145,7 @@ function setupDOMEnvironment() {
     originalError(...args);
   }) as typeof console.error;
 
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { Event: typeof Event }).Event = linkedomWindow.Event;
-  (globalThis as { CustomEvent: typeof CustomEvent }).CustomEvent =
-    linkedomWindow.CustomEvent;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, { event: true });
 
   (globalThis as { Audio: typeof Audio }).Audio = createMockAudio();
 

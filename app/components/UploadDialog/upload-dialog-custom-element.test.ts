@@ -7,47 +7,32 @@
  * so the component can run in Deno.
  */
 
-import { assert, assertEquals, assertExists, assertStringIncludes } from "@std/assert";
-import { parseHTML } from "linkedom";
+import {
+  assert,
+  assertEquals,
+  assertExists,
+  assertStringIncludes,
+} from "@std/assert";
+import {
+  createCustomElement,
+  createLinkedomEnv,
+  wireLinkedomToGlobal,
+} from "../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
-
-// ============================================================================
-// DOM SETUP (must run before importing the element module)
-// ============================================================================
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 function setupDOMEnvironment(options?: {
   fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }) {
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
-
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, {
+    event: true,
+    fetch: options?.fetch ??
+      (() =>
+        Promise.resolve(
+          new Response(null, { status: 303, headers: { Location: "/" } }),
+        )),
+  });
 
   // Polyfill dialog for linkedom: patch createElement so dialogs have showModal/close
   const origCreateElement = linkedomDocument.createElement.bind(
@@ -63,42 +48,29 @@ function setupDOMEnvironment(options?: {
       if (typeof d.showModal !== "function") d.showModal = () => {};
       if (typeof d.close !== "function") {
         d.close = function (this: Element) {
-          this.dispatchEvent(new linkedomWindow.Event("close", { bubbles: true }));
+          this.dispatchEvent(
+            new linkedomWindow.Event("close", { bubbles: true }),
+          );
         };
       }
     }
     return el as HTMLElement;
   };
 
-  // Wire CustomEvent from linkedom so element's dispatchEvent works correctly
-  (globalThis as { CustomEvent: typeof CustomEvent }).CustomEvent =
-    linkedomWindow.CustomEvent;
-
   // Mock location for redirect on success (upload dialog sets location.href)
   const locationMock = { href: "http://localhost:8000/" };
   (globalThis as { location: Location }).location =
     locationMock as unknown as Location;
-
-  globalThis.fetch = options?.fetch ?? (() =>
-    Promise.resolve(new Response(null, { status: 303, headers: { Location: "/" } })));
 }
 
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
-
-/** Creates an upload-dialog element in the DOM with optional attributes. */
 function createUploadDialog(
   attrs: Record<string, string> = {},
 ): HTMLElement {
-  const body = linkedomDocument.body;
-  if (!body) throw new Error("body not found");
-  const el = linkedomDocument.createElement("upload-dialog-custom-element");
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
-  body.appendChild(el);
-  return el as HTMLElement;
+  return createCustomElement(
+    linkedomDocument,
+    "upload-dialog-custom-element",
+    attrs,
+  );
 }
 
 function getTrigger(el: HTMLElement): HTMLButtonElement | null {
@@ -461,8 +433,9 @@ Deno.test(
       "submit should be disabled immediately after file selection (metadata loading)",
     );
 
-    const fileItem = fileListEl.querySelector("upload-dialog-file-item") as
-      unknown as { metadataReady: Promise<void> };
+    const fileItem = fileListEl.querySelector(
+      "upload-dialog-file-item",
+    ) as unknown as { metadataReady: Promise<void> };
     await fileItem.metadataReady;
     await new Promise((r) => setTimeout(r, 0));
     assert(
@@ -573,7 +546,10 @@ Deno.test(
       "Upload failed for all files: S3 connection error",
       "error message from server should be shown",
     );
-    assert(!errorEl.hidden, "error element should be visible when error occurs");
+    assert(
+      !errorEl.hidden,
+      "error element should be visible when error occurs",
+    );
   },
 );
 

@@ -8,86 +8,30 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import {
+  createCustomElement,
+  createLinkedomEnv,
+  wireLinkedomToGlobal,
+} from "../../test.utils.ts";
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
-
-// ============================================================================
-// DOM SETUP (must run before importing the element module)
-// ============================================================================
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 function setupDOMEnvironment() {
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
-
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
-
-  // Polyfill requestAnimationFrame for ScrollingText (linkedom does not provide it)
-  let rafId = 0;
-  (globalThis as { requestAnimationFrame: typeof requestAnimationFrame })
-    .requestAnimationFrame = (callback: FrameRequestCallback) => {
-      rafId += 1;
-      linkedomWindow.setTimeout(() => callback(0), 0);
-      return rafId;
-    };
-  (globalThis as { cancelAnimationFrame: typeof cancelAnimationFrame })
-    .cancelAnimationFrame = () => {};
-
-  // Mock getComputedStyle for ScrollingText (linkedom may not provide it)
-  (globalThis as { getComputedStyle: typeof getComputedStyle })
-    .getComputedStyle = (_el: Element) =>
-      ({
-        font: "16px sans-serif",
-        fontSize: "16px",
-        fontFamily: "sans-serif",
-        fontWeight: "400",
-        letterSpacing: "normal",
-      }) as CSSStyleDeclaration;
-
-  // Mock fetch for album-image-custom-element (no network in tests)
-  globalThis.fetch = () => Promise.resolve(new Response("", { status: 404 }));
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, {
+    event: true,
+    requestAnimationFrame: true,
+    getComputedStyle: true,
+    fetch: () => Promise.resolve(new Response("", { status: 404 })),
+  });
 }
 
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
-
-/** Creates a track-info element in the DOM with optional attributes. Uses
- * document.createElement and appendChild so connectedCallback fires naturally. */
 function createTrackInfo(attrs: Record<string, string> = {}): HTMLElement {
-  const body = linkedomDocument.body;
-  if (!body) throw new Error("body not found");
-  const el = linkedomDocument.createElement("track-info-custom-element");
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
-  body.appendChild(el);
-  return el as HTMLElement;
+  return createCustomElement(
+    linkedomDocument,
+    "track-info-custom-element",
+    attrs,
+  );
 }
 
 function getAlbumImage(el: HTMLElement): HTMLElement | null {

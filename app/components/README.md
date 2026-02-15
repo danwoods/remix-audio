@@ -6,6 +6,9 @@ or refactoring component tests in this codebase.
 ## Overview
 
 - **Framework**: Deno's built-in test runner
+- **Shared utilities**: [`test.utils.ts`](./test.utils.ts) —
+  `parseHtmlFragment`, `createLinkedomEnv`, `wireLinkedomToGlobal`,
+  `createCustomElement`
 - **DOM environment**: [linkedom](https://github.com/WebReflection/linkedom) — a
   real DOM implementation that runs in Deno (no browser required)
 - **Assertions**: `@std/assert` (`assertEquals`, `assertExists`, `assert`, etc.)
@@ -29,26 +32,29 @@ globals to `globalThis` so the component runs in Deno. Import the element module
 
 **Structure**:
 
-1. **Linkedom setup** — Create a linkedom document/window once (reused across
-   tests):
+1. **Linkedom setup** — Use `createLinkedomEnv()` from test.utils (or pass
+   custom HTML for e.g. nav/main):
    ```ts
-   const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-     `<!DOCTYPE html><html><head></head><body></body></html>`,
-     "http://localhost:8000/",
-   );
+   const { document: linkedomDocument, window: linkedomWindow } =
+     createLinkedomEnv();
    ```
-2. **`setupDOMEnvironment(options?)`** — Resets DOM state, clears `body`, wires
-   globals:
+2. **`setupDOMEnvironment(options?)`** — Call
+   `wireLinkedomToGlobal(linkedomWindow,
+   linkedomDocument, options)` plus any
+   test-specific patches. Resets DOM state, globals:
    - `document`, `window`, `customElements`, `HTMLElement`
    - `setTimeout`, `clearTimeout`
    - Optionally: `Event`, `CustomEvent`, `DOMParser`, `fetch`, `location`,
      `history`, `sessionStorage`
-3. **Create elements via DOM** — Use `document.createElement("tag-name")` and
-   `appendChild` so `connectedCallback` fires naturally:
+3. **Create elements via DOM** — Use
+   `createCustomElement(doc, "tag-name", attrs)` or `document.createElement` +
+   `appendChild` so `connectedCallback` fires:
    ```ts
-   const el = linkedomDocument.createElement("album-image-custom-element");
-   el.setAttribute("data-album-url", "https://...");
-   linkedomDocument.body.appendChild(el);
+   const el = createCustomElement(
+     linkedomDocument,
+     "album-image-custom-element",
+     { "data-album-url": "https://..." },
+   );
    ```
 4. **Import module inside each test** — Ensures the component sees the mocked
    env:
@@ -74,15 +80,10 @@ assert on DOM structure instead of raw strings.
 
 **Structure**:
 
-1. **`parseHtmlFragment(html)`** — Wrap HTML in a full document and parse:
+1. **`parseHtmlFragment(html)`** — Import from test.utils:
    ```ts
-   function parseHtmlFragment(html: string): Document {
-     const { document } = parseHTML(
-       `<!DOCTYPE html><html><head></head><body>${html}</body></html>`,
-       "http://localhost:8000/",
-     );
-     return document;
-   }
+   import { parseHtmlFragment } from "../test.utils.ts";
+   const document = parseHtmlFragment(html);
    ```
 2. **Assert on DOM** — Use `querySelector`, `getAttribute`, `textContent`,
    `querySelectorAll`, etc.:

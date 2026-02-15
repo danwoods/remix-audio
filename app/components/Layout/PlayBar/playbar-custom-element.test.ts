@@ -10,7 +10,11 @@
  */
 
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import {
+  createCustomElement,
+  createLinkedomEnv,
+  wireLinkedomToGlobal,
+} from "../../test.utils.ts";
 
 // Polyfill MediaMetadata for Deno (needed when Media Session API is mocked)
 if (typeof globalThis.MediaMetadata === "undefined") {
@@ -36,20 +40,8 @@ if (typeof globalThis.MediaMetadata === "undefined") {
     };
 }
 
-// ============================================================================
-// LINKEDOM SETUP (created once, reused across tests)
-// ============================================================================
-
-const LINKEDOM_HTML = `<!DOCTYPE html>
-<html>
-<head></head>
-<body></body>
-</html>`;
-
-const { document: linkedomDocument, window: linkedomWindow } = parseHTML(
-  LINKEDOM_HTML,
-  "http://localhost:8000/",
-);
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 // ============================================================================
 // MOCK STATE
@@ -121,21 +113,12 @@ ${contents.map((key) => `  <Contents><Key>${key}</Key></Contents>`).join("\n")}
 function setupDOMEnvironment(options?: {
   fetch?: typeof globalThis.fetch;
 }) {
-  const body = linkedomDocument.body;
-  if (body) {
-    while (body.firstChild) body.removeChild(body.firstChild);
-  }
+  const defaultFetch = createS3MockFetch([]);
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, {
+    event: true,
+    fetch: options?.fetch ?? defaultFetch,
+  });
 
-  (globalThis as { document: Document }).document = linkedomDocument;
-  (globalThis as { window: Window }).window =
-    linkedomWindow as unknown as Window;
-  (globalThis as { customElements: CustomElementRegistry }).customElements =
-    linkedomWindow.customElements;
-  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
-    linkedomWindow.HTMLElement;
-  (globalThis as { Event: typeof Event }).Event = linkedomWindow.Event;
-  (globalThis as { CustomEvent: typeof CustomEvent }).CustomEvent =
-    linkedomWindow.CustomEvent;
   (globalThis as { DOMParser: typeof DOMParser }).DOMParser =
     linkedomWindow.DOMParser;
   if (
@@ -170,14 +153,6 @@ function setupDOMEnvironment(options?: {
     (globalThis.HTMLMediaElement as unknown as { HAVE_ENOUGH_DATA: number })
       .HAVE_ENOUGH_DATA = 4;
   }
-  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
-    .setTimeout.bind(linkedomWindow);
-  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
-    linkedomWindow.clearTimeout.bind(linkedomWindow);
-
-  const defaultFetch = createS3MockFetch([]);
-  globalThis.fetch = options?.fetch ?? defaultFetch;
-
   linkedomDocument.createElement = (tagName: string) => {
     if (tagName.toLowerCase() === "audio") {
       return createAudioElementPatch();
@@ -190,16 +165,12 @@ function setupDOMEnvironment(options?: {
 // TEST HELPERS
 // ============================================================================
 
-/** Creates a playbar element in the DOM with optional attributes. */
 function createPlaybar(attrs: Record<string, string> = {}): HTMLElement {
-  const body = linkedomDocument.body;
-  if (!body) throw new Error("body not found");
-  const el = linkedomDocument.createElement("playbar-custom-element");
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, v);
-  }
-  body.appendChild(el);
-  return el as HTMLElement;
+  return createCustomElement(
+    linkedomDocument,
+    "playbar-custom-element",
+    attrs,
+  );
 }
 
 function getBar(el: HTMLElement): HTMLElement | null {

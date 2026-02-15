@@ -5,13 +5,9 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { parseHTML } from "linkedom";
+import { parseHtmlFragment } from "../test.utils.ts";
 import type { Files } from "../../util/files.ts";
 import albumTileHtml from "./album-tile-html.ts";
-
-// ============================================================================
-// TEST HELPERS
-// ============================================================================
 
 function makeFiles(artistId: string, albumId: string): Files {
   const id = `${artistId}/${albumId}`;
@@ -33,15 +29,6 @@ function makeFiles(artistId: string, albumId: string): Files {
       },
     },
   };
-}
-
-/** Parses an HTML string into a document for DOM-based assertions. */
-function parseHtmlFragment(html: string): Document {
-  const { document } = parseHTML(
-    `<!DOCTYPE html><html><head></head><body>${html}</body></html>`,
-    "http://localhost:8000/",
-  );
-  return document;
 }
 
 // ============================================================================
