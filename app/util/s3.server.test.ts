@@ -2,7 +2,7 @@
  *
  * Pure functions (createAsyncIteratorFromArrayBuffer) are tested here without mocks.
  * Functions that call AWS S3 (getObjectBytes, uploadStreamToS3, handleS3Upload,
- * getUploadedFiles) are tested in deno-tests/s3.server.test.ts with the import
+ * getUploadedFiles) are tested in tests/s3.server.test.ts with the import
  * map to inject S3 and ID3 mocks.
  */
 

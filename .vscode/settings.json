@@ -4,7 +4,7 @@
   "typescript.enable": true,
   "files.associations": {
     "server/**/*.ts": "typescript",
-    "deno-tests/**/*.ts": "typescript"
+    "tests/**/*.ts": "typescript"
   },
   "typescript.preferences.includePackageJsonAutoImports": "on",
   "deno.enable": true

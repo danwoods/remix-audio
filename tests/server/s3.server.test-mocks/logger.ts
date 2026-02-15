@@ -1,5 +1,5 @@
 /** Mock for logger.ts - no-op logger for s3.server tests */
-import type { Logger } from "../logger.ts";
+import type { Logger } from "../../../app/util/logger.ts";
 
 const noop = (): void => {};
 

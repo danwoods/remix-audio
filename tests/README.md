@@ -6,7 +6,7 @@ test framework.
 ## Test Structure
 
 ```
-deno-tests/
+tests/
 ├── app/
 │   └── util/
 │       ├── data-url.deno.test.ts        # Tests for data URL encode/decode (shared client/server)
@@ -30,19 +30,19 @@ deno-tests/
 ### Run All Tests
 
 ```bash
-deno test deno-tests/ --allow-net --allow-env --allow-read --allow-write --allow-sys
+deno test tests/ --allow-net --allow-env --allow-read --allow-write --allow-sys
 ```
 
 ### Run Specific Test File
 
 ```bash
-deno test deno-tests/server/router.deno.test.ts
+deno test tests/server/router.deno.test.ts
 ```
 
 ### Run Tests Without Type Checking (Faster)
 
 ```bash
-deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys
+deno test tests/ --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys
 ```
 
 ## Test Coverage

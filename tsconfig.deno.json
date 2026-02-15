@@ -19,7 +19,7 @@
   "include": [
     "server/**/*.ts",
     "server/**/*.tsx",
-    "deno-tests/**/*.ts",
+    "tests/**/*.ts",
     "deno.d.ts"
   ],
   "exclude": ["node_modules"]

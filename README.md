@@ -218,11 +218,11 @@ deno task test:all
 ```
 
 This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
-`test:server` (Deno tests under `deno-tests/`).
+`test:server` (Deno tests under `tests/`).
 
-- **Server / integration tests**: `deno-tests/` — see
-  [deno-tests/README.md](deno-tests/README.md) for structure and how to run
-  individual tests.
+- **Server / integration tests**: `tests/` — see
+  [tests/README.md](tests/README.md) for structure and how to run individual
+  tests.
 - **Component tests**: `deno test app/components/ --no-check`
 - **Util tests**: `deno test app/util --no-check --allow-env --allow-read`
 
@@ -268,7 +268,7 @@ deno run --allow-read --allow-run scripts/release.ts --dry-run
 │   └── utils/              # basicAuth, loadEnv, manifest
 ├── build/                  # Build output
 │   └── main.js             # Custom elements bundle (from deno task build)
-├── deno-tests/             # Deno tests (router, handlers, SSR, utils)
+├── tests/                  # Deno tests (router, handlers, SSR, utils)
 ├── scripts/                # CI/release scripts
 ├── public/                 # Static assets (e.g. favicon)
 ├── test_data/              # Test audio files (see test_data/README.md)
@@ -302,7 +302,7 @@ Static assets: `/build/*`, `/assets/*` (if present), `/favicon.ico`, `/app.css`.
   shadow DOM / template pattern and naming.
 - **Project conventions**: Deno-first, testing, and UI approach are described in
   [.cursor/rules/project.mdc](.cursor/rules/project.mdc).
-- **Test layout and coverage**: [deno-tests/README.md](deno-tests/README.md).
+- **Test layout and coverage**: [tests/README.md](tests/README.md).
 - **Test audio files**: [test_data/README.md](test_data/README.md).
 
 ---

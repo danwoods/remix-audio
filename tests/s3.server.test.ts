@@ -1,5 +1,5 @@
 /** @file Tests for s3.server - uses import map to inject mocks (no s3.server.ts changes).
- * Covers getObjectBytes, handleS3Upload. Run via: deno task test:server
+ * Covers getObjectBytes, handleS3Upload. Run via `deno task test:server`.
  */
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { setGetID3TagsReturn } from "./server/s3.server.test-mocks/id3.ts";
