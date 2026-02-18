@@ -397,13 +397,15 @@ export class PlaybarCustomElement extends HTMLElement {
     if (!this.audioElement) return;
 
     if (this.currentTrackUrl) {
+      const playableTrackUrl = this.toPlayableTrackUrl(this.currentTrackUrl);
       this.lastDurationSourceDiagnosticSignature = null;
       this.logMediaSessionDiagnostic("track-source-updated", {
         trackUrl: this.currentTrackUrl,
+        playableTrackUrl,
       });
-      this.audioElement.src = this.currentTrackUrl;
+      this.audioElement.src = playableTrackUrl;
       this.nextTrackLoaded = false;
-      this.updateMediaSessionFromTrack(this.currentTrackUrl);
+      this.updateMediaSessionFromTrack(this.currentTrackUrl, playableTrackUrl);
       // After setting source, update playback state when metadata is loaded
       const handleLoadedMetadata = () => {
         const seekableInfo = this.getSeekableInfoForDiagnostics(this.audioElement);
@@ -446,8 +448,11 @@ export class PlaybarCustomElement extends HTMLElement {
    * Used for lock screen / notification controls (title, artist, album, artwork).
    * Guards against race where the user switches tracks before the fetch completes.
    */
-  private async updateMediaSessionFromTrack(trackUrl: string): Promise<void> {
-    const tags = await getID3TagsFromURL(trackUrl);
+  private async updateMediaSessionFromTrack(
+    trackUrl: string,
+    playableTrackUrl = trackUrl,
+  ): Promise<void> {
+    const tags = await getID3TagsFromURL(playableTrackUrl);
     if (this.currentTrackUrl !== trackUrl) return;
 
     let albumUrl: string | null = null;
@@ -466,6 +471,49 @@ export class PlaybarCustomElement extends HTMLElement {
         (albumUrl ? `${albumUrl}/cover.jpeg` : undefined),
     };
     this.mediaSession?.updateMetadata(metadata);
+  }
+
+  /**
+   * Returns a URL string safe to pass to HTMLAudioElement.src / Audio().
+   * Encodes each path segment to avoid invalid URI errors for characters
+   * like spaces, `>`, and `#` in S3 object keys.
+   */
+  private toPlayableTrackUrl(trackUrl: string): string {
+    const rawUrlMatch = trackUrl.match(
+      /^([a-zA-Z][a-zA-Z\d+\-.]*:\/\/[^/]+)(\/.*)?$/,
+    );
+    if (rawUrlMatch) {
+      const baseUrl = rawUrlMatch[1];
+      const rawPath = rawUrlMatch[2] ?? "";
+      const encodedPath = rawPath.split("/").map((segment, index) => {
+        if (index === 0 || segment === "") return segment;
+        try {
+          return encodeURIComponent(decodeURIComponent(segment));
+        } catch {
+          return encodeURIComponent(segment);
+        }
+      }).join("/");
+      return `${baseUrl}${encodedPath}`;
+    }
+    try {
+      const url = new URL(trackUrl);
+      const encodedPath = url.pathname.split("/").map((segment, index) => {
+        if (index === 0 || segment === "") return segment;
+        try {
+          return encodeURIComponent(decodeURIComponent(segment));
+        } catch {
+          return encodeURIComponent(segment);
+        }
+      }).join("/");
+      url.pathname = encodedPath;
+      return url.toString();
+    } catch {
+      try {
+        return encodeURI(trackUrl).replace(/#/g, "%23");
+      } catch {
+        return trackUrl;
+      }
+    }
   }
 
   /**
@@ -517,7 +565,7 @@ export class PlaybarCustomElement extends HTMLElement {
       const [nextTrack] = this.remainingTracks;
       if (nextTrack) {
         // Preload the next track
-        new Audio(nextTrack.url);
+        new Audio(this.toPlayableTrackUrl(nextTrack.url));
       }
     }
   }

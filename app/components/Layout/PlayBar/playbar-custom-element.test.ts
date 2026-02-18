@@ -972,6 +972,22 @@ Deno.test("PlaybarCustomElement - should update audio source when data-current-t
   assert(element.getAttribute("data-current-track-url") === trackUrl);
 });
 
+Deno.test("PlaybarCustomElement - should encode audio source URL for special characters", async () => {
+  const element = createTestElement();
+  element.connectedCallback();
+
+  const trackUrl =
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track > One #2.mp3";
+  element.setAttribute("data-current-track-url", trackUrl);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assertExists(audioElement);
+  assertEquals(
+    audioElement?.src,
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track%20%3E%20One%20%232.mp3",
+  );
+});
+
 Deno.test("PlaybarCustomElement - should update playing state when data-is-playing changes", async () => {
   /**
    * Tests that changing data-is-playing to "true" starts playback.
