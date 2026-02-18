@@ -457,8 +457,8 @@ export class PlaybarCustomElement extends HTMLElement {
    */
   private seekAudioBy(deltaSeconds: number): void {
     if (!this.audioElement) return;
-    const duration = this.audioElement.duration;
-    if (!Number.isFinite(duration) || duration <= 0) return;
+    const duration = this.getMediaDurationForPositionState();
+    if (duration === null) return;
     this.audioElement.currentTime = Math.max(
       0,
       Math.min(duration, this.audioElement.currentTime + deltaSeconds),
@@ -547,8 +547,8 @@ export class PlaybarCustomElement extends HTMLElement {
    */
   private updateMediaSessionPositionState(): void {
     if (!this.audioElement) return;
-    const duration = this.audioElement.duration;
-    if (!Number.isFinite(duration) || duration <= 0) return;
+    const duration = this.getMediaDurationForPositionState();
+    if (duration === null) return;
     const currentTime = Number.isFinite(this.audioElement.currentTime)
       ? this.audioElement.currentTime
       : 0;
@@ -557,6 +557,28 @@ export class PlaybarCustomElement extends HTMLElement {
       ? this.audioElement.playbackRate
       : 1;
     this.mediaSession?.updatePositionState(currentTime, duration, playbackRate);
+  }
+
+  /**
+   * Returns a finite duration for Media Session position updates.
+   * Falls back to the last seekable range end when `audio.duration` is Infinity.
+   */
+  private getMediaDurationForPositionState(): number | null {
+    if (!this.audioElement) return null;
+    const duration = this.audioElement.duration;
+    if (Number.isFinite(duration) && duration > 0) {
+      return duration;
+    }
+    const seekable = this.audioElement.seekable;
+    if (!seekable || seekable.length === 0) return null;
+    try {
+      const seekableEnd = seekable.end(seekable.length - 1);
+      return Number.isFinite(seekableEnd) && seekableEnd > 0
+        ? seekableEnd
+        : null;
+    } catch {
+      return null;
+    }
   }
 
   private handleEnded() {

@@ -2017,6 +2017,73 @@ Deno.test("PlaybarCustomElement - updates media position state on loadedmetadata
   }
 });
 
+Deno.test("PlaybarCustomElement - uses seekable range when duration is Infinity for media position state", async () => {
+  const positionCalls: Array<{
+    position: number;
+    duration: number;
+    playbackRate?: number;
+  }> = [];
+  const mockMediaSession = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler: () => {},
+    setPositionState: (state: {
+      position: number;
+      duration: number;
+      playbackRate?: number;
+    }) => {
+      positionCalls.push(state);
+    },
+  };
+  const origNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...origNavigator, mediaSession: mockMediaSession },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const element = createTestElement();
+    element.connectedCallback();
+    element.setAttribute(
+      "data-current-track-url",
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert(audioElement !== null);
+    Object.defineProperty(audioElement, "duration", {
+      get: () => Infinity,
+      configurable: true,
+    });
+    Object.defineProperty(audioElement, "currentTime", {
+      get: () => 15,
+      configurable: true,
+    });
+    Object.defineProperty(audioElement, "seekable", {
+      value: {
+        length: 1,
+        end: (_index: number) => 180,
+      },
+      configurable: true,
+    });
+
+    audioEventListeners.loadedmetadata.forEach((listener) =>
+      listener(new Event("loadedmetadata"))
+    );
+
+    assertEquals(positionCalls.length, 1);
+    assertEquals(positionCalls[0].position, 15);
+    assertEquals(positionCalls[0].duration, 180);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
 Deno.test("PlaybarCustomElement - should handle play() errors gracefully", async () => {
   /**
    * Tests that errors from audio.play() are caught and handled gracefully.
