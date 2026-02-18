@@ -79,6 +79,40 @@ function normalizeTag(tag: RawTag): ID3Tags {
 }
 
 /**
+ * Normalize a track URL for ID3 fetch/parsing requests.
+ * Encodes unsafe path characters while avoiding double-encoding of
+ * already-encoded path segments.
+ */
+export const normalizeUrlForId3Request = (url: string): string => {
+  const absoluteUrlMatch = url.match(
+    /^([a-zA-Z][a-zA-Z\d+\-.]*:\/\/[^/]+)(\/.*)?$/,
+  );
+  if (absoluteUrlMatch) {
+    const origin = absoluteUrlMatch[1];
+    const pathAndSearch = absoluteUrlMatch[2] ?? "";
+    const searchIdx = pathAndSearch.indexOf("?");
+    const rawPath = searchIdx === -1
+      ? pathAndSearch
+      : pathAndSearch.slice(0, searchIdx);
+    const rawSearch = searchIdx === -1 ? "" : pathAndSearch.slice(searchIdx);
+    const encodedPath = rawPath.split("/").map((segment, index) => {
+      if (index === 0 || segment === "") return segment;
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    }).join("/");
+    return `${origin}${encodedPath}${rawSearch}`;
+  }
+  try {
+    return encodeURI(url).replace(/#/g, "%23");
+  } catch {
+    return url;
+  }
+};
+
+/**
  * Get normalized ID3 tags from a File in the browser.
  * BROWSER-ONLY: uses id3js.fromFile. In non-browser environments returns null.
  *
@@ -116,7 +150,7 @@ export const getID3TagsFromURL = async (
     return null;
   }
   try {
-    const tag = await fromUrl(encodeURI(url));
+    const tag = await fromUrl(normalizeUrlForId3Request(url));
     if (!tag) return null;
     return normalizeTag(tag as RawTag);
   } catch {
