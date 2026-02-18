@@ -616,6 +616,46 @@ Deno.test("MediaSessionController - updatePositionState does not throw when setP
   }
 });
 
+Deno.test("MediaSessionController - logs diagnostics when setPositionState throws", () => {
+  const mock = createMockMediaSession({ setPositionStateThrows: true });
+  const orig = globalThis.navigator;
+  const infoCalls: unknown[][] = [];
+  const originalInfo = console.info;
+  console.info = ((...args: unknown[]) => {
+    infoCalls.push(args);
+  }) as typeof console.info;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...orig, mediaSession: mock },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const controller = new MediaSessionController({
+      onPlay: () => {},
+      onPause: () => {},
+      onStop: () => {},
+      onNextTrack: () => {},
+      onPreviousTrack: () => {},
+    });
+
+    controller.updatePositionState(30, 180);
+
+    const hasPositionStateErrorDiagnostic = infoCalls.some((call) =>
+      call[0] === "[MediaSessionDiag][Controller]" &&
+      call[1] === "position-state-error"
+    );
+    assertStrictEquals(hasPositionStateErrorDiagnostic, true);
+  } finally {
+    console.info = originalInfo;
+    Object.defineProperty(globalThis, "navigator", {
+      value: orig,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
 Deno.test("MediaSessionController - updatePositionState clamps out-of-range position values", () => {
   const mock = createMockMediaSession({
     setPositionStateThrowsWhenInvalid: true,

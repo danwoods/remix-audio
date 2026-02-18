@@ -2084,6 +2084,85 @@ Deno.test("PlaybarCustomElement - uses seekable range when duration is Infinity 
   }
 });
 
+Deno.test("PlaybarCustomElement - logs diagnostics when media duration source changes", async () => {
+  const infoCalls: unknown[][] = [];
+  const originalInfo = console.info;
+  console.info = ((...args: unknown[]) => {
+    infoCalls.push(args);
+  }) as typeof console.info;
+
+  const mockMediaSession = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler: () => {},
+    setPositionState: () => {},
+  };
+  const origNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...origNavigator, mediaSession: mockMediaSession },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const element = createTestElement();
+    element.connectedCallback();
+    element.setAttribute(
+      "data-current-track-url",
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert(audioElement !== null);
+    Object.defineProperty(audioElement, "duration", {
+      get: () => Infinity,
+      configurable: true,
+    });
+    Object.defineProperty(audioElement, "seekable", {
+      value: {
+        length: 0,
+        end: (_index: number) => 0,
+      },
+      configurable: true,
+    });
+
+    audioEventListeners.loadedmetadata.forEach((listener) =>
+      listener(new Event("loadedmetadata"))
+    );
+
+    Object.defineProperty(audioElement, "seekable", {
+      value: {
+        length: 1,
+        end: (_index: number) => 180,
+      },
+      configurable: true,
+    });
+    const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
+    audioEventListeners.timeupdate.forEach((listener) => listener(timeupdateEvent));
+
+    const durationSourceLogs = infoCalls
+      .filter((call) =>
+        call[0] === "[MediaSessionDiag][Playbar]" &&
+        call[1] === "duration-source"
+      )
+      .map((call) => call[2] as { source?: string });
+
+    assert(durationSourceLogs.some((log) => log.source === "none"));
+    assert(durationSourceLogs.some((log) => log.source === "seekable"));
+  } finally {
+    console.info = originalInfo;
+    Object.defineProperty(globalThis, "navigator", {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
 Deno.test("PlaybarCustomElement - should handle play() errors gracefully", async () => {
   /**
    * Tests that errors from audio.play() are caught and handled gracefully.

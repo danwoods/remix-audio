@@ -46,13 +46,27 @@ const DEFAULT_SEEK_OFFSET = 10;
 export class MediaSessionController {
   private callbacks: MediaSessionCallbacks;
   private isSupported: boolean;
+  private hasLoggedPositionStateInitialization = false;
 
   constructor(callbacks: MediaSessionCallbacks) {
     this.callbacks = callbacks;
     this.isSupported = "mediaSession" in navigator;
+    this.logDiagnostic("init", {
+      isSupported: this.isSupported,
+      hasSetPositionState: this.isSupported &&
+        typeof navigator.mediaSession.setPositionState === "function",
+      userAgent: navigator.userAgent,
+    });
     if (this.isSupported) {
       this.registerActionHandlers();
     }
+  }
+
+  private logDiagnostic(
+    event: string,
+    details: Record<string, unknown>,
+  ): void {
+    console.info("[MediaSessionDiag][Controller]", event, details);
   }
 
   private setActionHandler(
@@ -61,8 +75,17 @@ export class MediaSessionController {
   ): void {
     try {
       navigator.mediaSession.setActionHandler(action, handler);
-    } catch {
+      this.logDiagnostic("set-action-handler", {
+        action,
+        enabled: handler !== null,
+      });
+    } catch (error) {
       // Browsers may throw for actions they don't support.
+      this.logDiagnostic("set-action-handler-error", {
+        action,
+        enabled: handler !== null,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -99,8 +122,10 @@ export class MediaSessionController {
   updateMetadata(metadata: MediaSessionMetadata | null): void {
     if (!this.isSupported) return;
     const ms = navigator.mediaSession;
+    this.hasLoggedPositionStateInitialization = false;
     if (!metadata) {
       ms.metadata = null;
+      this.logDiagnostic("metadata-cleared", {});
       return;
     }
     const artwork: MediaImage[] = metadata.artworkUrl
@@ -112,6 +137,12 @@ export class MediaSessionController {
       album: metadata.album,
       artwork,
     });
+    this.logDiagnostic("metadata-updated", {
+      title: metadata.title,
+      artist: metadata.artist,
+      album: metadata.album,
+      hasArtwork: artwork.length > 0,
+    });
   }
 
   /**
@@ -122,6 +153,7 @@ export class MediaSessionController {
   updatePlaybackState(state: "playing" | "paused" | "none"): void {
     if (!this.isSupported) return;
     navigator.mediaSession.playbackState = state;
+    this.logDiagnostic("playback-state", { state });
   }
 
   /**
@@ -137,9 +169,26 @@ export class MediaSessionController {
     duration: number,
     playbackRate = 1,
   ): void {
-    if (!this.isSupported) return;
-    if (!Number.isFinite(duration) || duration <= 0) return;
-    if (!Number.isFinite(position)) return;
+    if (!this.isSupported) {
+      this.logDiagnostic("position-state-skipped-unsupported", {});
+      return;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      this.logDiagnostic("position-state-skipped-invalid-duration", {
+        duration,
+        position,
+        playbackRate,
+      });
+      return;
+    }
+    if (!Number.isFinite(position)) {
+      this.logDiagnostic("position-state-skipped-invalid-position", {
+        duration,
+        position,
+        playbackRate,
+      });
+      return;
+    }
     const normalizedPosition = Math.min(duration, Math.max(0, position));
     const normalizedPlaybackRate = Number.isFinite(playbackRate) &&
         playbackRate > 0
@@ -151,8 +200,24 @@ export class MediaSessionController {
         playbackRate: normalizedPlaybackRate,
         position: normalizedPosition,
       });
-    } catch {
+      if (!this.hasLoggedPositionStateInitialization) {
+        this.logDiagnostic("position-state-initialized", {
+          duration,
+          position: normalizedPosition,
+          playbackRate: normalizedPlaybackRate,
+        });
+        this.hasLoggedPositionStateInitialization = true;
+      }
+    } catch (error) {
       // setPositionState can throw if duration/position are invalid
+      this.logDiagnostic("position-state-error", {
+        duration,
+        position,
+        playbackRate,
+        normalizedPosition,
+        normalizedPlaybackRate,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -173,5 +238,6 @@ export class MediaSessionController {
     this.setActionHandler("seekbackward", null);
     this.setActionHandler("seekforward", null);
     this.setActionHandler("seekto", null);
+    this.logDiagnostic("destroyed", {});
   }
 }
