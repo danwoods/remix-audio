@@ -386,6 +386,7 @@ export class PlaybarCustomElement extends HTMLElement {
       onSeekTo: (d) => {
         if (this.audioElement) {
           this.audioElement.currentTime = d.seekTime;
+          this.updateMediaSessionPositionState();
         }
       },
     };
@@ -400,6 +401,7 @@ export class PlaybarCustomElement extends HTMLElement {
       this.updateMediaSessionFromTrack(this.currentTrackUrl);
       // After setting source, update playback state when metadata is loaded
       const handleLoadedMetadata = () => {
+        this.updateMediaSessionPositionState();
         // Check current playing state, not the captured one
         if (this.isPlaying) {
           this.updateAudioPlayback();
@@ -486,13 +488,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private handleTimeUpdate(event: Event) {
     const audio = event.target as HTMLAudioElement;
     this.updateProgressIndicator(audio);
-    if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      this.mediaSession?.updatePositionState(
-        audio.currentTime,
-        audio.duration,
-        1,
-      );
-    }
+    this.updateMediaSessionPositionState();
     if (
       !this.nextTrackLoaded &&
       !Number.isNaN(audio.duration) &&
@@ -542,6 +538,25 @@ export class PlaybarCustomElement extends HTMLElement {
       return;
     }
     this.audioElement.currentTime = time;
+    this.updateMediaSessionPositionState();
+  }
+
+  /**
+   * Updates Media Session position state for lock screen/notification scrub UI.
+   * No-ops until audio metadata exposes a finite positive duration.
+   */
+  private updateMediaSessionPositionState(): void {
+    if (!this.audioElement) return;
+    const duration = this.audioElement.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const currentTime = Number.isFinite(this.audioElement.currentTime)
+      ? this.audioElement.currentTime
+      : 0;
+    const playbackRate = Number.isFinite(this.audioElement.playbackRate) &&
+        this.audioElement.playbackRate > 0
+      ? this.audioElement.playbackRate
+      : 1;
+    this.mediaSession?.updatePositionState(currentTime, duration, playbackRate);
   }
 
   private handleEnded() {
