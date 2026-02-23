@@ -1,3 +1,8 @@
+# Re-entry guard: when we push from within this hook (after amending), skip to avoid loop
+if [ -n "$COVERAGE_PREPUSH_INNER_PUSH" ]; then
+  exit 0
+fi
+
 # Capture pre-push refs before any git operations (stdin is consumed once)
 PREPUSH_REFS=$(cat)
 
@@ -41,11 +46,12 @@ if [ "$safe_to_amend" = true ] && [ -n "$(git status --porcelain coverage-baseli
   git add coverage-baseline.json && git commit --amend --no-edit
   echo "✅ Updated coverage baseline amended to the previous commit."
   # Git chose refs before our amend; we must push the amended commit ourselves.
+  # Use re-entry guard so our push does not re-trigger this hook (avoid loop).
   if [ -n "$branch" ]; then
     if [ -n "$remote_sha_for_branch" ] && [ "$remote_sha_for_branch" != "0000000000000000000000000000000000000000" ]; then
-      git push --force-with-lease="$branch:$remote_sha_for_branch" "$remote" "$branch"
+      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease="$branch:$remote_sha_for_branch" "$remote" "$branch"
     else
-      git push --force-with-lease "$remote" "$branch"
+      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease "$remote" "$branch"
     fi
   fi
   exit 1
