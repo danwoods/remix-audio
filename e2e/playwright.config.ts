@@ -19,6 +19,12 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
+  expect: {
+    toHaveScreenshot: {
+      pathTemplate:
+        "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}",
+    },
+  },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
