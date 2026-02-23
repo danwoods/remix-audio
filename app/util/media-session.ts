@@ -46,36 +46,69 @@ const DEFAULT_SEEK_OFFSET = 10;
 export class MediaSessionController {
   private callbacks: MediaSessionCallbacks;
   private isSupported: boolean;
+  private hasLoggedPositionStateInitialization = false;
 
   constructor(callbacks: MediaSessionCallbacks) {
     this.callbacks = callbacks;
     this.isSupported = "mediaSession" in navigator;
+    this.logDiagnostic("init", {
+      isSupported: this.isSupported,
+      hasSetPositionState: this.isSupported &&
+        typeof navigator.mediaSession.setPositionState === "function",
+      userAgent: navigator.userAgent,
+    });
     if (this.isSupported) {
       this.registerActionHandlers();
     }
   }
 
+  private logDiagnostic(
+    event: string,
+    details: Record<string, unknown>,
+  ): void {
+    console.info("[MediaSessionDiag][Controller]", event, details);
+  }
+
+  private setActionHandler(
+    action: Parameters<MediaSession["setActionHandler"]>[0],
+    handler: Parameters<MediaSession["setActionHandler"]>[1],
+  ): void {
+    try {
+      navigator.mediaSession.setActionHandler(action, handler);
+      this.logDiagnostic("set-action-handler", {
+        action,
+        enabled: handler !== null,
+      });
+    } catch (error) {
+      // Browsers may throw for actions they don't support.
+      this.logDiagnostic("set-action-handler-error", {
+        action,
+        enabled: handler !== null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private registerActionHandlers(): void {
-    const ms = navigator.mediaSession;
-    ms.setActionHandler("play", () => this.callbacks.onPlay());
-    ms.setActionHandler("pause", () => this.callbacks.onPause());
-    ms.setActionHandler("stop", () => this.callbacks.onStop());
-    ms.setActionHandler(
+    this.setActionHandler("play", () => this.callbacks.onPlay());
+    this.setActionHandler("pause", () => this.callbacks.onPause());
+    this.setActionHandler("stop", () => this.callbacks.onStop());
+    this.setActionHandler(
       "previoustrack",
       () => this.callbacks.onPreviousTrack(),
     );
-    ms.setActionHandler("nexttrack", () => this.callbacks.onNextTrack());
-    ms.setActionHandler("seekbackward", (details) => {
+    this.setActionHandler("nexttrack", () => this.callbacks.onNextTrack());
+    this.setActionHandler("seekbackward", (details) => {
       this.callbacks.onSeekBackward?.({
         seekOffset: details.seekOffset ?? DEFAULT_SEEK_OFFSET,
       });
     });
-    ms.setActionHandler("seekforward", (details) => {
+    this.setActionHandler("seekforward", (details) => {
       this.callbacks.onSeekForward?.({
         seekOffset: details.seekOffset ?? DEFAULT_SEEK_OFFSET,
       });
     });
-    ms.setActionHandler("seekto", (details) => {
+    this.setActionHandler("seekto", (details) => {
       if (typeof details.seekTime === "number") {
         this.callbacks.onSeekTo?.({ seekTime: details.seekTime });
       }
@@ -89,8 +122,10 @@ export class MediaSessionController {
   updateMetadata(metadata: MediaSessionMetadata | null): void {
     if (!this.isSupported) return;
     const ms = navigator.mediaSession;
+    this.hasLoggedPositionStateInitialization = false;
     if (!metadata) {
       ms.metadata = null;
+      this.logDiagnostic("metadata-cleared", {});
       return;
     }
     const artwork: MediaImage[] = metadata.artworkUrl
@@ -102,6 +137,12 @@ export class MediaSessionController {
       album: metadata.album,
       artwork,
     });
+    this.logDiagnostic("metadata-updated", {
+      title: metadata.title,
+      artist: metadata.artist,
+      album: metadata.album,
+      hasArtwork: artwork.length > 0,
+    });
   }
 
   /**
@@ -112,6 +153,7 @@ export class MediaSessionController {
   updatePlaybackState(state: "playing" | "paused" | "none"): void {
     if (!this.isSupported) return;
     navigator.mediaSession.playbackState = state;
+    this.logDiagnostic("playback-state", { state });
   }
 
   /**
@@ -127,15 +169,55 @@ export class MediaSessionController {
     duration: number,
     playbackRate = 1,
   ): void {
-    if (!this.isSupported) return;
+    if (!this.isSupported) {
+      this.logDiagnostic("position-state-skipped-unsupported", {});
+      return;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      this.logDiagnostic("position-state-skipped-invalid-duration", {
+        duration,
+        position,
+        playbackRate,
+      });
+      return;
+    }
+    if (!Number.isFinite(position)) {
+      this.logDiagnostic("position-state-skipped-invalid-position", {
+        duration,
+        position,
+        playbackRate,
+      });
+      return;
+    }
+    const normalizedPosition = Math.min(duration, Math.max(0, position));
+    const normalizedPlaybackRate = Number.isFinite(playbackRate) &&
+        playbackRate > 0
+      ? playbackRate
+      : 1;
     try {
       navigator.mediaSession.setPositionState({
         duration,
-        playbackRate,
-        position,
+        playbackRate: normalizedPlaybackRate,
+        position: normalizedPosition,
       });
-    } catch {
+      if (!this.hasLoggedPositionStateInitialization) {
+        this.logDiagnostic("position-state-initialized", {
+          duration,
+          position: normalizedPosition,
+          playbackRate: normalizedPlaybackRate,
+        });
+        this.hasLoggedPositionStateInitialization = true;
+      }
+    } catch (error) {
       // setPositionState can throw if duration/position are invalid
+      this.logDiagnostic("position-state-error", {
+        duration,
+        position,
+        playbackRate,
+        normalizedPosition,
+        normalizedPlaybackRate,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -148,13 +230,14 @@ export class MediaSessionController {
     const ms = navigator.mediaSession;
     ms.metadata = null;
     ms.playbackState = "none";
-    ms.setActionHandler("play", null);
-    ms.setActionHandler("pause", null);
-    ms.setActionHandler("stop", null);
-    ms.setActionHandler("previoustrack", null);
-    ms.setActionHandler("nexttrack", null);
-    ms.setActionHandler("seekbackward", null);
-    ms.setActionHandler("seekforward", null);
-    ms.setActionHandler("seekto", null);
+    this.setActionHandler("play", null);
+    this.setActionHandler("pause", null);
+    this.setActionHandler("stop", null);
+    this.setActionHandler("previoustrack", null);
+    this.setActionHandler("nexttrack", null);
+    this.setActionHandler("seekbackward", null);
+    this.setActionHandler("seekforward", null);
+    this.setActionHandler("seekto", null);
+    this.logDiagnostic("destroyed", {});
   }
 }

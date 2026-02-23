@@ -255,6 +255,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private boundHandlePlayPrev: (event: Event) => void;
   private boundHandleSeek: (event: Event) => void;
   private mediaSession: MediaSessionController | null = null;
+  private lastDurationSourceDiagnosticSignature: string | null = null;
 
   constructor() {
     super();
@@ -386,6 +387,7 @@ export class PlaybarCustomElement extends HTMLElement {
       onSeekTo: (d) => {
         if (this.audioElement) {
           this.audioElement.currentTime = d.seekTime;
+          this.updateMediaSessionPositionState();
         }
       },
     };
@@ -395,11 +397,28 @@ export class PlaybarCustomElement extends HTMLElement {
     if (!this.audioElement) return;
 
     if (this.currentTrackUrl) {
-      this.audioElement.src = this.currentTrackUrl;
+      const playableTrackUrl = this.toPlayableTrackUrl(this.currentTrackUrl);
+      this.lastDurationSourceDiagnosticSignature = null;
+      this.logMediaSessionDiagnostic("track-source-updated", {
+        trackUrl: this.currentTrackUrl,
+        playableTrackUrl,
+      });
+      this.audioElement.src = playableTrackUrl;
       this.nextTrackLoaded = false;
-      this.updateMediaSessionFromTrack(this.currentTrackUrl);
+      this.updateMediaSessionFromTrack(this.currentTrackUrl, playableTrackUrl);
       // After setting source, update playback state when metadata is loaded
       const handleLoadedMetadata = () => {
+        const seekableInfo = this.getSeekableInfoForDiagnostics(this.audioElement);
+        this.logMediaSessionDiagnostic("loadedmetadata", {
+          trackUrl: this.currentTrackUrl,
+          duration: this.audioElement?.duration,
+          currentTime: this.audioElement?.currentTime,
+          readyState: this.audioElement?.readyState,
+          seekableLength: seekableInfo.seekableLength,
+          seekableEnd: seekableInfo.seekableEnd,
+          seekableEndError: seekableInfo.seekableEndError,
+        });
+        this.updateMediaSessionPositionState();
         // Check current playing state, not the captured one
         if (this.isPlaying) {
           this.updateAudioPlayback();
@@ -415,6 +434,8 @@ export class PlaybarCustomElement extends HTMLElement {
         handleLoadedMetadata();
       }
     } else {
+      this.lastDurationSourceDiagnosticSignature = null;
+      this.logMediaSessionDiagnostic("track-source-cleared", {});
       this.audioElement.src = "";
       this.audioElement.pause();
       this.mediaSession?.updateMetadata(null);
@@ -427,8 +448,11 @@ export class PlaybarCustomElement extends HTMLElement {
    * Used for lock screen / notification controls (title, artist, album, artwork).
    * Guards against race where the user switches tracks before the fetch completes.
    */
-  private async updateMediaSessionFromTrack(trackUrl: string): Promise<void> {
-    const tags = await getID3TagsFromURL(trackUrl);
+  private async updateMediaSessionFromTrack(
+    trackUrl: string,
+    playableTrackUrl = trackUrl,
+  ): Promise<void> {
+    const tags = await getID3TagsFromURL(playableTrackUrl);
     if (this.currentTrackUrl !== trackUrl) return;
 
     let albumUrl: string | null = null;
@@ -450,13 +474,56 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   /**
+   * Returns a URL string safe to pass to HTMLAudioElement.src / Audio().
+   * Encodes each path segment to avoid invalid URI errors for characters
+   * like spaces, `>`, and `#` in S3 object keys.
+   */
+  private toPlayableTrackUrl(trackUrl: string): string {
+    const rawUrlMatch = trackUrl.match(
+      /^([a-zA-Z][a-zA-Z\d+\-.]*:\/\/[^/]+)(\/.*)?$/,
+    );
+    if (rawUrlMatch) {
+      const baseUrl = rawUrlMatch[1];
+      const rawPath = rawUrlMatch[2] ?? "";
+      const encodedPath = rawPath.split("/").map((segment, index) => {
+        if (index === 0 || segment === "") return segment;
+        try {
+          return encodeURIComponent(decodeURIComponent(segment));
+        } catch {
+          return encodeURIComponent(segment);
+        }
+      }).join("/");
+      return `${baseUrl}${encodedPath}`;
+    }
+    try {
+      const url = new URL(trackUrl);
+      const encodedPath = url.pathname.split("/").map((segment, index) => {
+        if (index === 0 || segment === "") return segment;
+        try {
+          return encodeURIComponent(decodeURIComponent(segment));
+        } catch {
+          return encodeURIComponent(segment);
+        }
+      }).join("/");
+      url.pathname = encodedPath;
+      return url.toString();
+    } catch {
+      try {
+        return encodeURI(trackUrl).replace(/#/g, "%23");
+      } catch {
+        return trackUrl;
+      }
+    }
+  }
+
+  /**
    * Seeks the audio element by deltaSeconds (positive = forward, negative = backward).
    * Clamps to [0, duration]. No-ops if no audio element or duration is not yet finite.
    */
   private seekAudioBy(deltaSeconds: number): void {
     if (!this.audioElement) return;
-    const duration = this.audioElement.duration;
-    if (!Number.isFinite(duration) || duration <= 0) return;
+    const duration = this.getMediaDurationForPositionState();
+    if (duration === null) return;
     this.audioElement.currentTime = Math.max(
       0,
       Math.min(duration, this.audioElement.currentTime + deltaSeconds),
@@ -486,13 +553,7 @@ export class PlaybarCustomElement extends HTMLElement {
   private handleTimeUpdate(event: Event) {
     const audio = event.target as HTMLAudioElement;
     this.updateProgressIndicator(audio);
-    if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      this.mediaSession?.updatePositionState(
-        audio.currentTime,
-        audio.duration,
-        1,
-      );
-    }
+    this.updateMediaSessionPositionState();
     if (
       !this.nextTrackLoaded &&
       !Number.isNaN(audio.duration) &&
@@ -504,7 +565,7 @@ export class PlaybarCustomElement extends HTMLElement {
       const [nextTrack] = this.remainingTracks;
       if (nextTrack) {
         // Preload the next track
-        new Audio(nextTrack.url);
+        new Audio(this.toPlayableTrackUrl(nextTrack.url));
       }
     }
   }
@@ -542,6 +603,136 @@ export class PlaybarCustomElement extends HTMLElement {
       return;
     }
     this.audioElement.currentTime = time;
+    this.updateMediaSessionPositionState();
+  }
+
+  /**
+   * Updates Media Session position state for lock screen/notification scrub UI.
+   * No-ops until audio metadata exposes a finite positive duration.
+   */
+  private updateMediaSessionPositionState(): void {
+    if (!this.audioElement) return;
+    const duration = this.getMediaDurationForPositionState();
+    if (duration === null) return;
+    const currentTime = Number.isFinite(this.audioElement.currentTime)
+      ? this.audioElement.currentTime
+      : 0;
+    const playbackRate = Number.isFinite(this.audioElement.playbackRate) &&
+        this.audioElement.playbackRate > 0
+      ? this.audioElement.playbackRate
+      : 1;
+    this.mediaSession?.updatePositionState(currentTime, duration, playbackRate);
+  }
+
+  /**
+   * Returns a finite duration for Media Session position updates.
+   * Falls back to the last seekable range end when `audio.duration` is Infinity.
+   */
+  private getMediaDurationForPositionState(): number | null {
+    if (!this.audioElement) return null;
+    const rawDuration = this.audioElement.duration;
+    const seekableInfo = this.getSeekableInfoForDiagnostics(this.audioElement);
+    if (Number.isFinite(rawDuration) && rawDuration > 0) {
+      this.reportDurationSourceDiagnostic("duration", {
+        rawDuration,
+        resolvedDuration: rawDuration,
+        seekableLength: seekableInfo.seekableLength,
+        seekableEnd: seekableInfo.seekableEnd,
+        seekableEndError: seekableInfo.seekableEndError,
+      });
+      return rawDuration;
+    }
+    if (seekableInfo.seekableEnd !== null && seekableInfo.seekableEnd > 0) {
+      this.reportDurationSourceDiagnostic("seekable", {
+        rawDuration,
+        resolvedDuration: seekableInfo.seekableEnd,
+        seekableLength: seekableInfo.seekableLength,
+        seekableEnd: seekableInfo.seekableEnd,
+        seekableEndError: seekableInfo.seekableEndError,
+      });
+      return seekableInfo.seekableEnd;
+    }
+    this.reportDurationSourceDiagnostic("none", {
+      rawDuration,
+      resolvedDuration: null,
+      seekableLength: seekableInfo.seekableLength,
+      seekableEnd: seekableInfo.seekableEnd,
+      seekableEndError: seekableInfo.seekableEndError,
+    });
+    return null;
+  }
+
+  private getSeekableInfoForDiagnostics(audio: HTMLAudioElement): {
+    seekableLength: number;
+    seekableEnd: number | null;
+    seekableEndError: string | null;
+  } {
+    const seekable = audio.seekable;
+    if (!seekable) {
+      return { seekableLength: 0, seekableEnd: null, seekableEndError: null };
+    }
+    const seekableLength = seekable.length;
+    if (seekableLength === 0) {
+      return { seekableLength, seekableEnd: null, seekableEndError: null };
+    }
+    try {
+      const seekableEnd = seekable.end(seekableLength - 1);
+      return {
+        seekableLength,
+        seekableEnd: Number.isFinite(seekableEnd) ? seekableEnd : null,
+        seekableEndError: null,
+      };
+    } catch (error) {
+      return {
+        seekableLength,
+        seekableEnd: null,
+        seekableEndError: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private reportDurationSourceDiagnostic(
+    source: "duration" | "seekable" | "none",
+    details: {
+      rawDuration: number;
+      resolvedDuration: number | null;
+      seekableLength: number;
+      seekableEnd: number | null;
+      seekableEndError: string | null;
+    },
+  ): void {
+    const numberToKey = (value: number | null): string => {
+      if (value === null) return "null";
+      return Number.isFinite(value) ? value.toFixed(3) : String(value);
+    };
+    const signature = [
+      source,
+      numberToKey(details.rawDuration),
+      numberToKey(details.resolvedDuration),
+      String(details.seekableLength),
+      numberToKey(details.seekableEnd),
+      details.seekableEndError ?? "",
+    ].join("|");
+    if (signature === this.lastDurationSourceDiagnosticSignature) {
+      return;
+    }
+    this.lastDurationSourceDiagnosticSignature = signature;
+    this.logMediaSessionDiagnostic("duration-source", {
+      source,
+      trackUrl: this.currentTrackUrl,
+      rawDuration: details.rawDuration,
+      resolvedDuration: details.resolvedDuration,
+      seekableLength: details.seekableLength,
+      seekableEnd: details.seekableEnd,
+      seekableEndError: details.seekableEndError,
+    });
+  }
+
+  private logMediaSessionDiagnostic(
+    event: string,
+    details: Record<string, unknown>,
+  ): void {
+    console.info("[MediaSessionDiag][Playbar]", event, details);
   }
 
   private handleEnded() {

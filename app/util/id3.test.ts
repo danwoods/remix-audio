@@ -1,7 +1,11 @@
 /** @file Tests for ID3 metadata extraction (getID3Tags, getID3TagsFromFile, getID3TagsFromURL) */
 import { assert, assertEquals } from "@std/assert";
 import { getID3Tags } from "./id3.ts";
-import { getID3TagsFromFile, getID3TagsFromURL } from "./id3.browser.ts";
+import {
+  getID3TagsFromFile,
+  getID3TagsFromURL,
+  normalizeUrlForId3Request,
+} from "./id3.browser.ts";
 
 const testMp3Url = new URL("../../test_data/test.mp3", import.meta.url);
 
@@ -37,4 +41,24 @@ Deno.test("getID3TagsFromURL - returns null in non-browser environment", async (
 Deno.test("getID3TagsFromURL - returns null when URL is invalid or unreachable", async () => {
   const result = await getID3TagsFromURL("not-a-valid-url");
   assertEquals(result, null);
+});
+
+Deno.test("normalizeUrlForId3Request - encodes special characters in path segments", () => {
+  const normalized = normalizeUrlForId3Request(
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track > One #2.mp3",
+  );
+  assertEquals(
+    normalized,
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track%20%3E%20One%20%232.mp3",
+  );
+});
+
+Deno.test("normalizeUrlForId3Request - does not double-encode existing escapes", () => {
+  const normalized = normalizeUrlForId3Request(
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track%20One%20%232.mp3",
+  );
+  assertEquals(
+    normalized,
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track%20One%20%232.mp3",
+  );
 });

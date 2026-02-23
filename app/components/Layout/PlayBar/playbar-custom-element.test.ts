@@ -972,6 +972,22 @@ Deno.test("PlaybarCustomElement - should update audio source when data-current-t
   assert(element.getAttribute("data-current-track-url") === trackUrl);
 });
 
+Deno.test("PlaybarCustomElement - should encode audio source URL for special characters", async () => {
+  const element = createTestElement();
+  element.connectedCallback();
+
+  const trackUrl =
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track > One #2.mp3";
+  element.setAttribute("data-current-track-url", trackUrl);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assertExists(audioElement);
+  assertEquals(
+    audioElement?.src,
+    "https://bucket.s3.amazonaws.com/Artist/Album/04__Track%20%3E%20One%20%232.mp3",
+  );
+});
+
 Deno.test("PlaybarCustomElement - should update playing state when data-is-playing changes", async () => {
   /**
    * Tests that changing data-is-playing to "true" starts playback.
@@ -1959,6 +1975,202 @@ Deno.test("PlaybarCustomElement - seekAudioBy is no-op when duration is not fini
       "currentTime should be unchanged when duration is NaN",
     );
   } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
+Deno.test("PlaybarCustomElement - updates media position state on loadedmetadata", async () => {
+  const positionCalls: Array<{
+    position: number;
+    duration: number;
+    playbackRate?: number;
+  }> = [];
+  const mockMediaSession = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler: () => {},
+    setPositionState: (state: {
+      position: number;
+      duration: number;
+      playbackRate?: number;
+    }) => {
+      positionCalls.push(state);
+    },
+  };
+  const origNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...origNavigator, mediaSession: mockMediaSession },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const element = createTestElement();
+    element.connectedCallback();
+    element.setAttribute(
+      "data-current-track-url",
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    audioEventListeners.loadedmetadata.forEach((listener) =>
+      listener(new Event("loadedmetadata"))
+    );
+
+    assertEquals(positionCalls.length, 1);
+    assertEquals(positionCalls[0].position, 0);
+    assertEquals(positionCalls[0].duration, 100);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
+Deno.test("PlaybarCustomElement - uses seekable range when duration is Infinity for media position state", async () => {
+  const positionCalls: Array<{
+    position: number;
+    duration: number;
+    playbackRate?: number;
+  }> = [];
+  const mockMediaSession = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler: () => {},
+    setPositionState: (state: {
+      position: number;
+      duration: number;
+      playbackRate?: number;
+    }) => {
+      positionCalls.push(state);
+    },
+  };
+  const origNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...origNavigator, mediaSession: mockMediaSession },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const element = createTestElement();
+    element.connectedCallback();
+    element.setAttribute(
+      "data-current-track-url",
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert(audioElement !== null);
+    Object.defineProperty(audioElement, "duration", {
+      get: () => Infinity,
+      configurable: true,
+    });
+    Object.defineProperty(audioElement, "currentTime", {
+      get: () => 15,
+      configurable: true,
+    });
+    Object.defineProperty(audioElement, "seekable", {
+      value: {
+        length: 1,
+        end: (_index: number) => 180,
+      },
+      configurable: true,
+    });
+
+    audioEventListeners.loadedmetadata.forEach((listener) =>
+      listener(new Event("loadedmetadata"))
+    );
+
+    assertEquals(positionCalls.length, 1);
+    assertEquals(positionCalls[0].position, 15);
+    assertEquals(positionCalls[0].duration, 180);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
+Deno.test("PlaybarCustomElement - logs diagnostics when media duration source changes", async () => {
+  const infoCalls: unknown[][] = [];
+  const originalInfo = console.info;
+  console.info = ((...args: unknown[]) => {
+    infoCalls.push(args);
+  }) as typeof console.info;
+
+  const mockMediaSession = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler: () => {},
+    setPositionState: () => {},
+  };
+  const origNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...origNavigator, mediaSession: mockMediaSession },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const element = createTestElement();
+    element.connectedCallback();
+    element.setAttribute(
+      "data-current-track-url",
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert(audioElement !== null);
+    Object.defineProperty(audioElement, "duration", {
+      get: () => Infinity,
+      configurable: true,
+    });
+    Object.defineProperty(audioElement, "seekable", {
+      value: {
+        length: 0,
+        end: (_index: number) => 0,
+      },
+      configurable: true,
+    });
+
+    audioEventListeners.loadedmetadata.forEach((listener) =>
+      listener(new Event("loadedmetadata"))
+    );
+
+    Object.defineProperty(audioElement, "seekable", {
+      value: {
+        length: 1,
+        end: (_index: number) => 180,
+      },
+      configurable: true,
+    });
+    const timeupdateEvent = new Event("timeupdate");
+    Object.defineProperty(timeupdateEvent, "target", {
+      value: audioElement,
+      writable: false,
+    });
+    audioEventListeners.timeupdate.forEach((listener) => listener(timeupdateEvent));
+
+    const durationSourceLogs = infoCalls
+      .filter((call) =>
+        call[0] === "[MediaSessionDiag][Playbar]" &&
+        call[1] === "duration-source"
+      )
+      .map((call) => call[2] as { source?: string });
+
+    assert(durationSourceLogs.some((log) => log.source === "none"));
+    assert(durationSourceLogs.some((log) => log.source === "seekable"));
+  } finally {
+    console.info = originalInfo;
     Object.defineProperty(globalThis, "navigator", {
       value: origNavigator,
       configurable: true,

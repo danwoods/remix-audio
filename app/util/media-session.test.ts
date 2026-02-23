@@ -32,6 +32,7 @@ import {
 
 function createMockMediaSession(options?: {
   setPositionStateThrows?: boolean;
+  setPositionStateThrowsWhenInvalid?: boolean;
 }) {
   const actionHandlers: Record<string, ((details?: unknown) => void) | null> =
     {};
@@ -69,6 +70,12 @@ function createMockMediaSession(options?: {
     }) {
       if (options?.setPositionStateThrows) {
         throw new Error("Invalid state");
+      }
+      if (
+        options?.setPositionStateThrowsWhenInvalid &&
+        (state.position < 0 || state.position > state.duration)
+      ) {
+        throw new Error("Position out of range");
       }
       setPositionStateCalls.push({
         position: state.position,
@@ -368,6 +375,60 @@ Deno.test("MediaSessionController - action handlers invoke callbacks", () => {
   }
 });
 
+Deno.test("MediaSessionController - continues registering actions when one action is unsupported", () => {
+  const actionHandlers: Record<string, ((details?: unknown) => void) | null> =
+    {};
+  const mock = {
+    metadata: null as MediaMetadata | null,
+    playbackState: "none" as MediaSessionPlaybackState,
+    setActionHandler(
+      action: string,
+      handler: ((details?: unknown) => void) | null,
+    ) {
+      if (action === "stop") {
+        throw new Error("Unsupported action");
+      }
+      actionHandlers[action] = handler;
+    },
+    setPositionState: (_state: {
+      position: number;
+      duration: number;
+      playbackRate?: number;
+    }) => {},
+  };
+  const orig = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...orig, mediaSession: mock },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const seekToCalls: Array<{ seekTime: number }> = [];
+    const controller = new MediaSessionController({
+      onPlay: () => {},
+      onPause: () => {},
+      onStop: () => {},
+      onNextTrack: () => {},
+      onPreviousTrack: () => {},
+      onSeekTo: (details) => seekToCalls.push(details),
+    });
+
+    const seekToHandler = actionHandlers["seekto"];
+    assertStrictEquals(typeof seekToHandler, "function");
+    seekToHandler?.({ seekTime: 12 });
+    assertEquals(seekToCalls.length, 1);
+
+    controller.destroy();
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: orig,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
 Deno.test("MediaSessionController - seek handlers invoke callbacks with offset", () => {
   const mock = createMockMediaSession();
   const orig = globalThis.navigator;
@@ -546,6 +607,79 @@ Deno.test("MediaSessionController - updatePositionState does not throw when setP
     controller.updatePositionState(NaN, 180);
 
     controller.destroy();
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      value: orig,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
+Deno.test("MediaSessionController - logs diagnostics when setPositionState throws", () => {
+  const mock = createMockMediaSession({ setPositionStateThrows: true });
+  const orig = globalThis.navigator;
+  const infoCalls: unknown[][] = [];
+  const originalInfo = console.info;
+  console.info = ((...args: unknown[]) => {
+    infoCalls.push(args);
+  }) as typeof console.info;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...orig, mediaSession: mock },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const controller = new MediaSessionController({
+      onPlay: () => {},
+      onPause: () => {},
+      onStop: () => {},
+      onNextTrack: () => {},
+      onPreviousTrack: () => {},
+    });
+
+    controller.updatePositionState(30, 180);
+
+    const hasPositionStateErrorDiagnostic = infoCalls.some((call) =>
+      call[0] === "[MediaSessionDiag][Controller]" &&
+      call[1] === "position-state-error"
+    );
+    assertStrictEquals(hasPositionStateErrorDiagnostic, true);
+  } finally {
+    console.info = originalInfo;
+    Object.defineProperty(globalThis, "navigator", {
+      value: orig,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
+Deno.test("MediaSessionController - updatePositionState clamps out-of-range position values", () => {
+  const mock = createMockMediaSession({
+    setPositionStateThrowsWhenInvalid: true,
+  });
+  const orig = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...orig, mediaSession: mock },
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const controller = new MediaSessionController({
+      onPlay: () => {},
+      onPause: () => {},
+      onStop: () => {},
+      onNextTrack: () => {},
+      onPreviousTrack: () => {},
+    });
+
+    controller.updatePositionState(250, 180);
+    assertEquals(mock.setPositionStateCalls.length, 1);
+    assertEquals(mock.setPositionStateCalls[0].position, 180);
+    assertEquals(mock.setPositionStateCalls[0].duration, 180);
   } finally {
     Object.defineProperty(globalThis, "navigator", {
       value: orig,
