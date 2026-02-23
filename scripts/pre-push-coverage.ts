@@ -3,8 +3,9 @@
  *
  * This script is invoked by the `.husky/pre-push` hook before every push. It
  * runs all tests with coverage instrumentation, generates LCOV output, and
- * compares the result to `coverage-baseline.json`. If line or branch coverage
- * drops below the baseline, the script exits 1 and the push is blocked.
+ * compares the result to `coverage-baseline.json`. If line, branch, or
+ * function coverage drops below the baseline, the script exits 1 and the
+ * push is blocked.
  *
  * ## What this script does
  *

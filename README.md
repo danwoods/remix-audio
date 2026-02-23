@@ -231,7 +231,8 @@ This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
 ### Coverage
 
 Tests run with coverage and are compared against `coverage-baseline.json`. If
-line or branch coverage drops below the baseline, the push or CI fails.
+line, branch, or function coverage drops below the baseline, the push or CI
+fails.
 
 - **Pre-push**: The `.husky/pre-push` hook runs `scripts/pre-push-coverage.ts`,
   which executes `deno task test:coverage:ci`. The push is blocked if coverage
