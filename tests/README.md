@@ -115,6 +115,17 @@ deno test tests/ --no-check --allow-net --allow-env --allow-read --allow-write -
      - FormData file acceptance
      - Multiple file handling
 
+## Coverage
+
+Tests run with coverage in CI via `deno task test:coverage:ci`. A baseline file
+`coverage-baseline.json` at the project root stores minimum line and branch
+coverage percentages. The check fails if coverage regresses.
+
+- `deno task test:coverage` — run all tests with coverage
+- `deno task coverage:baseline` — update baseline after adding tests
+
+---
+
 ## Test Philosophy
 
 - **Simple**: Tests use Deno's native test framework, no external test libraries

@@ -220,11 +220,28 @@ deno task test:all
 This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
 `test:server` (Deno tests under `tests/`).
 
+- **Coverage**: CI uses `deno task test:coverage:ci` to run tests with coverage
+  and enforce a baseline. See [Coverage](#coverage) below.
 - **Server / integration tests**: `tests/` — see
   [tests/README.md](tests/README.md) for structure and how to run individual
   tests.
 - **Component tests**: `deno test app/components/ --no-check`
 - **Util tests**: `deno test app/util --no-check --allow-env --allow-read`
+
+### Coverage
+
+CI runs tests with coverage and compares against `coverage-baseline.json`. If
+line or branch coverage drops below the baseline, the test job fails.
+
+| Task                | Purpose                                                           |
+| ------------------- | ----------------------------------------------------------------- |
+| `test:coverage`     | Run all tests with coverage (outputs to `cov/`)                   |
+| `coverage:check`    | Generate LCOV from `cov/`, compare to baseline, exit 0 or 1       |
+| `test:coverage:ci`  | Run `test:coverage` + `coverage:check` (single CI invocation)     |
+| `coverage:baseline` | Run tests, then write new percentages to `coverage-baseline.json` |
+
+**Raising the bar**: After adding tests and improving coverage, run
+`deno task coverage:baseline` and commit the updated `coverage-baseline.json`.
 
 ---
 

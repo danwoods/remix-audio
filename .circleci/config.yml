@@ -33,7 +33,7 @@ jobs:
             echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
       - run:
           name: Test
-          command: deno task test:all
+          command: deno task test:coverage:ci
 
   release:
     docker:
