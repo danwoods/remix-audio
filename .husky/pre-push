@@ -49,9 +49,9 @@ if [ "$safe_to_amend" = true ] && [ -n "$(git status --porcelain coverage-baseli
   # Use re-entry guard so our push does not re-trigger this hook (avoid loop).
   if [ -n "$branch" ]; then
     if [ -n "$remote_sha_for_branch" ] && [ "$remote_sha_for_branch" != "0000000000000000000000000000000000000000" ]; then
-      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease="$branch:$remote_sha_for_branch" "$remote" "$branch" && exit 0
+      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease="$branch:$remote_sha_for_branch" "$remote" "$branch"
     else
-      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease "$remote" "$branch" && exit 0
+      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease "$remote" "$branch"
     fi
   fi
   exit 1
