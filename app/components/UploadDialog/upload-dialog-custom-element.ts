@@ -399,9 +399,36 @@ export class UploadDialogCustomElement extends HTMLElement {
       }
     };
 
+    let allMetadataReady = false;
+    let metadataReadyVersion = 0;
+
+    const refreshMetadataReadyState = () => {
+      const items = fileListEl?.querySelectorAll(
+        "upload-dialog-file-item",
+      ) as NodeListOf<UploadDialogFileItemCustomElement>;
+      if (!items || items.length === 0) {
+        allMetadataReady = true;
+        updateSubmitState();
+        return;
+      }
+      allMetadataReady = false;
+      updateSubmitState();
+      const version = ++metadataReadyVersion;
+      Promise.all(Array.from(items).map((item) => item.metadataReady)).then(
+        () => {
+          if (version !== metadataReadyVersion) return;
+          allMetadataReady = true;
+          updateSubmitState();
+        },
+      );
+    };
+
     const updateSubmitState = () => {
       if (submitBtn) {
-        const disabled = this.#isSubmitting || this.#selectedFiles.length === 0;
+        const disabled =
+          this.#isSubmitting ||
+          this.#selectedFiles.length === 0 ||
+          !allMetadataReady;
         submitBtn.disabled = disabled;
         submitBtn.innerHTML = this.#isSubmitting
           ? '<span class="upload-dialog-loading" aria-hidden="true"></span>'
@@ -422,7 +449,7 @@ export class UploadDialogCustomElement extends HTMLElement {
         parent.removeChild(item);
       }
       updateFileLabel();
-      updateSubmitState();
+      refreshMetadataReadyState();
     };
 
     const updateFileList = () => {
@@ -476,7 +503,7 @@ export class UploadDialogCustomElement extends HTMLElement {
         fileInput.value = "";
         updateFileLabel();
         updateFileList();
-        updateSubmitState();
+        refreshMetadataReadyState();
       }
     });
 
@@ -491,10 +518,14 @@ export class UploadDialogCustomElement extends HTMLElement {
       }
       if (fileInput) fileInput.disabled = true;
 
-      const formData = new FormData();
       const fileItems = fileListEl?.querySelectorAll(
         "upload-dialog-file-item",
       ) as NodeListOf<UploadDialogFileItemCustomElement>;
+      await Promise.all(
+        Array.from(fileItems ?? []).map((item) => item.metadataReady),
+      );
+
+      const formData = new FormData();
       for (let i = 0; i < this.#selectedFiles.length; i++) {
         formData.append("files", this.#selectedFiles[i]);
         const item = fileItems?.[i];

@@ -162,6 +162,8 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
     trackNumber: 1,
   };
   #id3InputUnsubscribe: (() => void)[] = [];
+  #metadataReadyResolve: (() => void) | null = null;
+  #metadataReadyPromise: Promise<void> = Promise.resolve();
 
   constructor() {
     super();
@@ -197,8 +199,18 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
     this.#file = value;
     if (value) {
       this.#fileKey = `${value.name}-${value.size}-${value.lastModified}`;
+      this.#metadataReadyPromise = new Promise<void>((resolve) => {
+        this.#metadataReadyResolve = resolve;
+      });
       this.#render(value);
+    } else {
+      this.#metadataReadyPromise = Promise.resolve();
     }
+  }
+
+  /** Resolves when ID3 metadata has finished loading (or failed). Use before submit. */
+  get metadataReady(): Promise<void> {
+    return this.#metadataReadyPromise;
   }
 
   /** Stable key for this file (name-size-lastModified). */
@@ -248,116 +260,121 @@ export class UploadDialogFileItemCustomElement extends HTMLElement {
     for (const fn of this.#id3InputUnsubscribe) fn();
     this.#id3InputUnsubscribe = [];
 
-    getID3TagsFromFile(file).then((tags) => {
-      if (!this.isConnected || !id3Target) return;
-      id3Target.replaceChildren();
+    getID3TagsFromFile(file)
+      .then((tags) => {
+        if (!this.isConnected || !id3Target) return;
+        id3Target.replaceChildren();
 
-      // Use "Unknown" when ID3 fails or returns null (non-MP3, parse error).
-      // Empty strings would override server defaults on upload and produce invalid
-      // S3 keys (//1__) that file listing skips (!artist || !album)
-      const artist = tags?.artist?.trim() || "Unknown";
-      const album = tags?.album?.trim() || "Unknown";
-      const title = tags?.title?.trim() || "Unknown";
-      const trackNumber = Math.max(1, tags?.trackNumber ?? 1);
-      const image = tags?.image;
+        // Use "Unknown" when ID3 fails or returns null (non-MP3, parse error).
+        // Empty strings would override server defaults on upload and produce invalid
+        // S3 keys (//1__) that file listing skips (!artist || !album)
+        const artist = tags?.artist?.trim() || "Unknown";
+        const album = tags?.album?.trim() || "Unknown";
+        const title = tags?.title?.trim() || "Unknown";
+        const trackNumber = Math.max(1, tags?.trackNumber ?? 1);
+        const image = tags?.image;
 
-      this.#metadata = { artist, album, title, trackNumber };
+        this.#metadata = { artist, album, title, trackNumber };
 
-      const wrapper = document.createElement("div");
-      wrapper.className = "upload-dialog-file-item-id3";
+        const wrapper = document.createElement("div");
+        wrapper.className = "upload-dialog-file-item-id3";
 
-      if (image) {
-        const img = document.createElement("img");
-        img.src = image;
-        img.alt = "";
-        img.setAttribute("aria-hidden", "true");
-        wrapper.appendChild(img);
-      }
+        if (image) {
+          const img = document.createElement("img");
+          img.src = image;
+          img.alt = "";
+          img.setAttribute("aria-hidden", "true");
+          wrapper.appendChild(img);
+        }
 
-      const fields = document.createElement("div");
-      fields.className = "upload-dialog-file-item-id3-fields";
+        const fields = document.createElement("div");
+        fields.className = "upload-dialog-file-item-id3-fields";
 
-      const artistRow = document.createElement("div");
-      artistRow.className = "upload-dialog-file-item-id3-row";
-      const artistLabel = document.createElement("label");
-      artistLabel.htmlFor = "artist-input";
-      artistLabel.textContent = "Artist";
-      const artistInput = document.createElement("input");
-      artistInput.id = "artist-input";
-      artistInput.type = "text";
-      artistInput.value = artist;
-      artistInput.setAttribute("aria-label", "Artist");
-      artistRow.appendChild(artistLabel);
-      artistRow.appendChild(artistInput);
-      fields.appendChild(artistRow);
+        const artistRow = document.createElement("div");
+        artistRow.className = "upload-dialog-file-item-id3-row";
+        const artistLabel = document.createElement("label");
+        artistLabel.htmlFor = "artist-input";
+        artistLabel.textContent = "Artist";
+        const artistInput = document.createElement("input");
+        artistInput.id = "artist-input";
+        artistInput.type = "text";
+        artistInput.value = artist;
+        artistInput.setAttribute("aria-label", "Artist");
+        artistRow.appendChild(artistLabel);
+        artistRow.appendChild(artistInput);
+        fields.appendChild(artistRow);
 
-      const albumRow = document.createElement("div");
-      albumRow.className = "upload-dialog-file-item-id3-row";
-      const albumLabel = document.createElement("label");
-      albumLabel.htmlFor = "album-input";
-      albumLabel.textContent = "Album";
-      const albumInput = document.createElement("input");
-      albumInput.id = "album-input";
-      albumInput.type = "text";
-      albumInput.value = album;
-      albumInput.setAttribute("aria-label", "Album");
-      albumRow.appendChild(albumLabel);
-      albumRow.appendChild(albumInput);
-      fields.appendChild(albumRow);
+        const albumRow = document.createElement("div");
+        albumRow.className = "upload-dialog-file-item-id3-row";
+        const albumLabel = document.createElement("label");
+        albumLabel.htmlFor = "album-input";
+        albumLabel.textContent = "Album";
+        const albumInput = document.createElement("input");
+        albumInput.id = "album-input";
+        albumInput.type = "text";
+        albumInput.value = album;
+        albumInput.setAttribute("aria-label", "Album");
+        albumRow.appendChild(albumLabel);
+        albumRow.appendChild(albumInput);
+        fields.appendChild(albumRow);
 
-      const titleRow = document.createElement("div");
-      titleRow.className = "upload-dialog-file-item-id3-row";
-      const titleLabel = document.createElement("label");
-      titleLabel.htmlFor = "title-input";
-      titleLabel.textContent = "Title";
-      const titleInput = document.createElement("input");
-      titleInput.id = "title-input";
-      titleInput.type = "text";
-      titleInput.value = title;
-      titleInput.setAttribute("aria-label", "Title");
-      titleRow.appendChild(titleLabel);
-      titleRow.appendChild(titleInput);
-      fields.appendChild(titleRow);
+        const titleRow = document.createElement("div");
+        titleRow.className = "upload-dialog-file-item-id3-row";
+        const titleLabel = document.createElement("label");
+        titleLabel.htmlFor = "title-input";
+        titleLabel.textContent = "Title";
+        const titleInput = document.createElement("input");
+        titleInput.id = "title-input";
+        titleInput.type = "text";
+        titleInput.value = title;
+        titleInput.setAttribute("aria-label", "Title");
+        titleRow.appendChild(titleLabel);
+        titleRow.appendChild(titleInput);
+        fields.appendChild(titleRow);
 
-      const trackRow = document.createElement("div");
-      trackRow.className = "upload-dialog-file-item-id3-row";
-      const trackLabel = document.createElement("label");
-      trackLabel.htmlFor = "track-number-input";
-      trackLabel.textContent = "Track";
-      const trackInput = document.createElement("input");
-      trackInput.id = "track-number-input";
-      trackInput.type = "number";
-      trackInput.min = "1";
-      trackInput.value = String(trackNumber);
-      trackInput.setAttribute("aria-label", "Track number");
-      trackRow.appendChild(trackLabel);
-      trackRow.appendChild(trackInput);
-      fields.appendChild(trackRow);
+        const trackRow = document.createElement("div");
+        trackRow.className = "upload-dialog-file-item-id3-row";
+        const trackLabel = document.createElement("label");
+        trackLabel.htmlFor = "track-number-input";
+        trackLabel.textContent = "Track";
+        const trackInput = document.createElement("input");
+        trackInput.id = "track-number-input";
+        trackInput.type = "number";
+        trackInput.min = "1";
+        trackInput.value = String(trackNumber);
+        trackInput.setAttribute("aria-label", "Track number");
+        trackRow.appendChild(trackLabel);
+        trackRow.appendChild(trackInput);
+        fields.appendChild(trackRow);
 
-      const sync = () =>
-        this.#syncMetadataFromInputs(
-          artistInput,
-          albumInput,
-          titleInput,
-          trackInput,
-        );
+        const sync = () =>
+          this.#syncMetadataFromInputs(
+            artistInput,
+            albumInput,
+            titleInput,
+            trackInput,
+          );
 
-      const onInput = () => sync();
-      artistInput.addEventListener("input", onInput);
-      albumInput.addEventListener("input", onInput);
-      titleInput.addEventListener("input", onInput);
-      trackInput.addEventListener("input", onInput);
+        const onInput = () => sync();
+        artistInput.addEventListener("input", onInput);
+        albumInput.addEventListener("input", onInput);
+        titleInput.addEventListener("input", onInput);
+        trackInput.addEventListener("input", onInput);
 
-      this.#id3InputUnsubscribe.push(() => {
-        artistInput.removeEventListener("input", onInput);
-        albumInput.removeEventListener("input", onInput);
-        titleInput.removeEventListener("input", onInput);
-        trackInput.removeEventListener("input", onInput);
+        this.#id3InputUnsubscribe.push(() => {
+          artistInput.removeEventListener("input", onInput);
+          albumInput.removeEventListener("input", onInput);
+          titleInput.removeEventListener("input", onInput);
+          trackInput.removeEventListener("input", onInput);
+        });
+
+        wrapper.appendChild(fields);
+        id3Target.appendChild(wrapper);
+      })
+      .finally(() => {
+        this.#metadataReadyResolve?.();
+        this.#metadataReadyResolve = null;
       });
-
-      wrapper.appendChild(fields);
-      id3Target.appendChild(wrapper);
-    });
   }
 }
 

@@ -1,0 +1,18 @@
+/** @file E2E tests for the index (home) page.
+ *
+ * Asserts that the home page loads, shows the app name, and displays the
+ * "Latest" album row with fixture data (Test Artist / Test Album).
+ */
+import { expect, test } from "@playwright/test";
+
+test("index page loads and shows app name", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("BoomBox")).toBeVisible({ timeout: 10_000 });
+});
+
+test("index page shows Latest section with fixture album", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("Latest")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Test Album")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Test Artist")).toBeVisible({ timeout: 5_000 });
+});

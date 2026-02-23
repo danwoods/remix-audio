@@ -33,7 +33,30 @@ jobs:
             echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
       - run:
           name: Test
-          command: deno task test:all
+          command: deno task test:coverage:ci
+
+  test-e2e:
+    docker:
+      - image: mcr.microsoft.com/playwright:v1.49.1-jammy
+    steps:
+      - checkout
+      - run:
+          name: Install Deno
+          command: |
+            curl -fsSL https://deno.land/x/install/install.sh | sh
+            export DENO_INSTALL="$HOME/.deno"
+            export PATH="$DENO_INSTALL/bin:$PATH"
+            echo 'export DENO_INSTALL="$HOME/.deno"' >> $BASH_ENV
+            echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
+      - run:
+          name: Install dependencies
+          command: npm ci
+      - run:
+          name: Build
+          command: mkdir -p build && deno task build
+      - run:
+          name: E2E tests
+          command: sh scripts/run-e2e.sh
 
   release:
     docker:
@@ -78,8 +101,13 @@ jobs:
             fi
 
             git add deno.json
+
+            # Update coverage baseline at release time
+            deno task coverage:baseline
+            git add coverage-baseline.json 2>/dev/null || true
+
             if git diff --cached --quiet; then
-              echo "No deno.json changes to commit."
+              echo "No deno.json or coverage-baseline.json changes to commit."
               exit 0
             fi
 
@@ -95,9 +123,13 @@ workflows:
       - test:
           requires:
             - build
+      - test-e2e:
+          requires:
+            - build
       - release:
           requires:
             - test
+            - test-e2e
           filters:
             branches:
               only: main

@@ -1,10 +1,7 @@
-# Run tests before push
-echo "🧪 Running tests before push..."
-deno task test:all
-
+# Run tests with coverage and enforce baseline before push
+echo "🧪 Running tests with coverage before push..."
+deno task test:coverage:ci
 if [ $? -ne 0 ]; then
-  echo "❌ Tests failed. Push aborted."
+  echo "❌ Tests or coverage check failed. Push aborted."
   exit 1
 fi
-
-echo "✅ All tests passed!"

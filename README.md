@@ -218,13 +218,83 @@ deno task test:all
 ```
 
 This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
-`test:server` (Deno tests under `deno-tests/`).
+`test:server` (Deno tests under `tests/`).
 
-- **Server / integration tests**: `deno-tests/` — see
-  [deno-tests/README.md](deno-tests/README.md) for structure and how to run
-  individual tests.
+- **Coverage**: CI uses `deno task test:coverage:ci` to run tests with coverage
+  and enforce a baseline. See [Coverage](#coverage) below.
+- **Server / integration tests**: `tests/` — see
+  [tests/README.md](tests/README.md) for structure and how to run individual
+  tests.
 - **Component tests**: `deno test app/components/ --no-check`
 - **Util tests**: `deno test app/util --no-check --allow-env --allow-read`
+
+### Coverage
+
+Tests run with coverage and are compared against `coverage-baseline.json`. If
+line, branch, or function coverage drops below the baseline, the push or CI
+fails.
+
+- **Pre-push**: The `.husky/pre-push` hook runs `deno task test:coverage:ci`,
+  which executes `deno task test:coverage:ci`. The push is blocked if coverage
+  regresses.
+- **CI**: The test job runs `deno task test:coverage:ci`.
+- **Baseline updates**: The baseline is updated automatically only when a new
+  version is released (CircleCI release job). When merging to `main` triggers a
+  release, the job runs `deno task coverage:baseline` and commits the updated
+  `coverage-baseline.json` with the release commit.
+
+| Task                | Purpose                                                           |
+| ------------------- | ----------------------------------------------------------------- |
+| `test:coverage`     | Run all tests with coverage (outputs to `cov/`)                   |
+| `coverage:check`    | Generate LCOV from `cov/`, compare to baseline, exit 0 or 1       |
+| `test:coverage:ci`  | Run `test:coverage` + `coverage:check` (single invocation)        |
+| `coverage:baseline` | Run tests, then write new percentages to `coverage-baseline.json` |
+
+**Raising the bar**: Coverage baseline is raised automatically at release time.
+See
+[Updating the baseline during development](#updating-the-baseline-during-development)
+for when and how to update it locally.
+
+#### Updating the baseline during development
+
+The baseline only updates automatically when a release happens. During
+development, update it locally when:
+
+- **You added or improved tests** — run `coverage:baseline` and commit the
+  updated `coverage-baseline.json` to raise the bar for future work.
+- **Pre-push fails** due to coverage check — if the baseline is missing or
+  corrupted, run `coverage:baseline` to create/refresh it. If coverage regressed
+  (dropped below baseline), fix it by adding tests or restoring code; do not
+  lower the baseline.
+
+**Workflow when adding tests:**
+
+1. Add or update tests; run `deno task test:coverage:ci` to confirm tests pass.
+2. Run `deno task coverage:baseline` to write the new percentages.
+3. Commit `coverage-baseline.json` with your test changes (or in a follow-up
+   commit).
+
+**When to run `coverage:baseline`:**
+
+| Situation                          | Action                                                             |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| You added tests, coverage went up  | Run `coverage:baseline`, commit the updated file to raise the bar. |
+| Pre-push fails (baseline missing)  | Run `coverage:baseline` to create it; commit.                      |
+| Coverage regressed (dropped below) | Add tests or restore code; do not lower the baseline.              |
+| Release merged to `main`           | Baseline is updated automatically by CI; no local action needed.   |
+
+### E2E and visual regression
+
+Browser-based e2e and visual regression tests use Playwright in `e2e/`.
+
+- **Run e2e**: `deno task test:e2e` (starts the server with mocked S3, runs
+  Playwright)
+- **Update visual baselines**: `deno task test:e2e -- --update-snapshots`
+- **CI**: The `test-e2e` job runs after build; release requires both unit and
+  e2e tests to pass.
+
+Tasks: `start:e2e` (server with E2E_MODE + S3 mock), `test:e2e` (Playwright),
+`test:browser` (alias for `test:e2e`).
 
 ---
 
@@ -237,8 +307,9 @@ This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
   - `feat`: **minor**
   - `fix` / `perf` / `revert`: **patch**
 - CircleCI runs the release job only on `main` after tests pass. When a bump is
-  required, it updates `deno.json`, commits `chore(release): vX.Y.Z`, creates
-  tag `vX.Y.Z`, and pushes both commit and tag to `main`.
+  required, it updates `deno.json`, updates `coverage-baseline.json` with
+  current coverage, commits `chore(release): vX.Y.Z`, creates tag `vX.Y.Z`, and
+  pushes both commit and tag to `main`.
 
 Local dry run:
 
@@ -268,7 +339,8 @@ deno run --allow-read --allow-run scripts/release.ts --dry-run
 │   └── utils/              # basicAuth, loadEnv, manifest
 ├── build/                  # Build output
 │   └── main.js             # Custom elements bundle (from deno task build)
-├── deno-tests/             # Deno tests (router, handlers, SSR, utils)
+├── e2e/                    # Playwright e2e and visual regression tests
+├── tests/                  # Deno tests (router, handlers, SSR, utils)
 ├── scripts/                # CI/release scripts
 ├── public/                 # Static assets (e.g. favicon)
 ├── test_data/              # Test audio files (see test_data/README.md)
@@ -302,7 +374,7 @@ Static assets: `/build/*`, `/assets/*` (if present), `/favicon.ico`, `/app.css`.
   shadow DOM / template pattern and naming.
 - **Project conventions**: Deno-first, testing, and UI approach are described in
   [.cursor/rules/project.mdc](.cursor/rules/project.mdc).
-- **Test layout and coverage**: [deno-tests/README.md](deno-tests/README.md).
+- **Test layout and coverage**: [tests/README.md](tests/README.md).
 - **Test audio files**: [test_data/README.md](test_data/README.md).
 
 ---

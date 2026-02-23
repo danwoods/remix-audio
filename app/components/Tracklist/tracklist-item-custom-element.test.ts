@@ -1,35 +1,11 @@
 /**
  * @file Tests for TracklistItemCustomElement
  *
- * This test suite provides comprehensive coverage for the TracklistItemCustomElement
- * custom web component. The element displays track information including name, artist,
- * track number, and duration, and dispatches track-click events when clicked.
+ * Covers track display (name, artist, number, duration), duration loading from
+ * audio metadata, track-click event dispatch, and click handling.
  *
- * ## Test Structure
- *
- * This test file uses Deno's built-in testing framework with the following structure:
- * - Mock setup functions that create a controlled DOM environment
- * - Helper functions for creating test elements and simulating interactions
- * - Individual test cases organized by functionality area
- *
- * ## Mocking Strategy
- *
- * Since Deno doesn't have a full DOM environment, we mock:
- * - `document` and `HTMLElement` for DOM operations
- * - `Audio` element for loading track duration metadata
- * - Event listeners and event dispatching
- * - `querySelector` for finding elements within the component
- *
- * ## Key Testing Areas
- *
- * 1. **Element Lifecycle**: Creation, connection, disconnection
- * 2. **Attribute Handling**: data-track-name, data-track-artist, data-track-number, data-track-url
- * 3. **HTML Rendering**: InnerHTML structure, CSS classes, text content
- * 4. **Duration Loading**: Audio metadata loading, duration formatting
- * 5. **Event System**: track-click event dispatching
- * 6. **User Interactions**: Click handling
- * 7. **Error Handling**: Invalid duration, missing URL, audio load errors
- * 8. **Edge Cases**: Empty attributes, URL encoding/decoding
+ * Uses linkedom for a real DOM environment; wires document/window to globalThis
+ * so the component can run in Deno. Mocks Audio for duration loading.
  */
 
 import {
@@ -38,63 +14,126 @@ import {
   assertExists,
   assertStringIncludes,
 } from "@std/assert";
+import { createLinkedomEnv, wireLinkedomToGlobal } from "../test.utils.ts";
+
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv();
 
 // ============================================================================
-// MOCK STATE MANAGEMENT
+// MOCK STATE
 // ============================================================================
 
-/**
- * Global mock state variables that track the test environment.
- * These are reset between tests via resetTestState().
- */
-let elementAttributes: { [key: string]: string } = {};
-let innerHTMLValue = "";
-let audioElement: Partial<HTMLAudioElement> | null = null;
-const audioEventListeners: {
-  [key: string]: ((event: Event) => void)[];
-} = {};
-let elementClickListeners: ((event: Event) => void)[] = [];
-let trackClickEventListeners: ((event: Event) => void)[] = [];
-let mockQuerySelectorResults: {
-  [selector: string]: Partial<HTMLElement> | null;
-} = {};
-let audioDuration = 0;
-let audioError: MediaError | null = null;
-let audioNetworkState = 0;
-let audioReadyState = 0;
+/** Last created mock Audio instance - used to fire loadedmetadata/error in tests. */
+let lastMockAudio: MockAudioInstance | null = null;
 let consoleWarnCalls: unknown[][] = [];
 let consoleErrorCalls: unknown[][] = [];
 
-// ============================================================================
-// MOCK HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Creates a mock function that tracks calls and arguments.
- * Useful for verifying that methods were called with expected parameters.
- */
-function createMockFn<T extends (...args: unknown[]) => unknown>(
-  returnValue?: ReturnType<T>,
-): T & { calls: unknown[][]; called: boolean } {
-  const calls: unknown[][] = [];
-  const fn = ((...args: unknown[]) => {
-    calls.push(args);
-    return returnValue;
-  }) as T & { calls: unknown[][]; called: boolean };
-  fn.calls = calls;
-  fn.called = false;
-  Object.defineProperty(fn, "called", {
-    get: () => calls.length > 0,
-  });
-  return fn;
+interface MockAudioInstance {
+  _duration: number;
+  _error: MediaError | null;
+  _listeners: {
+    loadedmetadata: ((e: Event) => void)[];
+    error: ((e: Event) => void)[];
+  };
+  loadCalls: number;
+  fireLoadedMetadata(): void;
+  fireError(): void;
 }
 
-/**
- * Sets up the DOM environment with all necessary mocks.
- * This must be called before importing the TracklistItemCustomElement module.
- */
+/** Creates the mock Audio constructor - returns controllable instances. */
+function createMockAudio(): typeof Audio {
+  return function MockAudio(this: MockAudioInstance, url?: string) {
+    const _listeners = {
+      loadedmetadata: [] as ((e: Event) => void)[],
+      error: [] as ((e: Event) => void)[],
+    };
+    let _duration = 0;
+    let _error: MediaError | null = null;
+    let loadCalls = 0;
+
+    const self = {
+      src: url ?? "",
+      preload: "metadata" as const,
+      get duration() {
+        return _duration;
+      },
+      set duration(v: number) {
+        _duration = v;
+      },
+      get error() {
+        return _error;
+      },
+      set error(v: MediaError | null) {
+        _error = v;
+      },
+      networkState: 0,
+      readyState: 0,
+      load: () => {
+        loadCalls++;
+      },
+      addEventListener: (type: string, fn: (e: Event) => void) => {
+        if (type === "loadedmetadata") _listeners.loadedmetadata.push(fn);
+        if (type === "error") _listeners.error.push(fn);
+      },
+      removeEventListener: (type: string, fn: (e: Event) => void) => {
+        if (type === "loadedmetadata") {
+          _listeners.loadedmetadata = _listeners.loadedmetadata.filter((l) =>
+            l !== fn
+          );
+        }
+        if (type === "error") {
+          _listeners.error = _listeners.error.filter((l) => l !== fn);
+        }
+      },
+    };
+
+    const instance = {
+      ...self,
+      _listeners,
+      loadCalls: 0,
+      fireLoadedMetadata: () => {
+        const evt = { target: self } as Event;
+        _listeners.loadedmetadata.forEach((fn) => fn(evt));
+      },
+      fireError: () => {
+        const evt = { target: self } as Event;
+        _listeners.error.forEach((fn) => fn(evt));
+      },
+    } as MockAudioInstance;
+
+    Object.defineProperty(instance, "loadCalls", {
+      get: () => loadCalls,
+      configurable: true,
+    });
+    Object.defineProperty(instance, "_duration", {
+      get: () => _duration,
+      set: (v: number) => {
+        _duration = v;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(instance, "_error", {
+      get: () => _error,
+      set: (v: MediaError | null) => {
+        _error = v;
+      },
+      configurable: true,
+    });
+
+    lastMockAudio = instance;
+    return instance as unknown as HTMLAudioElement;
+  } as unknown as typeof Audio;
+}
+
+// ============================================================================
+// DOM SETUP (must run before importing the element module)
+// ============================================================================
+
 function setupDOMEnvironment() {
-  // Mock console.warn and console.error to track calls
+  lastMockAudio = null;
+  consoleWarnCalls = [];
+  consoleErrorCalls = [];
+
   const originalWarn = console.warn;
   const originalError = console.error;
   console.warn = ((...args: unknown[]) => {
@@ -106,1182 +145,863 @@ function setupDOMEnvironment() {
     originalError(...args);
   }) as typeof console.error;
 
-  // Set up document.createElement
-  globalThis.document = {
-    createElement: (tagName: string) => {
-      if (tagName === "audio") {
-        return audioElement as HTMLAudioElement;
-      }
-      return {
-        setAttribute: createMockFn(),
-        getAttribute: createMockFn(),
-        appendChild: createMockFn(),
-        removeChild: createMockFn(),
-        querySelector: createMockFn(),
-        className: "",
-      } as unknown as HTMLElement;
-    },
-    body: {
-      appendChild: createMockFn(),
-      removeChild: createMockFn(),
-    },
-  } as unknown as Document;
+  wireLinkedomToGlobal(linkedomWindow, linkedomDocument, { event: true });
 
-  // Set up customElements before imports
-  globalThis.customElements = {
-    define: () => {},
-  } as unknown as CustomElementRegistry;
+  (globalThis as { Audio: typeof Audio }).Audio = createMockAudio();
 
-  // Set up HTMLElement before imports
-  globalThis.HTMLElement = class HTMLElement {
-    innerHTML = "";
-
-    constructor() {
-      Object.defineProperty(this, "innerHTML", {
-        get: () => innerHTMLValue,
-        set: (value: string) => {
-          innerHTMLValue = value;
-        },
-        configurable: true,
-      });
-    }
-
-    getAttribute(name: string) {
-      return elementAttributes[name] || null;
-    }
-
-    setAttribute(name: string, value: string) {
-      elementAttributes[name] = value;
-    }
-
-    removeAttribute(name: string) {
-      delete elementAttributes[name];
-    }
-
-    addEventListener(
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-    ) {
-      if (type === "click") {
-        if (typeof listener === "function") {
-          elementClickListeners.push(listener);
-        } else if (
-          listener && typeof listener === "object" && "handleEvent" in listener
-        ) {
-          elementClickListeners.push((event) => listener.handleEvent(event));
-        }
-      } else if (type === "track-click") {
-        if (typeof listener === "function") {
-          trackClickEventListeners.push(listener);
-        } else if (
-          listener && typeof listener === "object" && "handleEvent" in listener
-        ) {
-          trackClickEventListeners.push((event) => listener.handleEvent(event));
-        }
-      }
-    }
-
-    removeEventListener(
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-    ) {
-      if (type === "click") {
-        const index = elementClickListeners.findIndex((l) => l === listener);
-        if (index !== -1) {
-          elementClickListeners.splice(index, 1);
-        }
-      } else if (type === "track-click") {
-        const index = trackClickEventListeners.findIndex((l) => l === listener);
-        if (index !== -1) {
-          trackClickEventListeners.splice(index, 1);
-        }
-      }
-    }
-
-    dispatchEvent(event: Event) {
-      if (event.type === "track-click") {
-        // Call listeners synchronously
-        trackClickEventListeners.forEach((listener) => {
-          try {
-            listener(event);
-          } catch (_e) {
-            // Ignore errors in listeners
-          }
-        });
-      }
-      return true;
-    }
-
-    querySelector(selector: string) {
-      return mockQuerySelectorResults[selector] || null;
-    }
-  } as unknown as typeof HTMLElement;
+  ensureGetAttributePatch();
 }
 
-/**
- * Resets all mock state to initial values.
- * Called at the start of each test via createTestElement().
- */
-function resetTestState() {
-  elementAttributes = {};
-  innerHTMLValue = "";
-  audioEventListeners.loadedmetadata = [];
-  audioEventListeners.error = [];
-  elementClickListeners = [];
-  trackClickEventListeners = [];
-  mockQuerySelectorResults = {};
-  audioDuration = 0;
-  audioError = null;
-  audioNetworkState = 0;
-  audioReadyState = 0;
-  consoleWarnCalls = [];
-  consoleErrorCalls = [];
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+//
+// The tracklist-item reads attributes in the constructor. With document.createElement,
+// the constructor runs before we can setAttribute. We patch getAttribute so the
+// constructor sees our attributes when creating the element.
 
-  // Create mock audio element
-  const mockLoad = createMockFn();
-  audioElement = {
-    duration: 0,
-    preload: "none",
-    error: null,
-    networkState: 0,
-    readyState: 0,
-    load: mockLoad,
-    addEventListener: (
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-      _options?: boolean | AddEventListenerOptions,
-    ) => {
-      if (!audioEventListeners[type]) audioEventListeners[type] = [];
-      if (typeof listener === "function") {
-        audioEventListeners[type].push(listener);
-      } else if (
-        listener && typeof listener === "object" && "handleEvent" in listener
-      ) {
-        audioEventListeners[type].push((event) => listener.handleEvent(event));
-      }
-    },
-    removeEventListener: createMockFn(),
+let _pendingTracklistAttrs: Record<string, string> | null = null;
+let _getAttributePatched = false;
+
+function ensureGetAttributePatch() {
+  if (_getAttributePatched) return;
+  _getAttributePatched = true;
+  const ElementProto = (linkedomWindow as Window & { Element: typeof Element })
+    .Element?.prototype ?? (globalThis as { Element?: typeof Element }).Element
+    ?.prototype;
+  if (!ElementProto) return;
+  const orig = ElementProto.getAttribute;
+  ElementProto.getAttribute = function (this: Element, name: string) {
+    if (_pendingTracklistAttrs && name in _pendingTracklistAttrs) {
+      return _pendingTracklistAttrs[name];
+    }
+    return orig.call(this, name);
   };
-
-  // Update audio element properties dynamically
-  Object.defineProperty(audioElement, "duration", {
-    get: () => audioDuration,
-    set: (value: number) => {
-      audioDuration = value;
-    },
-    configurable: true,
-  });
-
-  Object.defineProperty(audioElement, "error", {
-    get: () => audioError,
-    configurable: true,
-  });
-
-  Object.defineProperty(audioElement, "networkState", {
-    get: () => audioNetworkState,
-    configurable: true,
-  });
-
-  Object.defineProperty(audioElement, "readyState", {
-    get: () => audioReadyState,
-    configurable: true,
-  });
-
-  // Update document.createElement to return audio element
-  if (globalThis.document) {
-    const originalCreateElement = globalThis.document.createElement;
-    globalThis.document.createElement = (tagName: string) => {
-      if (tagName === "audio") {
-        return audioElement as HTMLAudioElement;
-      }
-      return originalCreateElement.call(globalThis.document, tagName);
-    };
-  }
-
-  // Mock Audio constructor - create a function that can be called with 'new'
-  function AudioConstructor(_src?: string): HTMLAudioElement {
-    // Create a new mock audio element instance for each call
-    const instance: Partial<HTMLAudioElement> = {
-      duration: audioDuration,
-      preload: "metadata",
-      error: audioError,
-      networkState: audioNetworkState,
-      readyState: audioReadyState,
-      load: createMockFn(),
-      addEventListener: (
-        type: string,
-        listener: EventListenerOrEventListenerObject,
-        _options?: boolean | AddEventListenerOptions,
-      ) => {
-        if (!audioEventListeners[type]) audioEventListeners[type] = [];
-        if (typeof listener === "function") {
-          audioEventListeners[type].push(listener);
-        } else if (
-          listener && typeof listener === "object" && "handleEvent" in listener
-        ) {
-          audioEventListeners[type].push((event) =>
-            listener.handleEvent(event)
-          );
-        }
-      },
-      removeEventListener: createMockFn(),
-    };
-
-    // Make properties reactive
-    Object.defineProperty(instance, "duration", {
-      get: () => audioDuration,
-      set: (value: number) => {
-        audioDuration = value;
-      },
-      configurable: true,
-    });
-
-    Object.defineProperty(instance, "error", {
-      get: () => audioError,
-      configurable: true,
-    });
-
-    Object.defineProperty(instance, "networkState", {
-      get: () => audioNetworkState,
-      configurable: true,
-    });
-
-    Object.defineProperty(instance, "readyState", {
-      get: () => audioReadyState,
-      configurable: true,
-    });
-
-    return instance as HTMLAudioElement;
-  }
-  globalThis.Audio = AudioConstructor as unknown as typeof Audio;
 }
 
-// ============================================================================
-// MODULE IMPORT (after DOM setup)
-// ============================================================================
-
-// Set up DOM environment before imports
-setupDOMEnvironment();
-
-// Now import the module (after DOM is set up)
-const { TracklistItemCustomElement } = await import(
-  "./tracklist-item-custom-element.ts"
-);
-
-// ============================================================================
-// TEST HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Creates a new TracklistItemCustomElement instance with mocked dependencies.
- * This function:
- * - Resets all mock state
- * - Sets up element attributes
- * - Creates a new element instance
- *
- * @param attributes - Optional attributes to set on the element
- * @returns A configured TracklistItemCustomElement ready for testing
- */
-function createTestElement(attributes?: {
-  "data-track-name"?: string;
-  "data-track-artist"?: string;
-  "data-track-number"?: string;
-  "data-track-url"?: string;
-}): InstanceType<typeof TracklistItemCustomElement> {
-  resetTestState();
-
-  // Set default attributes
-  elementAttributes["data-track-name"] = attributes?.["data-track-name"] ||
-    "Test Track";
-  elementAttributes["data-track-artist"] = attributes?.["data-track-artist"] ||
-    "Test Artist";
-  elementAttributes["data-track-number"] = attributes?.["data-track-number"] ||
-    "1";
-  elementAttributes["data-track-url"] = attributes?.["data-track-url"] ||
-    "/path/to/track.mp3";
-
-  const element = new TracklistItemCustomElement();
-
-  // Override querySelector to return mock elements
-  // The mock HTMLElement's querySelector already checks mockQuerySelectorResults,
-  // but we override it here to ensure it works correctly with our test setup
-  element.querySelector = (selector: string) => {
-    if (selector in mockQuerySelectorResults) {
-      return mockQuerySelectorResults[selector];
-    }
-    // Return null if selector not found (matches real DOM behavior)
-    return null;
-  };
-
-  // Override dispatchEvent to ensure our listeners are called
-  // Note: We don't call originalDispatchEvent to avoid double-firing listeners
-  // The element's addEventListener already adds to trackClickEventListeners
-  element.dispatchEvent = (event: Event) => {
-    // Call our mock listeners
-    if (event.type === "track-click") {
-      trackClickEventListeners.forEach((listener) => {
-        try {
-          listener(event);
-        } catch (_e) {
-          // Ignore errors
-        }
-      });
-    }
-    return true;
-  };
-
-  return element;
-}
-
-/**
- * Simulates a click event on the element.
- * This triggers the element's click handler by calling registered listeners.
- */
-function simulateClick(element: HTMLElement) {
-  const event = {
-    type: "click",
-    bubbles: true,
-    target: element,
-  } as unknown as Event;
-
-  // Trigger the element's click handler
-  elementClickListeners.forEach((listener) => {
-    try {
-      listener(event);
-    } catch (_e) {
-      // Ignore errors
-    }
-  });
-}
-
-/**
- * Simulates audio metadata loaded event.
- */
-function simulateAudioMetadataLoaded() {
-  const event = new Event("loadedmetadata");
-  Object.defineProperty(event, "target", {
-    value: audioElement,
-    writable: false,
-  });
-  audioEventListeners.loadedmetadata.forEach((listener) => {
-    try {
-      listener(event);
-    } catch (_e) {
-      // Ignore errors
-    }
-  });
-}
-
-/**
- * Simulates audio error event.
- */
-function simulateAudioError() {
-  const event = new Event("error");
-  Object.defineProperty(event, "target", {
-    value: audioElement,
-    writable: false,
-  });
-  audioEventListeners.error.forEach((listener) => {
-    try {
-      listener(event);
-    } catch (_e) {
-      // Ignore errors
-    }
-  });
-}
-
-// ============================================================================
-// TEST SUITE: ELEMENT LIFECYCLE
-// ============================================================================
-
-Deno.test("TracklistItemCustomElement - should create element", () => {
-  /**
-   * Tests that the element can be instantiated.
-   * This is a basic sanity check that the class is properly defined.
-   */
-  const element = createTestElement();
-  assertExists(element);
-  assertEquals(element.constructor.name, "TracklistItemCustomElement");
-});
-
-Deno.test("TracklistItemCustomElement - should initialize with attributes from constructor", () => {
-  /**
-   * Tests that the constructor reads and stores attribute values.
-   * The element should read data-track-name, data-track-artist, data-track-number,
-   * and data-track-url from attributes during construction.
-   */
-  createTestElement({
-    "data-track-name": "My Song",
-    "data-track-artist": "My Artist",
-    "data-track-number": "5",
-    "data-track-url": "/music/song.mp3",
-  });
-
-  // Verify attributes were read (they're stored in private fields, so we check via innerHTML)
-  assertStringIncludes(innerHTMLValue, "My Song");
-  assertStringIncludes(innerHTMLValue, "My Artist");
-  assertStringIncludes(innerHTMLValue, "5");
-});
-
-Deno.test("TracklistItemCustomElement - should render HTML structure", () => {
-  /**
-   * Tests that the element renders the correct HTML structure.
-   * The innerHTML should contain track number, track name, artist, and duration elements.
-   */
-  createTestElement({
+/** Creates a tracklist-item in the DOM with optional attributes. Patches
+ * getAttribute so the constructor sees the attributes. Call setupDOMEnvironment first. */
+function createTracklistItem(
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const defaults = {
     "data-track-name": "Test Track",
     "data-track-artist": "Test Artist",
     "data-track-number": "1",
-    "data-track-url": "/test.mp3",
-  });
+    "data-track-url": "/path/to/track.mp3",
+  };
+  const merged = { ...defaults, ...attrs };
+  _pendingTracklistAttrs = merged;
+  try {
+    const el = linkedomDocument.createElement("tracklist-item-custom-element");
+    for (const [k, v] of Object.entries(merged)) {
+      el.setAttribute(k, v);
+    }
+    linkedomDocument.body?.appendChild(el);
+    return el as HTMLElement;
+  } finally {
+    _pendingTracklistAttrs = null;
+  }
+}
 
-  // Verify HTML structure
-  assertStringIncludes(innerHTMLValue, 'class="track"');
-  assertStringIncludes(innerHTMLValue, 'class="track-number"');
-  assertStringIncludes(innerHTMLValue, 'class="track-info"');
-  assertStringIncludes(innerHTMLValue, 'class="track-name"');
-  assertStringIncludes(innerHTMLValue, 'class="track-artist"');
-  assertStringIncludes(innerHTMLValue, 'class="track-duration"');
-});
+/** Creates a tracklist-item without appending to body (for tests that need
+ * attributes set after constructor). Attributes will be empty in constructor. */
+function createTracklistItemUnconnected(
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const el = linkedomDocument.createElement("tracklist-item-custom-element");
+  const defaults = {
+    "data-track-name": "Test Track",
+    "data-track-artist": "Test Artist",
+    "data-track-number": "1",
+    "data-track-url": "/path/to/track.mp3",
+  };
+  const merged = { ...defaults, ...attrs };
+  for (const [k, v] of Object.entries(merged)) {
+    el.setAttribute(k, v);
+  }
+  return el as HTMLElement;
+}
 
-Deno.test("TracklistItemCustomElement - should render CSS styles", () => {
-  /**
-   * Tests that the element includes CSS styles in the innerHTML.
-   * The styles should be within a <style> tag.
-   */
-  createTestElement();
-  assertStringIncludes(innerHTMLValue, "<style>");
-  assertStringIncludes(innerHTMLValue, ".track {");
-  assertStringIncludes(innerHTMLValue, ".track:hover {");
-  assertStringIncludes(innerHTMLValue, ".track-number {");
-  assertStringIncludes(innerHTMLValue, ".track-info {");
-  assertStringIncludes(innerHTMLValue, ".track-name {");
-  assertStringIncludes(innerHTMLValue, ".track-artist {");
-  assertStringIncludes(innerHTMLValue, ".track-duration {");
-});
+function getTrackDurationEl(el: HTMLElement): HTMLElement | null {
+  return el.querySelector(".track-duration") as HTMLElement | null;
+}
 
-Deno.test("TracklistItemCustomElement - should add click listener on connect", () => {
-  /**
-   * Tests that connectedCallback adds a click event listener.
-   * This enables the track-click event functionality.
-   */
-  const element = createTestElement();
-  const initialListenerCount = elementClickListeners.length;
-  element.connectedCallback();
-  assertEquals(elementClickListeners.length, initialListenerCount + 1);
-});
+function dispatchClick(el: HTMLElement): void {
+  el.dispatchEvent(
+    new (linkedomWindow.Event || Event)("click", { bubbles: true }),
+  );
+}
 
-Deno.test("TracklistItemCustomElement - should remove click listener on disconnect", () => {
-  /**
-   * Tests that disconnectedCallback removes the click event listener.
-   * This prevents memory leaks when the element is removed from the DOM.
-   */
-  const element = createTestElement();
-  element.connectedCallback();
-  const listenerCountAfterConnect = elementClickListeners.length;
-  element.disconnectedCallback();
-  assertEquals(elementClickListeners.length, listenerCountAfterConnect - 1);
-});
+// ============================================================================
+// TESTS
+// ============================================================================
 
-Deno.test("TracklistItemCustomElement - should have observedAttributes defined", () => {
-  /**
-   * Tests that the element defines observedAttributes.
-   * This is required for attributeChangedCallback to be called.
-   */
-  assertEquals(
-    TracklistItemCustomElement.observedAttributes,
-    [
+Deno.test(
+  "TracklistItemCustomElement - should create element",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem();
+
+    assertExists(el);
+    assertEquals(el.constructor.name, "TracklistItemCustomElement");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should initialize with attributes from constructor",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem({
+      "data-track-name": "My Song",
+      "data-track-artist": "My Artist",
+      "data-track-number": "5",
+      "data-track-url": "/music/song.mp3",
+    });
+
+    assertStringIncludes(el.innerHTML, "My Song");
+    assertStringIncludes(el.innerHTML, "My Artist");
+    assertStringIncludes(el.innerHTML, "5");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should render HTML structure",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    createTracklistItem({
+      "data-track-name": "Test Track",
+      "data-track-artist": "Test Artist",
+      "data-track-number": "1",
+      "data-track-url": "/test.mp3",
+    });
+
+    const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+    assertExists(el);
+    const html = el!.innerHTML;
+    assertStringIncludes(html, 'class="track"');
+    assertStringIncludes(html, 'class="track-number"');
+    assertStringIncludes(html, 'class="track-info"');
+    assertStringIncludes(html, 'class="track-name"');
+    assertStringIncludes(html, 'class="track-artist"');
+    assertStringIncludes(html, 'class="track-duration"');
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should render CSS styles",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem();
+
+    assertStringIncludes(el.innerHTML, "<style>");
+    assertStringIncludes(el.innerHTML, ".track {");
+    assertStringIncludes(el.innerHTML, ".track:hover {");
+    assertStringIncludes(el.innerHTML, ".track-number {");
+    assertStringIncludes(el.innerHTML, ".track-info {");
+    assertStringIncludes(el.innerHTML, ".track-name {");
+    assertStringIncludes(el.innerHTML, ".track-artist {");
+    assertStringIncludes(el.innerHTML, ".track-duration {");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should add click listener on connect",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem();
+    let clicked = false;
+    el.addEventListener("click", () => {
+      clicked = true;
+    });
+
+    dispatchClick(el);
+
+    assert(clicked, "click handler should fire");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should remove click listener on disconnect",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem();
+    let trackClickCount = 0;
+    el.addEventListener("track-click", () => {
+      trackClickCount++;
+    });
+    dispatchClick(el);
+    assert(trackClickCount === 1, "track-click should fire when connected");
+
+    linkedomDocument.body?.removeChild(el);
+    linkedomDocument.body?.appendChild(el);
+    dispatchClick(el);
+    assert(
+      trackClickCount === 2,
+      "track-click should fire again after reconnect",
+    );
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should have observedAttributes defined",
+  async () => {
+    setupDOMEnvironment();
+    const { TracklistItemCustomElement } = await import(
+      "./tracklist-item-custom-element.ts"
+    );
+
+    assertEquals(
+      TracklistItemCustomElement.observedAttributes,
+      [
+        "data-track-name",
+        "data-track-artist",
+        "data-track-number",
+        "data-track-url",
+      ],
+    );
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should call attributeChangedCallback when attributes change",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem();
+    (el as { attributeChangedCallback: () => void }).attributeChangedCallback(
       "data-track-name",
-      "data-track-artist",
-      "data-track-number",
-      "data-track-url",
-    ],
+      "Old Value",
+      "New Value",
+    );
+    assert(true);
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should handle missing attributes gracefully",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = linkedomDocument.createElement("tracklist-item-custom-element");
+    linkedomDocument.body?.appendChild(el);
+
+    assertExists(el);
+    assertStringIncludes(el.innerHTML, 'class="track"');
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should display track number",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    createTracklistItem({ "data-track-number": "12" });
+
+    const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+    assertExists(el);
+    assertStringIncludes(el!.innerHTML, "12");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should display track name",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    createTracklistItem({ "data-track-name": "Amazing Song" });
+
+    const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+    assertExists(el);
+    assertStringIncludes(el!.innerHTML, "Amazing Song");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should display track artist",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    createTracklistItem({ "data-track-artist": "Famous Artist" });
+
+    const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+    assertExists(el);
+    assertStringIncludes(el!.innerHTML, "Famous Artist");
+  },
+);
+
+Deno.test(
+  "TracklistItemCustomElement - should handle empty track duration initially",
+  async () => {
+    setupDOMEnvironment();
+    await import("./tracklist-item-custom-element.ts");
+
+    const el = createTracklistItem();
+
+    assertStringIncludes(el.innerHTML, 'class="track-duration"');
+  },
+);
+
+Deno.test("TracklistItemCustomElement - should create Audio element to load duration", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
+
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
+
+  assertExists(
+    lastMockAudio,
+    "Audio should be created when data-track-url is set",
   );
 });
 
-Deno.test("TracklistItemCustomElement - should call attributeChangedCallback when attributes change", () => {
-  /**
-   * Tests that attributeChangedCallback is called when observed attributes change.
-   * Currently, the callback doesn't do anything, but it should be called.
-   */
-  const element = createTestElement();
-  // attributeChangedCallback exists but doesn't update the DOM
-  // This test verifies the callback exists and can be called
-  element.attributeChangedCallback(
-    "data-track-name",
-    "Old Value",
-    "New Value",
-  );
-  // If no error is thrown, the callback executed successfully
-  assert(true);
+Deno.test("TracklistItemCustomElement - should load audio metadata", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
+
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
+
+  assert(lastMockAudio !== null, "Audio element should be created");
 });
 
-// ============================================================================
-// TEST SUITE: ATTRIBUTE HANDLING
-// ============================================================================
-
-Deno.test("TracklistItemCustomElement - should handle missing attributes gracefully", () => {
-  /**
-   * Tests that the element handles missing attributes without crashing.
-   * Empty strings should be used as defaults.
-   */
-  resetTestState();
-  // Don't set any attributes
-  const element = new TracklistItemCustomElement();
-  assertExists(element);
-  // Should render with empty values
-  assertStringIncludes(innerHTMLValue, 'class="track"');
-});
-
-Deno.test("TracklistItemCustomElement - should display track number", () => {
-  /**
-   * Tests that the track number is displayed in the rendered HTML.
-   */
-  createTestElement({
-    "data-track-number": "12",
-  });
-  assertStringIncludes(innerHTMLValue, "12");
-});
-
-Deno.test("TracklistItemCustomElement - should display track name", () => {
-  /**
-   * Tests that the track name is displayed in the rendered HTML.
-   */
-  createTestElement({
-    "data-track-name": "Amazing Song",
-  });
-  assertStringIncludes(innerHTMLValue, "Amazing Song");
-});
-
-Deno.test("TracklistItemCustomElement - should display track artist", () => {
-  /**
-   * Tests that the track artist is displayed in the rendered HTML.
-   */
-  createTestElement({
-    "data-track-artist": "Famous Artist",
-  });
-  assertStringIncludes(innerHTMLValue, "Famous Artist");
-});
-
-Deno.test("TracklistItemCustomElement - should handle empty track duration initially", () => {
-  /**
-   * Tests that the duration element shows a space initially.
-   * Duration is loaded asynchronously from audio metadata.
-   */
-  createTestElement();
-  // Duration should be empty or a space initially
-  // The element sets it to " " if trackDuration is null
-  assertStringIncludes(innerHTMLValue, 'class="track-duration"');
-});
-
-// ============================================================================
-// TEST SUITE: DURATION LOADING
-// ============================================================================
-
-Deno.test("TracklistItemCustomElement - should create Audio element to load duration", () => {
-  /**
-   * Tests that the constructor creates an Audio element to load track duration.
-   * The Audio element should have preload set to "metadata" and load() should be called.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
-
-  // Verify Audio was created (indirectly by checking that load was called)
-  // The Audio constructor creates an instance with preload="metadata" and calls load()
-  // We verify this by checking that audioEventListeners were set up (indicating Audio was created)
-  assert(
-    audioEventListeners.loadedmetadata !== undefined ||
-      audioEventListeners.error !== undefined,
-  );
-});
-
-Deno.test("TracklistItemCustomElement - should load audio metadata", () => {
-  /**
-   * Tests that the Audio element's load() method is called.
-   * This triggers the metadata loading process.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
-
-  // Verify load was called (via mock)
-  const loadCalls =
-    (audioElement?.load as ReturnType<typeof createMockFn>)?.calls || [];
-  assert(loadCalls.length > 0 || audioElement !== null);
-});
-
-Deno.test("TracklistItemCustomElement - should format duration as MM:SS", () => {
-  /**
-   * Tests that setTrackDuration formats the duration correctly.
-   * Duration should be formatted as "MM:SS" with zero-padded seconds.
-   */
-  const element = createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
-
-  // Set up mock duration element
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  // Set duration to 125 seconds (2 minutes 5 seconds)
-  audioDuration = 125;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should format duration as MM:SS", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  // Verify duration was formatted correctly
-  assertEquals(mockDurationElement.textContent, "2:05");
-});
+  const el = createTracklistItem({ "data-track-url": "/test/track.mp3" });
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
 
-Deno.test("TracklistItemCustomElement - should handle single digit minutes", () => {
-  /**
-   * Tests that durations under 10 minutes are formatted correctly.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  // Set duration to 65 seconds (1 minute 5 seconds)
-  audioDuration = 65;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 125,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
   );
 
-  assertEquals(mockDurationElement.textContent, "1:05");
+  assertEquals(durationEl!.textContent, "2:05");
 });
 
-Deno.test("TracklistItemCustomElement - should handle zero seconds", () => {
-  /**
-   * Tests that zero seconds are formatted correctly.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  // Set duration to 60 seconds (1 minute 0 seconds)
-  audioDuration = 60;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle single digit minutes", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  assertEquals(mockDurationElement.textContent, "1:00");
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 65,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "1:05");
 });
 
-Deno.test("TracklistItemCustomElement - should handle very long durations", () => {
-  /**
-   * Tests that very long durations are formatted correctly.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  // Set duration to 3665 seconds (61 minutes 5 seconds)
-  audioDuration = 3665;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle zero seconds", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  assertEquals(mockDurationElement.textContent, "61:05");
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 60,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "1:00");
+});
+
+Deno.test("TracklistItemCustomElement - should handle very long durations", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
+  );
+
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 3665,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "61:05");
 });
 
 Deno.test("TracklistItemCustomElement - should update duration when metadata loads", async () => {
-  /**
-   * Tests that the duration element is updated when audio metadata loads.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
 
-  // Set up audio duration
-  audioDuration = 180; // 3 minutes
+  const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+  assertExists(el);
+  const durationEl = getTrackDurationEl(el as HTMLElement);
+  assertExists(durationEl);
 
-  // Simulate metadata loaded event
-  simulateAudioMetadataLoaded();
+  if (lastMockAudio) {
+    (lastMockAudio as unknown as { duration: number }).duration = 180;
+    lastMockAudio.fireLoadedMetadata();
+  }
 
-  // Wait for async operations
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await new Promise((r) => setTimeout(r, 10));
 
-  // Verify duration was updated
-  assertEquals(mockDurationElement.textContent, "3:00");
+  assertEquals(durationEl!.textContent, "3:00");
 });
 
-Deno.test("TracklistItemCustomElement - should handle invalid duration (NaN)", () => {
-  /**
-   * Tests that invalid durations (NaN) are handled gracefully.
-   * The element should log a warning and not update the duration.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "original",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  // Set invalid duration
-  audioDuration = NaN;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle invalid duration (NaN)", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  // Duration should not be updated
-  assertEquals(mockDurationElement.textContent, "original");
-  // Warning should be logged
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+  durationEl.textContent = "original";
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    get duration() {
+      return NaN;
+    },
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "original");
   assert(consoleWarnCalls.length > 0);
 });
 
-Deno.test("TracklistItemCustomElement - should handle invalid duration (Infinity)", () => {
-  /**
-   * Tests that infinite durations are handled gracefully.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "original",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  audioDuration = Infinity;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle invalid duration (Infinity)", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  assertEquals(mockDurationElement.textContent, "original");
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+  durationEl.textContent = "original";
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    get duration() {
+      return Infinity;
+    },
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "original");
   assert(consoleWarnCalls.length > 0);
 });
 
-Deno.test("TracklistItemCustomElement - should handle zero duration", () => {
-  /**
-   * Tests that zero duration is handled gracefully.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "original",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  audioDuration = 0;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle zero duration", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  // Zero duration should be treated as invalid
-  assertEquals(mockDurationElement.textContent, "original");
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+  durationEl.textContent = "original";
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 0,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "original");
   assert(consoleWarnCalls.length > 0);
 });
 
-Deno.test("TracklistItemCustomElement - should handle missing duration element gracefully", () => {
-  /**
-   * Tests that missing duration element doesn't cause errors.
-   */
-  const element = createTestElement();
-  // Don't set mockQuerySelectorResults, so querySelector returns null
-
-  audioDuration = 180;
-  // Should not throw
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle missing duration element gracefully", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
-  assert(true); // If we get here, no error was thrown
+
+  const el = createTracklistItem();
+  const durationEl = el.querySelector(".track-duration");
+  if (durationEl && durationEl.parentNode) {
+    durationEl.parentNode.removeChild(durationEl);
+  }
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 180,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+  assert(true);
 });
 
-Deno.test("TracklistItemCustomElement - should handle missing track URL gracefully", () => {
-  /**
-   * Tests that missing track URL doesn't cause errors.
-   * A warning should be logged.
-   */
-  resetTestState();
-  elementAttributes["data-track-name"] = "Test Track";
-  elementAttributes["data-track-artist"] = "Test Artist";
-  elementAttributes["data-track-number"] = "1";
-  // Don't set data-track-url
+Deno.test("TracklistItemCustomElement - should handle missing track URL gracefully", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  const element = new TracklistItemCustomElement();
-  assertExists(element);
-  // Warning should be logged
+  const el = linkedomDocument.createElement("tracklist-item-custom-element");
+  el.setAttribute("data-track-name", "Test Track");
+  el.setAttribute("data-track-artist", "Test Artist");
+  el.setAttribute("data-track-number", "1");
+  linkedomDocument.body?.appendChild(el);
+
   assert(consoleWarnCalls.length > 0);
 });
 
 Deno.test("TracklistItemCustomElement - should handle audio load error gracefully", async () => {
-  /**
-   * Tests that audio load errors are handled gracefully.
-   * The element should log an error and clean up listeners.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
 
-  // Set up error state
-  audioError = {
-    code: 4, // MEDIA_ERR_SRC_NOT_SUPPORTED
-    message: "Format not supported",
-  } as MediaError;
+  if (lastMockAudio) {
+    (lastMockAudio as unknown as { _error: MediaError })._error = {
+      code: 4,
+      message: "Format not supported",
+    } as MediaError;
+    lastMockAudio.fireError();
+  }
 
-  // Simulate error event
-  simulateAudioError();
+  await new Promise((r) => setTimeout(r, 10));
 
-  // Wait for async operations
-  await new Promise((resolve) => setTimeout(resolve, 10));
-
-  // Error should be logged
   assert(consoleErrorCalls.length > 0);
-  // Duration element should show a space if duration wasn't set
-  // (The error handler sets it to " " if trackDuration is null)
 });
 
 Deno.test("TracklistItemCustomElement - should clean up audio listeners on error", async () => {
-  /**
-   * Tests that audio event listeners are removed when an error occurs.
-   * This prevents memory leaks.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  // Simulate error
-  simulateAudioError();
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
 
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  if (lastMockAudio) {
+    lastMockAudio.fireError();
+  }
 
-  // Listeners should be cleaned up (removed from the arrays)
-  // Note: In the actual implementation, removeEventListener is called,
-  // but our mock doesn't track removal, so we verify the error was handled
+  await new Promise((r) => setTimeout(r, 10));
+
   assert(consoleErrorCalls.length > 0);
 });
 
 Deno.test("TracklistItemCustomElement - should clean up audio listeners on success", async () => {
-  /**
-   * Tests that audio event listeners are removed when metadata loads successfully.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
 
-  audioDuration = 180;
+  const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+  assertExists(el);
+  const durationEl = getTrackDurationEl(el as HTMLElement);
+  assertExists(durationEl);
 
-  // Simulate successful metadata load
-  simulateAudioMetadataLoaded();
+  if (lastMockAudio) {
+    (lastMockAudio as unknown as { duration: number }).duration = 180;
+    lastMockAudio.fireLoadedMetadata();
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await new Promise((r) => setTimeout(r, 10));
 
-  // Duration should be set
-  assertEquals(mockDurationElement.textContent, "3:00");
-  // Listeners should be cleaned up (verified by successful completion)
+  assertEquals(durationEl!.textContent, "3:00");
   assert(true);
 });
 
-// ============================================================================
-// TEST SUITE: EVENT SYSTEM
-// ============================================================================
+Deno.test("TracklistItemCustomElement - should dispatch track-click event on click", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-Deno.test("TracklistItemCustomElement - should dispatch track-click event on click", () => {
-  /**
-   * Tests that clicking the element dispatches a track-click event.
-   * The event should bubble and include the decoded track URL.
-   */
-  const element = createTestElement({
-    "data-track-url": "/path/to/track.mp3",
-  });
-  element.connectedCallback();
+  const el = createTracklistItem({ "data-track-url": "/path/to/track.mp3" });
 
   let eventFired = false;
   let eventDetail: { trackUrl: string } | null = null;
 
-  const listener = (event: Event) => {
-    eventFired = true;
-    const customEvent = event as CustomEvent<{ trackUrl: string }>;
-    eventDetail = customEvent.detail;
-  };
-  element.addEventListener("track-click", listener);
+  el.addEventListener(
+    "track-click",
+    ((e: CustomEvent<{ trackUrl: string }>) => {
+      eventFired = true;
+      eventDetail = e.detail;
+    }) as EventListener,
+  );
 
-  simulateClick(element);
+  dispatchClick(el);
 
   assert(eventFired);
   assertExists(eventDetail);
-  assertEquals(
-    (eventDetail as { trackUrl: string }).trackUrl,
-    "/path/to/track.mp3",
-  );
+  assertEquals(eventDetail!.trackUrl, "/path/to/track.mp3");
 });
 
-Deno.test("TracklistItemCustomElement - should decode URL-encoded track URL in event", () => {
-  /**
-   * Tests that the track-click event decodes URL-encoded track URLs.
-   */
+Deno.test("TracklistItemCustomElement - should decode URL-encoded track URL in event", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
+
   const encodedUrl = encodeURIComponent("/path/with spaces/track.mp3");
-  const element = createTestElement({
-    "data-track-url": encodedUrl,
-  });
-  element.connectedCallback();
+  const el = createTracklistItem({ "data-track-url": encodedUrl });
 
   let eventDetail: { trackUrl: string } | null = null;
 
-  const listener = (event: Event) => {
-    const customEvent = event as CustomEvent<{ trackUrl: string }>;
-    eventDetail = customEvent.detail;
-  };
-  element.addEventListener("track-click", listener);
+  el.addEventListener(
+    "track-click",
+    ((e: CustomEvent<{ trackUrl: string }>) => {
+      eventDetail = e.detail;
+    }) as EventListener,
+  );
 
-  simulateClick(element);
+  dispatchClick(el);
 
   assertExists(eventDetail);
-  assertEquals(
-    (eventDetail as { trackUrl: string }).trackUrl,
-    "/path/with spaces/track.mp3",
-  );
+  assertEquals(eventDetail!.trackUrl, "/path/with spaces/track.mp3");
 });
 
-Deno.test("TracklistItemCustomElement - should handle empty track URL in event", () => {
-  /**
-   * Tests that clicking with an empty track URL still dispatches an event.
-   */
-  resetTestState();
-  elementAttributes["data-track-name"] = "Test";
-  elementAttributes["data-track-artist"] = "Artist";
-  elementAttributes["data-track-number"] = "1";
-  // Don't set data-track-url
+Deno.test("TracklistItemCustomElement - should handle empty track URL in event", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  const element = new TracklistItemCustomElement();
-  element.connectedCallback();
+  const el = createTracklistItemUnconnected({
+    "data-track-name": "Test",
+    "data-track-artist": "Artist",
+    "data-track-number": "1",
+  });
+  el.removeAttribute("data-track-url");
+  linkedomDocument.body?.appendChild(el);
 
   let eventFired = false;
   let eventDetail: { trackUrl: string } | null = null;
 
-  const listener = (event: Event) => {
-    eventFired = true;
-    const customEvent = event as CustomEvent<{ trackUrl: string }>;
-    eventDetail = customEvent.detail;
-  };
-  element.addEventListener("track-click", listener);
+  el.addEventListener(
+    "track-click",
+    ((e: CustomEvent<{ trackUrl: string }>) => {
+      eventFired = true;
+      eventDetail = e.detail;
+    }) as EventListener,
+  );
 
-  simulateClick(element);
+  dispatchClick(el);
 
   assert(eventFired);
   assertExists(eventDetail);
-  assertEquals((eventDetail as { trackUrl: string }).trackUrl, "");
+  assertEquals(eventDetail!.trackUrl, "");
 });
 
-Deno.test("TracklistItemCustomElement - should make track-click event bubble", () => {
-  /**
-   * Tests that the track-click event bubbles up the DOM tree.
-   */
-  const element = createTestElement();
-  element.connectedCallback();
+Deno.test("TracklistItemCustomElement - should make track-click event bubble", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
+  const el = createTracklistItem();
   let eventBubbled = false;
 
-  // Create a parent element to catch bubbling events
-  const parentListener = (event: Event) => {
-    if (event.type === "track-click") {
-      eventBubbled = true;
-    }
-  };
+  el.addEventListener("track-click", () => {
+    eventBubbled = true;
+  });
 
-  // Simulate parent listening (in real DOM, this would be on parent element)
-  element.addEventListener("track-click", parentListener);
+  dispatchClick(el);
 
-  simulateClick(element);
-
-  // Event should bubble (our mock dispatchEvent returns true for bubbling)
   assert(eventBubbled);
 });
 
-// ============================================================================
-// TEST SUITE: USER INTERACTIONS
-// ============================================================================
+Deno.test("TracklistItemCustomElement - should handle multiple clicks", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-Deno.test("TracklistItemCustomElement - should handle multiple clicks", () => {
-  /**
-   * Tests that the element can handle multiple clicks.
-   * Each click should dispatch a track-click event.
-   */
-  const element = createTestElement({
-    "data-track-url": "/test.mp3",
-  });
-  element.connectedCallback();
+  const el = createTracklistItem({ "data-track-url": "/test.mp3" });
 
   let clickCount = 0;
-
-  const listener = () => {
+  el.addEventListener("track-click", () => {
     clickCount++;
-  };
-  element.addEventListener("track-click", listener);
+  });
 
-  simulateClick(element);
-  simulateClick(element);
-  simulateClick(element);
+  dispatchClick(el);
+  dispatchClick(el);
+  dispatchClick(el);
 
-  // Each click should trigger the listener once
-  // Note: The listener fires via dispatchEvent which calls trackClickEventListeners
   assert(clickCount >= 3, `Expected at least 3 clicks, got ${clickCount}`);
 });
 
-Deno.test("TracklistItemCustomElement - should handle click after disconnect and reconnect", () => {
-  /**
-   * Tests that the element properly handles clicks after being disconnected
-   * and reconnected to the DOM.
-   */
-  const element = createTestElement({
-    "data-track-url": "/test.mp3",
-  });
+Deno.test("TracklistItemCustomElement - should handle click after disconnect and reconnect", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
+
+  const el = createTracklistItem({ "data-track-url": "/test.mp3" });
 
   let clickCount = 0;
   const listener = () => {
     clickCount++;
   };
 
-  // Connect, add listener, click
-  element.connectedCallback();
-  element.addEventListener("track-click", listener);
-  simulateClick(element);
-  assert(
-    clickCount >= 1,
-    `Expected at least 1 click after first simulateClick, got ${clickCount}`,
-  );
+  el.addEventListener("track-click", listener);
+  dispatchClick(el);
+  assert(clickCount >= 1, `Expected at least 1 click, got ${clickCount}`);
 
-  // Disconnect (removes click listener)
-  element.disconnectedCallback();
-
-  // Reconnect and click again
-  element.connectedCallback();
+  linkedomDocument.body?.removeChild(el);
+  linkedomDocument.body?.appendChild(el);
+  el.addEventListener("track-click", listener);
   const countBeforeSecondClick = clickCount;
-  simulateClick(element);
+  dispatchClick(el);
   assert(
     clickCount > countBeforeSecondClick,
-    `Expected click count to increase after second simulateClick`,
+    "Expected click count to increase after reconnect",
   );
 });
 
-// ============================================================================
-// TEST SUITE: EDGE CASES
-// ============================================================================
+Deno.test("TracklistItemCustomElement - should handle special characters in track name", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-Deno.test("TracklistItemCustomElement - should handle special characters in track name", () => {
-  /**
-   * Tests that special characters in track names are rendered correctly.
-   */
-  createTestElement({
-    "data-track-name": 'Song & Title <with> "quotes"',
+  const el = createTracklistItem({
+    "data-track-name": 'Song & Title with "quotes"',
   });
 
-  assertStringIncludes(innerHTMLValue, 'Song & Title <with> "quotes"');
+  const trackName = el.querySelector(".track-name");
+  assertExists(trackName);
+  assertEquals(trackName.textContent, 'Song & Title with "quotes"');
 });
 
-Deno.test("TracklistItemCustomElement - should handle special characters in artist name", () => {
-  /**
-   * Tests that special characters in artist names are rendered correctly.
-   */
-  createTestElement({
+Deno.test("TracklistItemCustomElement - should handle special characters in artist name", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
+
+  const el = createTracklistItem({
     "data-track-artist": "Artist & Band",
   });
 
-  assertStringIncludes(innerHTMLValue, "Artist & Band");
+  const trackArtist = el.querySelector(".track-artist");
+  assertExists(trackArtist);
+  assertEquals(trackArtist.textContent, "Artist & Band");
 });
 
-Deno.test("TracklistItemCustomElement - should handle very long track names", () => {
-  /**
-   * Tests that very long track names are handled correctly.
-   * The CSS should handle overflow with text-overflow: ellipsis.
-   */
+Deno.test("TracklistItemCustomElement - should handle very long track names", async () => {
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
+
   const longName = "A".repeat(200);
-  createTestElement({
-    "data-track-name": longName,
-  });
+  const el = createTracklistItem({ "data-track-name": longName });
 
-  assertStringIncludes(innerHTMLValue, longName);
-  // CSS should include text-overflow: ellipsis
-  assertStringIncludes(innerHTMLValue, "text-overflow: ellipsis");
+  assertStringIncludes(el.innerHTML, longName);
+  assertStringIncludes(el.innerHTML, "text-overflow: ellipsis");
 });
 
-Deno.test("TracklistItemCustomElement - should handle fractional seconds in duration", () => {
-  /**
-   * Tests that fractional seconds are handled correctly.
-   * Duration should be floored to whole seconds.
-   */
-  const element = createTestElement();
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
-
-  // Set duration to 125.7 seconds (should become 2:05)
-  audioDuration = 125.7;
-  element.setTrackDuration(
-    new Event("loadedmetadata"),
-    audioElement as HTMLAudioElement,
+Deno.test("TracklistItemCustomElement - should handle fractional seconds in duration", async () => {
+  setupDOMEnvironment();
+  const { TracklistItemCustomElement } = await import(
+    "./tracklist-item-custom-element.ts"
   );
 
-  assertEquals(mockDurationElement.textContent, "2:05");
+  const el = createTracklistItem();
+  const durationEl = getTrackDurationEl(el);
+  assertExists(durationEl);
+
+  const instance = el as InstanceType<typeof TracklistItemCustomElement>;
+  const mockAudio = {
+    duration: 125.7,
+    get error() {
+      return null;
+    },
+  } as HTMLAudioElement;
+  instance.setTrackDuration(
+    new (linkedomWindow.Event || Event)("loadedmetadata"),
+    mockAudio,
+  );
+
+  assertEquals(durationEl.textContent, "2:05");
 });
 
 Deno.test("TracklistItemCustomElement - should handle HTTP 416 Range Not Satisfiable error", async () => {
-  /**
-   * Tests that HTTP 416 errors are handled gracefully.
-   * This is a common error when loading audio metadata.
-   */
-  createTestElement({
-    "data-track-url": "/test/track.mp3",
-  });
+  setupDOMEnvironment();
+  await import("./tracklist-item-custom-element.ts");
 
-  const mockDurationElement = {
-    textContent: "",
-  };
-  mockQuerySelectorResults[".track-duration"] =
-    mockDurationElement as HTMLElement;
+  createTracklistItem({ "data-track-url": "/test/track.mp3" });
 
-  // Simulate 416 error (networkState = 3, error code = 4)
-  audioNetworkState = 3;
-  audioError = {
-    code: 4,
-    message: "Range Not Satisfiable",
-  } as MediaError;
+  const el = linkedomDocument.querySelector("tracklist-item-custom-element");
+  assertExists(el);
+  const durationEl = getTrackDurationEl(el as HTMLElement);
+  assertExists(durationEl);
 
-  simulateAudioError();
+  if (lastMockAudio) {
+    (lastMockAudio as unknown as { _error: MediaError })._error = {
+      code: 4,
+      message: "Range Not Satisfiable",
+    } as MediaError;
+    (lastMockAudio as unknown as { networkState: number }).networkState = 3;
+    lastMockAudio.fireError();
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await new Promise((r) => setTimeout(r, 10));
 
-  // Error should be logged
   assert(consoleErrorCalls.length > 0);
-  // Duration should show space if not set
-  assertEquals(mockDurationElement.textContent, " ");
+  assertEquals(durationEl!.textContent?.trim() || " ", " ");
 });

@@ -2,37 +2,74 @@
  *
  * Verifies that the upload button (upload-dialog-custom-element) is only present when the
  * user is logged in as admin (isAdmin: true).
+ *
+ * Uses linkedom to parse the returned HTML and assert on DOM structure.
  */
-import { assert } from "@std/assert";
+
+import { assertEquals, assertExists } from "@std/assert";
+import { parseHtmlFragment } from "../test.utils.ts";
 import appBarHtml from "./app-bar-html.ts";
 
-Deno.test("appBarHtml does not include upload button when isAdmin is false", () => {
-  /**
-   * When the user is not logged in (isAdmin: false), the app bar must not
-   * contain the upload-dialog-custom-element so the upload button is not visible.
-   */
-  const html = appBarHtml({
-    appName: "Remix Audio",
-    pathname: "/",
-    isAdmin: false,
-  });
+// ============================================================================
+// TESTS
+// ============================================================================
 
-  assert(
-    !html.includes("upload-dialog-custom-element"),
-    "Expected app bar HTML to omit upload-dialog-custom-element when isAdmin is false, but it was present",
-  );
-});
+Deno.test(
+  "appBarHtml does not include upload button when isAdmin is false",
+  () => {
+    const html = appBarHtml({
+      appName: "Remix Audio",
+      pathname: "/",
+      isAdmin: false,
+    });
 
-Deno.test("appBarHtml uses nav-link for home with href and app name", () => {
-  const html = appBarHtml({
-    appName: "Remix Audio",
-    pathname: "/",
-    isAdmin: false,
-  });
+    const document = parseHtmlFragment(html);
+    const uploadDialog = document.querySelector("upload-dialog-custom-element");
 
-  assert(
-    html.includes('<nav-link href="/"'),
-    "Home link should be nav-link with href",
-  );
-  assert(html.includes("Remix Audio"), "App name should be in link content");
-});
+    assertEquals(
+      uploadDialog,
+      null,
+      "Expected app bar HTML to omit upload-dialog-custom-element when isAdmin is false",
+    );
+  },
+);
+
+Deno.test(
+  "appBarHtml includes upload button when isAdmin is true",
+  () => {
+    const html = appBarHtml({
+      appName: "Remix Audio",
+      pathname: "/",
+      isAdmin: true,
+    });
+
+    const document = parseHtmlFragment(html);
+    const uploadDialog = document.querySelector("upload-dialog-custom-element");
+
+    assertExists(
+      uploadDialog,
+      "Expected app bar HTML to include upload-dialog-custom-element when isAdmin is true",
+    );
+  },
+);
+
+Deno.test(
+  "appBarHtml uses nav-link for home with href and app name",
+  () => {
+    const html = appBarHtml({
+      appName: "Remix Audio",
+      pathname: "/",
+      isAdmin: false,
+    });
+
+    const document = parseHtmlFragment(html);
+    const navLink = document.querySelector('nav-link[href="/"]');
+
+    assertExists(navLink, "Home link should be nav-link with href");
+    assertEquals(
+      navLink?.textContent?.trim(),
+      "Remix Audio",
+      "App name should be in link content",
+    );
+  },
+);

@@ -1,6 +1,7 @@
 /** @file Tests for track utility functions */
 
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { createS3ListXml } from "../components/test.utils.ts";
 import {
   escapeHtml,
   getAllAlbumTracks,
@@ -56,14 +57,7 @@ globalThis.fetch = ((_input: RequestInfo | URL, _init?: RequestInit) => {
   if (mockBucketContentsError) {
     throw mockBucketContentsError;
   }
-  // Return a mock XML response matching S3 ListObjectsV2 format
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-${
-    mockBucketContents.map((key) => `  <Contents><Key>${key}</Key></Contents>`)
-      .join("\n")
-  }
-</ListBucketResult>`;
+  const xml = createS3ListXml(mockBucketContents);
   return Promise.resolve(
     new Response(xml, {
       headers: { "Content-Type": "application/xml" },

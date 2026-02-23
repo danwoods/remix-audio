@@ -2,9 +2,20 @@
  *
  * Covers client-side navigation: click on nav-link fetches fragment JSON,
  * updates main content and title, and pushes history state.
+ *
+ * Uses linkedom for a real DOM environment; wires document/window to globalThis
+ * so the component can run in Deno.
  */
 
 import { assertEquals, assertExists } from "@std/assert";
+import { Event } from "linkedom";
+import { createLinkedomEnv, getFetchUrl } from "../test.utils.ts";
+
+const NAVLINK_HTML = `<!DOCTYPE html>
+<html><head></head><body><nav></nav><main></main></body></html>`;
+
+const { document: linkedomDocument, window: linkedomWindow } =
+  createLinkedomEnv(NAVLINK_HTML);
 
 // ============================================================================
 // MOCK STATE
@@ -12,979 +23,716 @@ import { assertEquals, assertExists } from "@std/assert";
 
 const fetchCalls: { url: string; headers: Record<string, string> }[] = [];
 const pushStateCalls: unknown[][] = [];
-let mainInnerHTML = "";
-let documentTitle = "";
 let preventDefaultCalled = false;
 
 // ============================================================================
-// MOCK HELPERS
+// FETCH HELPERS
 // ============================================================================
 
-function createMockFn<T extends (...args: unknown[]) => unknown>(
-  returnValue?: ReturnType<T>,
-): T & { calls: unknown[][] } {
-  const calls: unknown[][] = [];
-  const fn = ((...args: unknown[]) => {
-    calls.push(args);
-    return returnValue;
-  }) as T & { calls: unknown[][] };
-  fn.calls = calls;
-  return fn;
+type FragmentEnvelopeOverrides = Partial<{
+  title: string;
+  html: string;
+  meta: { property?: string; name?: string; content: string }[];
+  styles: string | undefined;
+}>;
+
+/** Creates a Response with application/json Content-Type and a JSON fragment envelope. */
+function createJsonFragmentResponse(
+  overrides?: FragmentEnvelopeOverrides,
+): Response {
+  const envelope = {
+    title: "New Title",
+    html: "<div>new content</div>",
+    meta: [] as { property?: string; name?: string; content: string }[],
+    ...overrides,
+  };
+  return {
+    ok: true,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    json: () => Promise.resolve(envelope),
+  } as Response;
+}
+
+function parseFetchInput(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): { url: string; headers: Record<string, string> } {
+  const url = getFetchUrl(input);
+  const headers: Record<string, string> = {};
+  if (init?.headers) {
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((v: string, k: string) => {
+        headers[k] = v;
+      });
+    } else {
+      for (
+        const [k, v] of Object.entries(
+          init.headers as Record<string, string>,
+        )
+      ) {
+        headers[k] = String(v);
+      }
+    }
+  }
+  return { url, headers };
+}
+
+/** Creates a fetch that records url/headers to fetchCalls and returns the given response. */
+function createFetchThatRecordsCalls(
+  response: Response,
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return (input, init) => {
+    const { url, headers } = parseFetchInput(input, init);
+    fetchCalls.push({ url, headers });
+    return Promise.resolve(response);
+  };
 }
 
 // ============================================================================
 // DOM SETUP (must run before importing the element module)
 // ============================================================================
 
-function setupDOMEnvironment() {
+type LocationLike = {
+  origin: string;
+  href: string;
+  reload?: () => void;
+};
+
+function setupDOMEnvironment(options?: {
+  location?: LocationLike;
+  history?: { pushState: (...args: unknown[]) => void };
+  addEventListener?: (type: string, fn: () => void) => void;
+  sessionStorage?: Storage;
+  fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+}) {
   fetchCalls.length = 0;
   pushStateCalls.length = 0;
-  mainInnerHTML = "";
-  documentTitle = "";
   preventDefaultCalled = false;
 
-  const mainEl = {
-    get innerHTML() {
-      return mainInnerHTML;
-    },
-    set innerHTML(value: string) {
-      mainInnerHTML = value;
-    },
-  };
+  // Reset DOM state
+  const nav = linkedomDocument.querySelector("nav");
+  const main = linkedomDocument.querySelector("main");
+  if (nav) nav.innerHTML = "";
+  if (main) main.innerHTML = "";
+  linkedomDocument.title = "";
 
-  const mockTemplateContent = {
-    cloneNode(_deep: boolean) {
-      return { appendChild: createMockFn() };
-    },
-  };
+  // Clear head of fragment-managed content (OG meta, critical styles)
+  const head = linkedomDocument.head;
+  const ogMeta = head.querySelectorAll('meta[property^="og:"]');
+  for (const el of ogMeta) head.removeChild(el);
+  const stylesEl = linkedomDocument.getElementById("fragment-critical-styles");
+  if (stylesEl) stylesEl.remove();
 
-  globalThis.document = {
-    createElement(tagName: string) {
-      if (tagName === "template") {
-        return {
-          innerHTML: "",
-          content: mockTemplateContent,
-        } as unknown as HTMLTemplateElement;
-      }
-      return {} as HTMLElement;
-    },
-    querySelector(selector: string) {
-      if (selector === "main") return mainEl;
-      return null;
-    },
-    get title() {
-      return documentTitle;
-    },
-    set title(value: string) {
-      documentTitle = value;
-    },
-    baseURI: "http://localhost:8000/",
-    head: {
-      appendChild: createMockFn(),
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      removeChild: () => {},
-    },
-    getElementById: () => null,
-  } as unknown as Document;
-
-  const mockLocation = {
+  const defaultLocation: LocationLike = {
     origin: "http://localhost:8000",
     href: "http://localhost:8000/",
   };
-  const mockHistory = {
+
+  const defaultHistory = {
     pushState: (...args: unknown[]) => {
       pushStateCalls.push(args);
     },
   };
-  const mockAddEventListener = () => {};
 
-  (globalThis as {
-    window: typeof globalThis & {
-      location: typeof mockLocation;
-      history: typeof mockHistory;
-      addEventListener: typeof mockAddEventListener;
+  const location = options?.location ?? defaultLocation;
+  const history = options?.history ?? defaultHistory;
+  const addEventListener = options?.addEventListener ?? (() => {});
+
+  // Wire linkedom + overrides to globalThis
+  (globalThis as { document: Document }).document = linkedomDocument;
+  const windowWithOverrides = {
+    ...linkedomWindow,
+    document: linkedomDocument,
+    location: location as Location,
+    history: history as History,
+    addEventListener: addEventListener as (
+      type: string,
+      fn: () => void,
+    ) => void,
+  };
+  (globalThis as { window: Window }).window =
+    windowWithOverrides as unknown as Window;
+
+  (globalThis as { location: Location }).location = location as Location;
+  (globalThis as { history: History }).history = history as History;
+  (globalThis as { addEventListener: typeof globalThis.addEventListener })
+    .addEventListener = addEventListener as typeof globalThis.addEventListener;
+
+  (globalThis as { customElements: CustomElementRegistry }).customElements =
+    linkedomWindow.customElements;
+  (globalThis as { HTMLElement: typeof HTMLElement }).HTMLElement =
+    linkedomWindow.HTMLElement;
+
+  if (options?.sessionStorage) {
+    (globalThis as { sessionStorage: Storage }).sessionStorage =
+      options.sessionStorage;
+  } else {
+    (globalThis as { sessionStorage: Storage }).sessionStorage =
+      linkedomWindow.sessionStorage;
+  }
+
+  (globalThis as { setTimeout: typeof setTimeout }).setTimeout = linkedomWindow
+    .setTimeout.bind(linkedomWindow);
+  (globalThis as { clearTimeout: typeof clearTimeout }).clearTimeout =
+    linkedomWindow.clearTimeout.bind(linkedomWindow);
+
+  globalThis.fetch = options?.fetch ??
+    createFetchThatRecordsCalls(createJsonFragmentResponse());
+}
+
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+
+function getMain(): HTMLElement | null {
+  return linkedomDocument.querySelector("main");
+}
+
+/** Creates a nav-link in the DOM with optional attributes. Uses document.createElement
+ * and appendChild so connectedCallback fires naturally when the element is connected. */
+function createNavLink(
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const nav = linkedomDocument.querySelector("nav");
+  if (!nav) throw new Error("nav element not found");
+  const el = linkedomDocument.createElement("nav-link");
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
+  nav.appendChild(el);
+  return el as HTMLElement;
+}
+
+function createClickEvent(
+  overrides: { metaKey?: boolean } = {},
+): Event {
+  const ev = new Event("click", { bubbles: true, cancelable: true }) as
+    & Event
+    & {
+      metaKey?: boolean;
+      ctrlKey?: boolean;
+      button?: number;
     };
-  }).window = {
-    ...globalThis,
-    location: mockLocation,
-    history: mockHistory,
-    addEventListener: mockAddEventListener,
+  ev.metaKey = overrides.metaKey ?? false;
+  (ev as Event & { ctrlKey?: boolean }).ctrlKey = false;
+  (ev as Event & { button?: number }).button = 0;
+  const orig = ev.preventDefault.bind(ev);
+  ev.preventDefault = () => {
+    preventDefaultCalled = true;
+    orig();
   };
-
-  // Component uses globalThis.location/history/addEventListener; in Deno those
-  // are not set, so point them at the same mocks as window.
-  (globalThis as { location: typeof mockLocation }).location = mockLocation;
-  (globalThis as { history: typeof mockHistory }).history = mockHistory;
-  (globalThis as { addEventListener: typeof mockAddEventListener })
-    .addEventListener = mockAddEventListener;
-
-  (globalThis as { customElements: { define: () => void } }).customElements = {
-    define: () => {},
-  };
-
-  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-      ? input.href
-      : (input as Request).url;
-    const headers: Record<string, string> = {};
-    if (init?.headers) {
-      if (init.headers instanceof Headers) {
-        init.headers.forEach((v: string, k: string) => {
-          headers[k] = v;
-        });
-      } else {
-        for (
-          const [k, v] of Object.entries(init.headers as Record<string, string>)
-        ) {
-          headers[k] = String(v);
-        }
-      }
-    }
-    fetchCalls.push({ url, headers });
-    return Promise.resolve({
-      ok: true,
-      headers: new Headers({ "Content-Type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          title: "New Title",
-          html: "<div>new content</div>",
-          meta: [],
-        }),
-    } as Response);
-  };
+  return ev;
 }
 
-class MockHTMLElement {
-  _attrs: Record<string, string> = {};
-  _listeners: Record<string, (e: Event) => void> = {};
-  shadowRoot: { appendChild: (node: unknown) => void } | null = null;
-
-  attachShadow(_opts: { mode: string }) {
-    this.shadowRoot = { appendChild: () => {} };
-    return this.shadowRoot;
-  }
-
-  getAttribute(name: string): string | null {
-    return this._attrs[name] ?? null;
-  }
-
-  setAttribute(name: string, value: string) {
-    this._attrs[name] = value;
-  }
-
-  removeAttribute(name: string) {
-    delete this._attrs[name];
-  }
-
-  addEventListener(type: string, fn: (e: Event) => void) {
-    this._listeners[type] = fn;
-  }
-
-  removeEventListener(type: string) {
-    delete this._listeners[type];
-  }
-
-  dispatchEvent(e: Event): boolean {
-    const fn = this._listeners[e.type];
-    if (fn) fn(e);
-    return true;
-  }
+function createKeydownEvent(): Event & { key?: string } {
+  const ev = new Event("keydown", { bubbles: true, cancelable: true }) as
+    & Event
+    & {
+      key?: string;
+    };
+  ev.key = "Enter";
+  const orig = ev.preventDefault.bind(ev);
+  ev.preventDefault = () => {
+    preventDefaultCalled = true;
+    orig();
+  };
+  return ev;
 }
 
-(globalThis as { HTMLElement: typeof MockHTMLElement }).HTMLElement =
-  MockHTMLElement as unknown as typeof HTMLElement;
+/** Dispatches a click event. Uses unknown cast for linkedom Event → DOM Event compatibility. */
+function dispatchClick(
+  el: { dispatchEvent(event: unknown): boolean },
+  overrides?: { metaKey?: boolean },
+): void {
+  el.dispatchEvent(createClickEvent(overrides) as unknown as Event);
+}
+
+/** Dispatches a keydown Enter event. Uses unknown cast for linkedom Event → DOM Event compatibility. */
+function dispatchKeydown(el: { dispatchEvent(event: unknown): boolean }): void {
+  el.dispatchEvent(createKeydownEvent() as unknown as Event);
+}
 
 // ============================================================================
 // TESTS
 // ============================================================================
 
-Deno.test("NavLinkCustomElement - popstate triggers fetch and applyEnvelope", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - popstate triggers fetch and applyEnvelope",
+  async () => {
+    const popstateUrl = "http://localhost:8000/artists/a/albums/b";
+    let popstateListener: ((ev?: Event) => void) | null = null;
 
-  const popstateUrl = "http://localhost:8000/artists/a/albums/b";
-  let popstateListener: (() => void) | null = null;
-
-  const popstateWindow = {
-    ...globalThis,
-    location: {
-      origin: "http://localhost:8000",
-      get href() {
-        return popstateUrl;
+    setupDOMEnvironment({
+      location: {
+        origin: "http://localhost:8000",
+        get href() {
+          return popstateUrl;
+        },
       },
-    },
-    history: { pushState: () => {} },
-    addEventListener(type: string, fn: () => void) {
-      if (type === "popstate") popstateListener = fn;
-    },
-  } as unknown as Window;
-  (globalThis as { window: Window }).window = popstateWindow;
-  (globalThis as { location: typeof popstateWindow.location }).location =
-    popstateWindow.location;
-  (globalThis as { history: typeof popstateWindow.history }).history =
-    popstateWindow.history;
-  (globalThis as { addEventListener: typeof popstateWindow.addEventListener })
-    .addEventListener = popstateWindow.addEventListener;
-
-  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-      ? input.href
-      : (input as Request).url;
-    const headers: Record<string, string> = {};
-    if (init?.headers) {
-      if (init.headers instanceof Headers) {
-        init.headers.forEach((v: string, k: string) => {
-          headers[k] = v;
-        });
-      } else {
-        for (
-          const [k, v] of Object.entries(init.headers as Record<string, string>)
-        ) {
-          headers[k] = String(v);
-        }
-      }
-    }
-    fetchCalls.push({ url, headers });
-    return Promise.resolve({
-      ok: true,
-      headers: new Headers({ "Content-Type": "application/json" }),
-      json: () =>
-        Promise.resolve({
+      history: { pushState: () => {} },
+      addEventListener: (type: string, fn: (ev?: Event) => void) => {
+        if (type === "popstate") popstateListener = fn;
+      },
+      fetch: createFetchThatRecordsCalls(
+        createJsonFragmentResponse({
           title: "Popstate Title",
           html: "<div>popstate content</div>",
-          meta: [],
         }),
-    }) as Promise<Response>;
-  };
+      ),
+    });
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await import("./nav-link-custom-element.ts");
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    createNavLink();
 
-  assertExists(popstateListener, "popstate listener should be registered");
-  popstateListener!();
+    assertExists(popstateListener, "popstate listener should be registered");
+    (popstateListener as (ev?: Event) => void)();
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
-
-  assertEquals(fetchCalls.length, 1);
-  assertEquals(fetchCalls[0].url, popstateUrl);
-  assertEquals(fetchCalls[0].headers["X-Requested-With"], "fetch");
-  assertEquals(mainInnerHTML, "<div>popstate content</div>");
-  assertEquals(documentTitle, "Popstate Title");
-});
-
-Deno.test("NavLinkCustomElement - popstate shows error after 4 fragment load failures and does not reload", async () => {
-  setupDOMEnvironment();
-
-  const popstateUrl = "http://localhost:8000/artists/a/albums/b";
-  let popstateListener: (() => void) | null = null;
-  const reloadCalls: unknown[] = [];
-  const storage: Record<string, string> = {};
-
-  const popstateWindow = {
-    ...globalThis,
-    location: {
-      origin: "http://localhost:8000",
-      get href() {
-        return popstateUrl;
-      },
-      reload() {
-        reloadCalls.push(undefined);
-      },
-    },
-    history: { pushState: () => {} },
-    addEventListener(type: string, fn: () => void) {
-      if (type === "popstate") popstateListener = fn;
-    },
-    get sessionStorage() {
-      return {
-        getItem(key: string) {
-          return storage[key] ?? null;
-        },
-        setItem(key: string, value: string) {
-          storage[key] = value;
-        },
-        removeItem(key: string) {
-          delete storage[key];
-        },
-      };
-    },
-  } as unknown as Window & { sessionStorage: Storage };
-  (globalThis as { window: Window }).window = popstateWindow;
-  (globalThis as { location: typeof popstateWindow.location }).location =
-    popstateWindow.location;
-  (globalThis as { history: typeof popstateWindow.history }).history =
-    popstateWindow.history;
-  (globalThis as { addEventListener: typeof popstateWindow.addEventListener })
-    .addEventListener = popstateWindow.addEventListener;
-  (globalThis as { sessionStorage: Storage }).sessionStorage =
-    popstateWindow.sessionStorage;
-
-  globalThis.fetch = () =>
-    Promise.resolve({ ok: false, status: 503 }) as Promise<Response>;
-
-  const { NavLinkCustomElement, _testResetPopstateState } = await import(
-    "./nav-link-custom-element.ts"
-  );
-  _testResetPopstateState();
-
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<typeof MockHTMLElement>
-    & { connectedCallback?: () => void };
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
-
-  assertExists(popstateListener, "popstate listener should be registered");
-
-  for (let i = 0; i < 4; i++) {
-    popstateListener!();
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
-  }
 
-  assertEquals(
-    reloadCalls.length,
-    0,
-    "reload must not be called; error should be shown after 4 failures",
-  );
-  assertEquals(
-    mainInnerHTML.includes("Couldn't load this page"),
-    true,
-    "main should show error message after 4 failures",
-  );
-});
+    assertEquals(fetchCalls.length, 1);
+    assertEquals(fetchCalls[0].url, popstateUrl);
+    assertEquals(fetchCalls[0].headers["X-Requested-With"], "fetch");
+    assertEquals(getMain()?.innerHTML ?? "", "<div>popstate content</div>");
+    assertEquals(linkedomDocument.title, "Popstate Title");
+  },
+);
 
-Deno.test("NavLinkCustomElement - click fetches with X-Requested-With header and updates main and title", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - popstate shows error after 4 fragment load failures and does not reload",
+  async () => {
+    const popstateUrl = "http://localhost:8000/artists/a/albums/b";
+    let popstateListener: ((ev?: Event) => void) | null = null;
+    const reloadCalls: unknown[] = [];
+    const storage: Record<string, string> = {};
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    setupDOMEnvironment({
+      location: {
+        origin: "http://localhost:8000",
+        get href() {
+          return popstateUrl;
+        },
+        reload: () => reloadCalls.push(undefined),
+      },
+      history: { pushState: () => {} },
+      addEventListener: (type: string, fn: (ev?: Event) => void) => {
+        if (type === "popstate") popstateListener = fn;
+      },
+      sessionStorage: {
+        getItem: (k: string) => storage[k] ?? null,
+        setItem: (k: string, v: string) => {
+          storage[k] = v;
+        },
+        removeItem: (k: string) => delete storage[k],
+        length: 0,
+        key: () => null,
+        clear: () => {},
+      },
+      fetch: () =>
+        Promise.resolve({ ok: false, status: 503 }) as Promise<Response>,
+    });
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const { _testResetPopstateState } = await import(
+      "./nav-link-custom-element.ts"
+    );
+    _testResetPopstateState();
 
-  const preventDefault = () => {
-    preventDefaultCalled = true;
-  };
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault,
-  } as unknown as Event;
+    createNavLink();
 
-  el.dispatchEvent(clickEvent);
+    assertExists(popstateListener, "popstate listener should be registered");
 
-  // Flush microtasks and task queue so fetch and applyEnvelope complete before assertions.
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    for (let i = 0; i < 4; i++) {
+      (popstateListener as (ev?: Event) => void)();
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+    }
 
-  assertEquals(fetchCalls.length, 1);
-  assertEquals(fetchCalls[0].url, "http://localhost:8000/");
-  assertEquals(fetchCalls[0].headers["X-Requested-With"], "fetch");
-  assertEquals(mainInnerHTML, "<div>new content</div>");
-  assertEquals(documentTitle, "New Title");
-  assertEquals(pushStateCalls.length, 1);
-  assertExists(pushStateCalls[0][2]);
-  assertEquals(pushStateCalls[0][2] as string, "http://localhost:8000/");
-});
+    assertEquals(
+      reloadCalls.length,
+      0,
+      "reload must not be called; error should be shown after 4 failures",
+    );
+    assertEquals(
+      getMain()?.innerHTML.includes("Couldn't load this page") ?? false,
+      true,
+      "main should show error message after 4 failures",
+    );
+  },
+);
 
-Deno.test("NavLinkCustomElement - click with cross-origin href does not preventDefault and does not fetch", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - click fetches with X-Requested-With header and updates main and title",
+  async () => {
+    setupDOMEnvironment();
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await import("./nav-link-custom-element.ts");
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "https://example.com/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const el = createNavLink({ href: "/" });
 
-  const preventDefault = () => {
-    preventDefaultCalled = true;
-  };
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault,
-  } as unknown as Event;
+    dispatchClick(el);
 
-  el.dispatchEvent(clickEvent);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  assertEquals(
-    preventDefaultCalled,
-    false,
-    "cross-origin link should not prevent default",
-  );
-  assertEquals(
-    fetchCalls.length,
-    0,
-    "cross-origin link should not trigger fetch",
-  );
-});
+    assertEquals(fetchCalls.length, 1);
+    assertEquals(fetchCalls[0].url, "http://localhost:8000/");
+    assertEquals(fetchCalls[0].headers["X-Requested-With"], "fetch");
+    assertEquals(getMain()?.innerHTML ?? "", "<div>new content</div>");
+    assertEquals(linkedomDocument.title, "New Title");
+    assertEquals(pushStateCalls.length, 1);
+    assertExists(pushStateCalls[0][2]);
+    assertEquals(pushStateCalls[0][2] as string, "http://localhost:8000/");
+  },
+);
 
-Deno.test("NavLinkCustomElement - click with metaKey (Cmd+click) does not preventDefault and does not fetch", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - click with cross-origin href does not preventDefault and does not fetch",
+  async () => {
+    setupDOMEnvironment();
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await import("./nav-link-custom-element.ts");
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const el = createNavLink({ href: "https://example.com/" });
 
-  const preventDefault = () => {
-    preventDefaultCalled = true;
-  };
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault,
-    metaKey: true,
-  } as unknown as Event;
+    dispatchClick(el);
 
-  el.dispatchEvent(clickEvent);
+    assertEquals(
+      preventDefaultCalled,
+      false,
+      "cross-origin link should not prevent default",
+    );
+    assertEquals(
+      fetchCalls.length,
+      0,
+      "cross-origin link should not trigger fetch",
+    );
+  },
+);
 
-  assertEquals(
-    preventDefaultCalled,
-    false,
-    "Cmd+click should not prevent default (allows open in new tab)",
-  );
-  assertEquals(
-    fetchCalls.length,
-    0,
-    "Cmd+click should not trigger fragment fetch",
-  );
-});
+Deno.test(
+  "NavLinkCustomElement - click with metaKey (Cmd+click) does not preventDefault and does not fetch",
+  async () => {
+    setupDOMEnvironment();
 
-Deno.test("NavLinkCustomElement - no href sets host tabindex -1 and no role", async () => {
-  setupDOMEnvironment();
+    await import("./nav-link-custom-element.ts");
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    const el = createNavLink({ href: "/" });
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<typeof MockHTMLElement>
-    & { connectedCallback?: () => void };
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    dispatchClick(el, { metaKey: true });
 
-  assertEquals(
-    el.getAttribute("tabindex"),
-    "-1",
-    "host should have tabindex -1 when no href",
-  );
-  assertEquals(
-    el.getAttribute("role"),
-    null,
-    "host should have no role when no href",
-  );
-});
+    assertEquals(
+      preventDefaultCalled,
+      false,
+      "Cmd+click should not prevent default (allows open in new tab)",
+    );
+    assertEquals(
+      fetchCalls.length,
+      0,
+      "Cmd+click should not trigger fragment fetch",
+    );
+  },
+);
 
-Deno.test("NavLinkCustomElement - keydown Enter triggers same fetch as click", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - no href sets host tabindex -1 and no role",
+  async () => {
+    setupDOMEnvironment();
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await import("./nav-link-custom-element.ts");
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const el = createNavLink();
 
-  const preventDefault = () => {
-    preventDefaultCalled = true;
-  };
-  const keydownEvent = {
-    type: "keydown",
-    key: "Enter",
-    bubbles: true,
-    preventDefault,
-  } as unknown as Event;
+    assertEquals(
+      el.getAttribute("tabindex"),
+      "-1",
+      "host should have tabindex -1 when no href",
+    );
+    assertEquals(
+      el.getAttribute("role"),
+      null,
+      "host should have no role when no href",
+    );
+  },
+);
 
-  el.dispatchEvent(keydownEvent);
+Deno.test(
+  "NavLinkCustomElement - keydown Enter triggers same fetch as click",
+  async () => {
+    setupDOMEnvironment();
 
-  // Flush microtasks and task queue so fetch and applyEnvelope complete before assertions.
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    await import("./nav-link-custom-element.ts");
 
-  assertEquals(fetchCalls.length, 1);
-  assertEquals(fetchCalls[0].url, "http://localhost:8000/");
-  assertEquals(fetchCalls[0].headers["X-Requested-With"], "fetch");
-  assertEquals(preventDefaultCalled, true);
-});
+    const el = createNavLink({ href: "/" });
 
-Deno.test("NavLinkCustomElement - keydown Enter with cross-origin href does not preventDefault and does not fetch", async () => {
-  setupDOMEnvironment();
+    dispatchKeydown(el);
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "https://example.com/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    assertEquals(fetchCalls.length, 1);
+    assertEquals(fetchCalls[0].url, "http://localhost:8000/");
+    assertEquals(fetchCalls[0].headers["X-Requested-With"], "fetch");
+    assertEquals(preventDefaultCalled, true);
+  },
+);
 
-  const preventDefault = () => {
-    preventDefaultCalled = true;
-  };
-  const keydownEvent = {
-    type: "keydown",
-    key: "Enter",
-    bubbles: true,
-    preventDefault,
-  } as unknown as Event;
+Deno.test(
+  "NavLinkCustomElement - keydown Enter with cross-origin href does not preventDefault and does not fetch",
+  async () => {
+    setupDOMEnvironment();
 
-  el.dispatchEvent(keydownEvent);
+    await import("./nav-link-custom-element.ts");
 
-  assertEquals(
-    preventDefaultCalled,
-    false,
-    "cross-origin keydown should not prevent default",
-  );
-  assertEquals(
-    fetchCalls.length,
-    0,
-    "cross-origin keydown should not trigger fetch",
-  );
-});
+    const el = createNavLink({ href: "https://example.com/" });
 
-Deno.test("NavLinkCustomElement - fallback to location.href when fetch fails", async () => {
-  setupDOMEnvironment();
-  let locationHrefSet = "";
-  const fallbackLocation = {
-    origin: "http://localhost:8000",
-    get href() {
-      return locationHrefSet || "http://localhost:8000/";
-    },
-    set href(value: string) {
-      locationHrefSet = value;
-    },
-  };
-  const fallbackWindow = {
-    ...globalThis,
-    location: fallbackLocation,
-    history: { pushState: () => {} },
-    addEventListener: () => {},
-  } as unknown as Window;
-  (globalThis as { window: Window }).window = fallbackWindow;
-  (globalThis as { location: typeof fallbackLocation }).location =
-    fallbackLocation;
+    dispatchKeydown(el);
 
-  globalThis.fetch = () =>
-    Promise.resolve({ ok: false, status: 500 } as Response);
+    assertEquals(
+      preventDefaultCalled,
+      false,
+      "cross-origin keydown should not prevent default",
+    );
+    assertEquals(
+      fetchCalls.length,
+      0,
+      "cross-origin keydown should not trigger fetch",
+    );
+  },
+);
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+Deno.test(
+  "NavLinkCustomElement - fallback to location.href when fetch fails",
+  async () => {
+    let locationHrefSet = "";
+    setupDOMEnvironment({
+      location: {
+        origin: "http://localhost:8000",
+        get href() {
+          return locationHrefSet || "http://localhost:8000/";
+        },
+        set href(value: string) {
+          locationHrefSet = value;
+        },
+      },
+      fetch: () =>
+        Promise.resolve({ ok: false, status: 500 }) as Promise<Response>,
+    });
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    await import("./nav-link-custom-element.ts");
 
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault: () => {},
-  } as unknown as Event;
-  el.dispatchEvent(clickEvent);
+    const el = createNavLink({ href: "/" });
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    dispatchClick(el);
 
-  assertEquals(locationHrefSet, "http://localhost:8000/");
-});
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-Deno.test("NavLinkCustomElement - fallback to location.href when fragment response Content-Type is not application/json", async () => {
-  setupDOMEnvironment();
-  let locationHrefSet = "";
-  const fallbackLocation = {
-    origin: "http://localhost:8000",
-    get href() {
-      return locationHrefSet || "http://localhost:8000/";
-    },
-    set href(value: string) {
-      locationHrefSet = value;
-    },
-  };
-  const fallbackWindow = {
-    ...globalThis,
-    location: fallbackLocation,
-    history: { pushState: () => {} },
-    addEventListener: () => {},
-  } as unknown as Window;
-  (globalThis as { window: Window }).window = fallbackWindow;
-  (globalThis as { location: typeof fallbackLocation }).location =
-    fallbackLocation;
+    assertEquals(locationHrefSet, "http://localhost:8000/");
+  },
+);
 
-  globalThis.fetch = () =>
-    Promise.resolve({
-      ok: true,
-      headers: new Headers({ "Content-Type": "text/html" }),
-      json: () =>
+Deno.test(
+  "NavLinkCustomElement - fallback to location.href when fragment response Content-Type is not application/json",
+  async () => {
+    let locationHrefSet = "";
+    setupDOMEnvironment({
+      location: {
+        origin: "http://localhost:8000",
+        get href() {
+          return locationHrefSet || "http://localhost:8000/";
+        },
+        set href(value: string) {
+          locationHrefSet = value;
+        },
+      },
+      fetch: () =>
         Promise.resolve({
-          title: "Untrusted",
-          html: "<p>should not be applied</p>",
-          meta: [],
-        }),
-    } as Response);
+          ok: true,
+          headers: new Headers({ "Content-Type": "text/html" }),
+          json: () =>
+            Promise.resolve({
+              title: "Untrusted",
+              html: "<p>should not be applied</p>",
+              meta: [],
+            }),
+        } as Response),
+    });
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await import("./nav-link-custom-element.ts");
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<typeof MockHTMLElement>
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const el = createNavLink({ href: "/" });
 
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault: () => {},
-  } as unknown as Event;
-  el.dispatchEvent(clickEvent);
+    dispatchClick(el);
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  assertEquals(
-    mainInnerHTML,
-    "",
-    "main must not be updated when Content-Type is not application/json",
-  );
-  assertEquals(locationHrefSet, "http://localhost:8000/");
-});
+    assertEquals(
+      getMain()?.innerHTML ?? "",
+      "",
+      "main must not be updated when Content-Type is not application/json",
+    );
+    assertEquals(locationHrefSet, "http://localhost:8000/");
+  },
+);
 
-Deno.test("NavLinkCustomElement - fragment with empty meta clears OG meta from head", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - fragment with empty meta clears OG meta from head",
+  async () => {
+    setupDOMEnvironment();
 
-  const removeChildCalls: unknown[] = [];
-  const mockOgMeta = [{}, {}];
-  const doc = globalThis.document as {
-    head: {
-      appendChild: ReturnType<typeof createMockFn>;
-      querySelector: () => null;
-      querySelectorAll: (sel: string) => unknown[];
-      removeChild: (child: unknown) => void;
-    };
-  };
-  doc.head.querySelectorAll = (sel: string) =>
-    sel === 'meta[property^="og:"]' ? mockOgMeta : [];
-  doc.head.removeChild = (child: unknown) => {
-    removeChildCalls.push(child);
-  };
+    for (let i = 0; i < 2; i++) {
+      const meta = linkedomDocument.createElement("meta");
+      meta.setAttribute("property", `og:test${i}`);
+      meta.setAttribute("content", "value");
+      linkedomDocument.head.appendChild(meta);
+    }
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await import("./nav-link-custom-element.ts");
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const el = createNavLink({ href: "/" });
 
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault: () => {},
-  } as unknown as Event;
-  el.dispatchEvent(clickEvent);
+    dispatchClick(el);
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  assertEquals(
-    removeChildCalls.length,
-    2,
-    "removeChild should be called for each OG meta",
-  );
-});
+    const ogMeta = linkedomDocument.head.querySelectorAll(
+      'meta[property^="og:"]',
+    );
+    assertEquals(
+      ogMeta.length,
+      0,
+      "OG meta should be cleared when fragment has empty meta",
+    );
+  },
+);
 
-Deno.test("NavLinkCustomElement - fragment with new meta clears previous OG tags before applying", async () => {
-  setupDOMEnvironment();
+Deno.test(
+  "NavLinkCustomElement - fragment with new meta clears previous OG tags before applying",
+  async () => {
+    setupDOMEnvironment({
+      fetch: () =>
+        Promise.resolve(
+          createJsonFragmentResponse({
+            title: "Home",
+            html: "<div>home content</div>",
+            meta: [
+              { property: "og:title", content: "BoomBox" },
+              { property: "og:description", content: "Music player" },
+            ],
+          }),
+        ),
+    });
 
-  const removeChildCalls: unknown[] = [];
-  const mockOgMeta = [{}, {}, {}, {}, {}];
-  const doc = globalThis.document as {
-    head: {
-      appendChild: ReturnType<typeof createMockFn>;
-      querySelector: () => null;
-      querySelectorAll: (sel: string) => unknown[];
-      removeChild: (child: unknown) => void;
-    };
-  };
-  doc.head.querySelectorAll = (sel: string) =>
-    sel === 'meta[property^="og:"]' ? mockOgMeta : [];
-  doc.head.removeChild = (child: unknown) => {
-    removeChildCalls.push(child);
-  };
+    for (let i = 0; i < 5; i++) {
+      const meta = linkedomDocument.createElement("meta");
+      meta.setAttribute("property", `og:old${i}`);
+      meta.setAttribute("content", "old");
+      linkedomDocument.head.appendChild(meta);
+    }
 
-  globalThis.fetch = () =>
-    Promise.resolve({
-      ok: true,
-      headers: new Headers({ "Content-Type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          title: "Home",
-          html: "<div>home content</div>",
-          meta: [
-            { property: "og:title", content: "BoomBox" },
-            { property: "og:description", content: "Music player" },
-          ],
-        }),
-    } as Response);
+    await import("./nav-link-custom-element.ts");
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    const el = createNavLink({ href: "/" });
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<typeof MockHTMLElement>
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    dispatchClick(el);
 
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault: () => {},
-  } as unknown as Event;
-  el.dispatchEvent(clickEvent);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    const ogMeta = linkedomDocument.head.querySelectorAll(
+      'meta[property^="og:"]',
+    );
+    assertEquals(
+      ogMeta.length,
+      2,
+      "should have exactly 2 OG meta tags after clearing 5 and applying 2",
+    );
+    assertEquals(
+      linkedomDocument.querySelector('meta[property="og:title"]')?.getAttribute(
+        "content",
+      ),
+      "BoomBox",
+    );
+    assertEquals(
+      linkedomDocument.querySelector('meta[property="og:description"]')
+        ?.getAttribute("content"),
+      "Music player",
+    );
+  },
+);
 
-  assertEquals(
-    removeChildCalls.length,
-    5,
-    "removeChild should be called for each previous OG meta before applying new subset",
-  );
-});
+Deno.test(
+  "NavLinkCustomElement - fragment with styles injects critical CSS into head",
+  async () => {
+    const criticalCss = "<style>.album-page-main { flex: 1; }</style>";
+    setupDOMEnvironment({
+      fetch: () =>
+        Promise.resolve(
+          createJsonFragmentResponse({
+            title: "Album",
+            html: "<div>album content</div>",
+            meta: [],
+            styles: criticalCss,
+          }),
+        ),
+    });
 
-Deno.test("NavLinkCustomElement - fragment with styles injects critical CSS into head", async () => {
-  setupDOMEnvironment();
+    await import("./nav-link-custom-element.ts");
 
-  const appendedToHead: unknown[] = [];
-  const doc = globalThis.document as {
-    head: {
-      appendChild: (node: unknown) => void;
-      querySelector: () => null;
-      querySelectorAll: () => [];
-      removeChild: () => void;
-    };
-  };
-  doc.head.appendChild = (node: unknown) => {
-    appendedToHead.push(node);
-  };
+    const el = createNavLink({ href: "/artists/foo/albums/bar" });
 
-  const criticalCss = "<style>.album-page-main { flex: 1; }</style>";
-  globalThis.fetch = () =>
-    Promise.resolve({
-      ok: true,
-      headers: new Headers({ "Content-Type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          title: "Album",
-          html: "<div>album content</div>",
-          meta: [],
-          styles: criticalCss,
-        }),
-    } as Response);
+    dispatchClick(el);
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/artists/foo/albums/bar");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
+    const styleEl = linkedomDocument.getElementById("fragment-critical-styles");
+    assertExists(styleEl);
+    assertEquals(styleEl.tagName.toLowerCase(), "style");
+    assertEquals(
+      (styleEl as HTMLStyleElement).textContent?.trim(),
+      ".album-page-main { flex: 1; }",
+    );
+  },
+);
 
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault: () => {},
-  } as unknown as Event;
-  el.dispatchEvent(clickEvent);
+Deno.test(
+  "NavLinkCustomElement - fragment with no styles removes existing critical-styles element",
+  async () => {
+    setupDOMEnvironment({
+      fetch: () =>
+        Promise.resolve(
+          createJsonFragmentResponse({
+            title: "Home",
+            html: "<div>home</div>",
+            meta: [],
+            styles: undefined,
+          }),
+        ),
+    });
 
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+    const existingStyle = linkedomDocument.createElement("style");
+    existingStyle.id = "fragment-critical-styles";
+    existingStyle.textContent = ".old { color: red; }";
+    linkedomDocument.head.appendChild(existingStyle);
 
-  assertEquals(appendedToHead.length, 1);
-  const styleEl = appendedToHead[0] as { id: string; textContent: string };
-  assertEquals(styleEl.id, "fragment-critical-styles");
-  assertEquals(styleEl.textContent.trim(), ".album-page-main { flex: 1; }");
-});
+    await import("./nav-link-custom-element.ts");
 
-Deno.test("NavLinkCustomElement - fragment with no styles removes existing critical-styles element", async () => {
-  setupDOMEnvironment();
+    const el = createNavLink({ href: "/" });
 
-  let removeCalled = false;
-  const mockStylesEl = {
-    id: "fragment-critical-styles",
-    remove: () => {
-      removeCalled = true;
-    },
-  };
-  const doc = globalThis.document as {
-    getElementById: (id: string) => unknown;
-  };
-  doc.getElementById = (id: string) =>
-    id === "fragment-critical-styles" ? mockStylesEl : null;
+    dispatchClick(el);
 
-  globalThis.fetch = () =>
-    Promise.resolve({
-      ok: true,
-      headers: new Headers({ "Content-Type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          title: "Home",
-          html: "<div>home</div>",
-          meta: [],
-          styles: undefined,
-        }),
-    } as Response);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
-  const { NavLinkCustomElement } = await import(
-    "./nav-link-custom-element.ts"
-  );
-
-  const el = new NavLinkCustomElement() as unknown as
-    & InstanceType<
-      typeof MockHTMLElement
-    >
-    & { connectedCallback?: () => void };
-  el.setAttribute("href", "/");
-  if (
-    typeof (el as { connectedCallback?: () => void }).connectedCallback ===
-      "function"
-  ) {
-    (el as { connectedCallback: () => void }).connectedCallback();
-  }
-
-  const clickEvent = {
-    type: "click",
-    bubbles: true,
-    preventDefault: () => {},
-  } as unknown as Event;
-  el.dispatchEvent(clickEvent);
-
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
-
-  assertEquals(
-    removeCalled,
-    true,
-    "existing fragment-critical-styles element should be removed",
-  );
-});
+    const styleEl = linkedomDocument.getElementById("fragment-critical-styles");
+    assertEquals(
+      styleEl,
+      null,
+      "existing fragment-critical-styles element should be removed",
+    );
+  },
+);

@@ -6,7 +6,7 @@ test framework.
 ## Test Structure
 
 ```
-deno-tests/
+tests/
 ├── app/
 │   └── util/
 │       ├── data-url.deno.test.ts        # Tests for data URL encode/decode (shared client/server)
@@ -30,19 +30,19 @@ deno-tests/
 ### Run All Tests
 
 ```bash
-deno test deno-tests/ --allow-net --allow-env --allow-read --allow-write --allow-sys
+deno test tests/ --allow-net --allow-env --allow-read --allow-write --allow-sys
 ```
 
 ### Run Specific Test File
 
 ```bash
-deno test deno-tests/server/router.deno.test.ts
+deno test tests/server/router.deno.test.ts
 ```
 
 ### Run Tests Without Type Checking (Faster)
 
 ```bash
-deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys
+deno test tests/ --no-check --allow-net --allow-env --allow-read --allow-write --allow-sys
 ```
 
 ## Test Coverage
@@ -115,6 +115,41 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
      - FormData file acceptance
      - Multiple file handling
 
+## Coverage
+
+Tests run with coverage in CI and before every push via
+`deno task test:coverage:ci`. A baseline file `coverage-baseline.json` at the
+project root stores minimum line, branch, and function coverage percentages. The
+check fails if coverage regresses.
+
+- **Pre-push**: `deno task test:coverage:ci` runs the check (invoked by
+  `.husky/pre-push`)
+- **CI**: Test job runs `deno task test:coverage:ci`
+- **Baseline updates**: Automatically at release time (CircleCI release job);
+  see
+  [Updating the baseline during development](#updating-the-baseline-during-development)
+  for local workflow.
+
+Tasks:
+
+- `deno task test:coverage` — run all tests with coverage
+- `deno task coverage:baseline` — run tests and write new baseline percentages
+  to `coverage-baseline.json`
+
+### Updating the baseline during development
+
+The baseline is updated automatically only during release. When you add or
+improve tests during development, update it locally to raise the bar:
+
+1. Run `deno task test:coverage:ci` to ensure tests pass.
+2. Run `deno task coverage:baseline` to write the new percentages.
+3. Commit `coverage-baseline.json` with your test changes.
+
+See the main [README Coverage section](../README.md#coverage) for more detail
+and a decision table.
+
+---
+
 ## Test Philosophy
 
 - **Simple**: Tests use Deno's native test framework, no external test libraries
@@ -129,6 +164,12 @@ deno test deno-tests/ --no-check --allow-net --allow-env --allow-read --allow-wr
 - Tests use `--no-check` flag to skip TypeScript checking for faster execution
 - All tests use Deno's standard assertion library from `deno.land/std`
 
+## E2E tests
+
+Browser-based e2e and visual regression tests live in `e2e/` and use Playwright.
+See the main [README](../README.md#e2e-and-visual-regression) for how to run
+them.
+
 ## Future Test Additions
 
 Potential areas for additional tests:
@@ -136,4 +177,3 @@ Potential areas for additional tests:
 - Integration tests for full request/response cycles
 - Error handling edge cases
 - Performance tests for large file sets
-- Browser-based E2E tests (using Playwright or similar)

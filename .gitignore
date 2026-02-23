@@ -2,6 +2,8 @@ node_modules
 
 /.cache
 /build
+/cov
+cov.lcov
 .env
 
 # macOS
@@ -9,3 +11,8 @@ node_modules
 **/.DS_Store
 
 docs
+
+# Playwright
+/test-results
+/playwright-report
+/blob-report
