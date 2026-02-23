@@ -16,7 +16,11 @@ jobs:
             echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> $BASH_ENV
       - run:
           name: Build
-          command: mkdir build && deno task build
+          command: deno task build
+      - store_artifacts:
+          path: custom-elements.json
+      - store_artifacts:
+          path: build/custom-elements.json
 
   test:
     docker:
@@ -77,9 +81,11 @@ jobs:
               exit 0
             fi
 
-            git add deno.json
+            deno task build:manifest
+
+            git add deno.json custom-elements.json
             if git diff --cached --quiet; then
-              echo "No deno.json changes to commit."
+              echo "No release changes to commit."
               exit 0
             fi
 
