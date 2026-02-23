@@ -1,6 +1,6 @@
 # Run tests with coverage and enforce baseline before push
 echo "🧪 Running tests with coverage before push..."
-deno run --allow-run scripts/pre-push-coverage.ts
+deno task test:coverage:ci
 if [ $? -ne 0 ]; then
   echo "❌ Tests or coverage check failed. Push aborted."
   exit 1

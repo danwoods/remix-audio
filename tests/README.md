@@ -122,7 +122,7 @@ Tests run with coverage in CI and before every push via
 project root stores minimum line, branch, and function coverage percentages. The
 check fails if coverage regresses.
 
-- **Pre-push**: `scripts/pre-push-coverage.ts` runs the check (invoked by
+- **Pre-push**: `deno task test:coverage:ci` runs the check (invoked by
   `.husky/pre-push`)
 - **CI**: Test job runs `deno task test:coverage:ci`
 - **Baseline updates**: Only at release time (CircleCI release job runs
