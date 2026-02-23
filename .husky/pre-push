@@ -1,60 +1,7 @@
-# Re-entry guard: when we push from within this hook (after amending), skip to avoid loop
-if [ -n "$COVERAGE_PREPUSH_INNER_PUSH" ]; then
-  exit 0
-fi
-
-# Capture pre-push refs before any git operations (stdin is consumed once)
-PREPUSH_REFS=$(cat)
-
-# Run tests with coverage before push
+# Run tests with coverage and enforce baseline before push
 echo "🧪 Running tests with coverage before push..."
-deno task test:coverage:ci
-
+deno run --allow-run scripts/pre-push-coverage.ts
 if [ $? -ne 0 ]; then
   echo "❌ Tests or coverage check failed. Push aborted."
   exit 1
 fi
-
-# Update baseline if coverage stayed same or improved; amend to latest commit if it changed
-deno run --allow-read --allow-write scripts/coverage-check.ts --write-baseline
-if [ $? -ne 0 ]; then
-  echo "❌ Coverage baseline write failed. Push aborted."
-  exit 1
-fi
-
-# Only amend if baseline changed, we have a commit, and HEAD is not already on remote
-safe_to_amend=false
-remote_sha_for_branch=""
-current_ref=$(git symbolic-ref -q HEAD)
-while read -r local_ref local_sha remote_ref remote_sha; do
-  [ -z "$local_ref" ] && break
-  if [ -n "$current_ref" ] && [ "$local_ref" = "$current_ref" ]; then
-    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ] || [ "$local_sha" != "$remote_sha" ]; then
-      safe_to_amend=true
-      remote_sha_for_branch="$remote_sha"
-    fi
-    break
-  fi
-done << EOF
-$PREPUSH_REFS
-EOF
-
-remote="${1:-origin}"
-branch=$(git symbolic-ref -q --short HEAD)
-
-if [ "$safe_to_amend" = true ] && [ -n "$(git status --porcelain coverage-baseline.json 2>/dev/null)" ] && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
-  git add coverage-baseline.json && git commit --amend --no-edit
-  echo "✅ Updated coverage baseline amended to the previous commit."
-  # Git chose refs before our amend; we must push the amended commit ourselves.
-  # Use re-entry guard so our push does not re-trigger this hook (avoid loop).
-  if [ -n "$branch" ]; then
-    if [ -n "$remote_sha_for_branch" ] && [ "$remote_sha_for_branch" != "0000000000000000000000000000000000000000" ]; then
-      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease="$branch:$remote_sha_for_branch" "$remote" "$branch"
-    else
-      COVERAGE_PREPUSH_INNER_PUSH=1 git push --force-with-lease "$remote" "$branch"
-    fi
-  fi
-  exit 1
-fi
-
-echo "✅ All tests passed!"

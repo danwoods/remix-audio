@@ -230,18 +230,29 @@ This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
 
 ### Coverage
 
-CI runs tests with coverage and compares against `coverage-baseline.json`. If
-line or branch coverage drops below the baseline, the test job fails.
+Tests run with coverage and are compared against `coverage-baseline.json`. If
+line or branch coverage drops below the baseline, the push or CI fails.
+
+- **Pre-push**: The `.husky/pre-push` hook runs `scripts/pre-push-coverage.ts`,
+  which executes `deno task test:coverage:ci`. The push is blocked if coverage
+  regresses.
+- **CI**: The test job runs `deno task test:coverage:ci`.
+- **Baseline updates**: The baseline is updated automatically only when a new
+  version is released (CircleCI release job). When merging to `main` triggers a
+  release, the job runs `deno task coverage:baseline` and commits the updated
+  `coverage-baseline.json` with the release commit.
 
 | Task                | Purpose                                                           |
 | ------------------- | ----------------------------------------------------------------- |
 | `test:coverage`     | Run all tests with coverage (outputs to `cov/`)                   |
 | `coverage:check`    | Generate LCOV from `cov/`, compare to baseline, exit 0 or 1       |
-| `test:coverage:ci`  | Run `test:coverage` + `coverage:check` (single CI invocation)     |
+| `test:coverage:ci`  | Run `test:coverage` + `coverage:check` (single invocation)        |
 | `coverage:baseline` | Run tests, then write new percentages to `coverage-baseline.json` |
 
-**Raising the bar**: After adding tests and improving coverage, run
-`deno task coverage:baseline` and commit the updated `coverage-baseline.json`.
+**Raising the bar**: Coverage baseline is raised automatically at release time.
+To update it locally (e.g. after adding tests), run
+`deno task coverage:baseline` and commit the result when merging to `main` for a
+release.
 
 ---
 
@@ -254,8 +265,9 @@ line or branch coverage drops below the baseline, the test job fails.
   - `feat`: **minor**
   - `fix` / `perf` / `revert`: **patch**
 - CircleCI runs the release job only on `main` after tests pass. When a bump is
-  required, it updates `deno.json`, commits `chore(release): vX.Y.Z`, creates
-  tag `vX.Y.Z`, and pushes both commit and tag to `main`.
+  required, it updates `deno.json`, updates `coverage-baseline.json` with
+  current coverage, commits `chore(release): vX.Y.Z`, creates tag `vX.Y.Z`, and
+  pushes both commit and tag to `main`.
 
 Local dry run:
 

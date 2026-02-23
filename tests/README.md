@@ -117,12 +117,21 @@ deno test tests/ --no-check --allow-net --allow-env --allow-read --allow-write -
 
 ## Coverage
 
-Tests run with coverage in CI via `deno task test:coverage:ci`. A baseline file
-`coverage-baseline.json` at the project root stores minimum line and branch
-coverage percentages. The check fails if coverage regresses.
+Tests run with coverage in CI and before every push via
+`deno task test:coverage:ci`. A baseline file `coverage-baseline.json` at the
+project root stores minimum line and branch coverage percentages. The check
+fails if coverage regresses.
+
+- **Pre-push**: `scripts/pre-push-coverage.ts` runs the check (invoked by
+  `.husky/pre-push`)
+- **CI**: Test job runs `deno task test:coverage:ci`
+- **Baseline updates**: Only at release time (CircleCI release job runs
+  `deno task coverage:baseline` and commits the result)
+
+Tasks:
 
 - `deno task test:coverage` — run all tests with coverage
-- `deno task coverage:baseline` — update baseline after adding tests
+- `deno task coverage:baseline` — update baseline (used by release job)
 
 ---
 

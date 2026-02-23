@@ -78,8 +78,13 @@ jobs:
             fi
 
             git add deno.json
+
+            # Update coverage baseline at release time
+            deno task coverage:baseline
+            git add coverage-baseline.json 2>/dev/null || true
+
             if git diff --cached --quiet; then
-              echo "No deno.json changes to commit."
+              echo "No deno.json or coverage-baseline.json changes to commit."
               exit 0
             fi
 
