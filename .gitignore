@@ -11,3 +11,8 @@ cov.lcov
 **/.DS_Store
 
 docs
+
+# Playwright
+/test-results
+/playwright-report
+/blob-report

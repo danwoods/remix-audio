@@ -255,6 +255,19 @@ To update it locally (e.g. after adding tests), run
 `deno task coverage:baseline` and commit the result when merging to `main` for a
 release.
 
+### E2E and visual regression
+
+Browser-based e2e and visual regression tests use Playwright in `e2e/`.
+
+- **Run e2e**: `deno task test:e2e` (starts the server with mocked S3, runs
+  Playwright)
+- **Update visual baselines**: `deno task test:e2e -- --update-snapshots`
+- **CI**: The `test-e2e` job runs after build; release requires both unit and
+  e2e tests to pass.
+
+Tasks: `start:e2e` (server with E2E_MODE + S3 mock), `test:e2e` (Playwright),
+`test:browser` (alias for `test:e2e`).
+
 ---
 
 ## Release automation
@@ -298,6 +311,7 @@ deno run --allow-read --allow-run scripts/release.ts --dry-run
 │   └── utils/              # basicAuth, loadEnv, manifest
 ├── build/                  # Build output
 │   └── main.js             # Custom elements bundle (from deno task build)
+├── e2e/                    # Playwright e2e and visual regression tests
 ├── tests/                  # Deno tests (router, handlers, SSR, utils)
 ├── scripts/                # CI/release scripts
 ├── public/                 # Static assets (e.g. favicon)

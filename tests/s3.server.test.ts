@@ -113,6 +113,37 @@ Deno.test("uploadStreamToS3 - uploads stream and returns S3 URL", async () => {
   assertEquals([...body], [1, 2, 3, 4, 5]);
 });
 
+Deno.test(
+  "S3 mock - E2E_MODE returns fixture data for ListObjectsV2",
+  async () => {
+    setupEnv();
+    clearS3SendCalls();
+    setSendBehavior(null);
+    const prev = Deno.env.get("E2E_MODE");
+    Deno.env.set("E2E_MODE", "1");
+    try {
+      const files = await getUploadedFiles(true);
+      assertEquals(Object.keys(files), ["Test Artist"]);
+      assert("Test Artist" in files);
+      assert("Test Album" in files["Test Artist"]);
+      assertEquals(files["Test Artist"]["Test Album"].tracks.length, 2);
+      assertEquals(
+        files["Test Artist"]["Test Album"].tracks[0].title,
+        "Test Track.mp3",
+      );
+      assertEquals(
+        files["Test Artist"]["Test Album"].tracks[1].title,
+        "Another Song.mp3",
+      );
+    } finally {
+      prev != null
+        ? Deno.env.set("E2E_MODE", prev)
+        : Deno.env.delete("E2E_MODE");
+      setSendBehavior(defaultSendBehavior);
+    }
+  },
+);
+
 Deno.test("getUploadedFiles - parses S3 keys into Files structure", async () => {
   setupEnv();
   clearS3SendCalls();

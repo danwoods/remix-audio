@@ -149,6 +149,12 @@ Tasks:
 - Tests use `--no-check` flag to skip TypeScript checking for faster execution
 - All tests use Deno's standard assertion library from `deno.land/std`
 
+## E2E tests
+
+Browser-based e2e and visual regression tests live in `e2e/` and use Playwright.
+See the main [README](../README.md#e2e-and-visual-regression) for how to run
+them.
+
 ## Future Test Additions
 
 Potential areas for additional tests:
@@ -156,4 +162,3 @@ Potential areas for additional tests:
 - Integration tests for full request/response cycles
 - Error handling edge cases
 - Performance tests for large file sets
-- Browser-based E2E tests (using Playwright or similar)
