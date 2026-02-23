@@ -33,8 +33,12 @@ artists and albums, play tracks, and (with admin) upload music to cloud storage
    ```bash
    deno task build
    ```
-   This produces `build/main.js` (custom elements bundle). The server serves
-   this and other static assets from `build/`, `app/app.css`, and `public/`.
+   This produces:
+   - `build/main.js` (custom elements bundle)
+   - `custom-elements.json` (manifest for tooling)
+   - `build/custom-elements.json` (served shipping copy)
+
+   The server serves static assets from `build/`, `app/app.css`, and `public/`.
 
 3. **Run the server**
    ```bash
@@ -178,13 +182,46 @@ changes are required for new routes; only the server handler must support
   ```bash
   deno task build
   ```
-  Output: `build/main.js`. The server serves it at `/build/main.js`.
+  Output:
+  - `build/main.js`
+  - `custom-elements.json`
+  - `build/custom-elements.json`
+
+- **Custom Elements Manifest only**:
+  ```bash
+  deno task build:manifest
+  ```
+  Output:
+  - `custom-elements.json` (committed source-of-truth file)
+  - `build/custom-elements.json` (shipping/runtime copy served at
+    `/build/custom-elements.json`)
 
 - **Generated API docs** (optional):
   ```bash
   deno task build:docs
   ```
   Output: `docs/` (HTML). See [Documentation](#documentation).
+
+---
+
+## Custom Elements Manifest automation
+
+The repo includes a runnable create/test/ship workflow:
+
+1. **Create**
+   - `deno task build:manifest`
+   - Uses `@custom-elements-manifest/analyzer` (programmatic API) against
+     component and icon custom-element source files.
+2. **Test**
+   - `deno task test:manifest`
+   - Regenerates into a temp directory and verifies the committed
+     `custom-elements.json` is up to date and still includes core tags.
+3. **Ship**
+   - Manifest is copied to `build/custom-elements.json` for runtime/static
+     serving.
+   - CircleCI build stores both `custom-elements.json` and
+     `build/custom-elements.json` as artifacts.
+   - CircleCI release regenerates `custom-elements.json` before tagging.
 
 ---
 
@@ -217,13 +254,15 @@ Run the full test suite:
 deno task test:all
 ```
 
-This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
-`test:server` (Deno tests under `deno-tests/`).
+This runs: `test:doc`, `test:release`, `test:manifest`, `test:components`,
+`test:util`, and `test:server` (Deno tests under `deno-tests/`).
 
 - **Server / integration tests**: `deno-tests/` — see
   [deno-tests/README.md](deno-tests/README.md) for structure and how to run
   individual tests.
 - **Component tests**: `deno test app/components/ --no-check`
+- **Manifest automation tests**:
+  `deno test scripts/custom-elements-manifest.test.ts --allow-read --allow-write --allow-env`
 - **Util tests**: `deno test app/util --no-check --allow-env --allow-read`
 
 ---
@@ -237,8 +276,9 @@ This runs: `test:doc`, `test:release`, `test:components`, `test:util`, and
   - `feat`: **minor**
   - `fix` / `perf` / `revert`: **patch**
 - CircleCI runs the release job only on `main` after tests pass. When a bump is
-  required, it updates `deno.json`, commits `chore(release): vX.Y.Z`, creates
-  tag `vX.Y.Z`, and pushes both commit and tag to `main`.
+  required, it updates `deno.json`, regenerates `custom-elements.json`,
+  commits `chore(release): vX.Y.Z`, creates tag `vX.Y.Z`, and pushes both
+  commit and tag to `main`.
 
 Local dry run:
 
@@ -268,6 +308,7 @@ deno run --allow-read --allow-run scripts/release.ts --dry-run
 │   └── utils/              # basicAuth, loadEnv, manifest
 ├── build/                  # Build output
 │   └── main.js             # Custom elements bundle (from deno task build)
+├── custom-elements.json    # Custom Elements Manifest (tooling + release)
 ├── deno-tests/             # Deno tests (router, handlers, SSR, utils)
 ├── scripts/                # CI/release scripts
 ├── public/                 # Static assets (e.g. favicon)

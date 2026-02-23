@@ -1,0 +1,1901 @@
+{
+  "schemaVersion": "1.0.0",
+  "readme": "",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "app/components/AlbumHeader/album-header-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for the header on an album page.",
+          "name": "AlbumHeaderCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "scrollSentinel",
+              "type": {
+                "text": "HTMLDivElement | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "scrollObserver",
+              "type": {
+                "text": "IntersectionObserver | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "findScrollableAncestor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Element | null"
+                }
+              },
+              "description": "Returns the nearest ancestor that has overflow-y auto/scroll/overlay,\nor null if none (viewport is the scroll context)."
+            },
+            {
+              "kind": "method",
+              "name": "connectedMoveCallback"
+            },
+            {
+              "kind": "field",
+              "name": "innerHTML",
+              "default": "` <style>${albumHeaderStyles}</style> <header class=\"album-header\" id=\"albumHeader\"> <div class=\"album-content\"> <div class=\"album-art\"><album-image-custom-element data-album-url=\"${albumUrl}\"></album-image-custom-element></div> <div class=\"album-info\"> <h1 class=\"album-title\">${albumId}</h1> <p class=\"album-artist\">${artistId}</p> <p class=\"album-meta\">2024 • 12 songs • 48 min</p> </div> </div> </header> `"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-album-url"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "album-header-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "AlbumHeaderCustomElement",
+          "declaration": {
+            "name": "AlbumHeaderCustomElement",
+            "module": "app/components/AlbumHeader/album-header-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "album-header-custom-element",
+          "declaration": {
+            "name": "AlbumHeaderCustomElement",
+            "module": "app/components/AlbumHeader/album-header-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/AlbumImage/album-image-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for an album image.",
+          "name": "AlbumImageCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "artistId",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "albumId",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "currentAlbumUrl",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "loadImageAbortController",
+              "type": {
+                "text": "AbortController | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "loadAlbumImage",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "setAltText",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "img",
+                  "type": {
+                    "text": "HTMLImageElement"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "updateImageClasses",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "updateImageStyles",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "connectedMoveCallback"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-album-url"
+            },
+            {
+              "name": "class"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "album-image-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "AlbumImageCustomElement",
+          "declaration": {
+            "name": "AlbumImageCustomElement",
+            "module": "app/components/AlbumImage/album-image-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "album-image-custom-element",
+          "declaration": {
+            "name": "AlbumImageCustomElement",
+            "module": "app/components/AlbumImage/album-image-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/Layout/PlayBar/playbar-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for player controls displayed at the bottom of the screen.\nThis element is self-contained and manages all player logic internally.\n\nThe element is controlled entirely through HTML attributes. User interactions\n(play/pause/next buttons, playlist selection) are handled internally. External\ncode can control playback by setting attributes and react to state changes via\nthe `change` event or `onchange` attribute.",
+          "name": "PlaybarCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "currentTrackUrl",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "isPlaying",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "private",
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "albumUrl",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "nextTrackLoaded",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "private",
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "remainingTracks",
+              "type": {
+                "text": "Array<{\n    url: string;\n    title: string;\n    trackNum: number;\n  }>"
+              },
+              "privacy": "private",
+              "default": "[]"
+            },
+            {
+              "kind": "field",
+              "name": "allAlbumTracks",
+              "type": {
+                "text": "Array<{\n    url: string;\n    title: string;\n    trackNum: number;\n  }>"
+              },
+              "privacy": "private",
+              "default": "[]"
+            },
+            {
+              "kind": "field",
+              "name": "loadTracksPromise",
+              "type": {
+                "text": "Promise<void> | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "audioElement",
+              "type": {
+                "text": "HTMLAudioElement | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "boundTimeUpdate",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundEnded",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandlePlayToggle",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandlePlayNext",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandlePlayPrev",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandleSeek",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "mediaSession",
+              "type": {
+                "text": "MediaSessionController | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "updateAttributes",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "createAudioElement",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "createMediaSessionCallbacks",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "MediaSessionCallbacks"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "updateAudioSource",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "updateMediaSessionFromTrack",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Promise<void>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "trackUrl",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "description": "Fetches ID3 tags from the track URL and updates Media Session metadata.\nUsed for lock screen / notification controls (title, artist, album, artwork).\nGuards against race where the user switches tracks before the fetch completes."
+            },
+            {
+              "kind": "method",
+              "name": "seekAudioBy",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "deltaSeconds",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "description": "Seeks the audio element by deltaSeconds (positive = forward, negative = backward).\nClamps to [0, duration]. No-ops if no audio element or duration is not yet finite."
+            },
+            {
+              "kind": "method",
+              "name": "updateAudioPlayback",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "handleTimeUpdate",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "updateProgressIndicator",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "audio",
+                  "type": {
+                    "text": "HTMLAudioElement"
+                  }
+                }
+              ],
+              "description": "Updates the progress indicator element with current time and duration."
+            },
+            {
+              "kind": "method",
+              "name": "handleSeek",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ],
+              "description": "Handles the seek event from progress-indicator-custom-element.\nSets the audio element's currentTime to the requested position."
+            },
+            {
+              "kind": "method",
+              "name": "handleEnded",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "handlePlayToggle",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The play-toggle custom event"
+                }
+              ],
+              "description": "Handles the play-toggle event from player-controls-custom-element.\nToggles play/pause for the current track, or stops playback if no track is set."
+            },
+            {
+              "kind": "method",
+              "name": "handlePlayNext",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The play-next custom event"
+                }
+              ],
+              "description": "Handles the play-next event from player-controls-custom-element.\nPlays the next track in the album if available."
+            },
+            {
+              "kind": "method",
+              "name": "handlePlayPrev",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The play-prev custom event"
+                }
+              ],
+              "description": "Handles the play-prev event from player-controls-custom-element.\nPlays the previous track in the album if available."
+            },
+            {
+              "kind": "method",
+              "name": "loadRemainingTracks",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "loadAllAlbumTracks",
+              "privacy": "private",
+              "description": "Load all tracks in the album for prev button functionality.\nFilters out cover.jpeg files from the track list."
+            },
+            {
+              "kind": "method",
+              "name": "playToggle",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "trackUrl",
+                  "optional": true,
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "description": "Play/Pause/Resume/Stop\nThere are 4 different scenarios this supports:\n1. If a track is passed in that is not currently being played, it will start playing that track\n2. If a track is passed in that is currently being played, it will pause\n3. If a track is passed in that is the current track, but it's not currently playing, it will resume\n4. If no track is passed in, it will stop playback"
+            },
+            {
+              "kind": "method",
+              "name": "pause",
+              "privacy": "private",
+              "description": "Pause track"
+            },
+            {
+              "kind": "method",
+              "name": "playNext",
+              "privacy": "private",
+              "description": "Play next track"
+            },
+            {
+              "kind": "method",
+              "name": "playPrev",
+              "privacy": "private",
+              "description": "Play previous track"
+            },
+            {
+              "kind": "method",
+              "name": "dispatchChangeEvent",
+              "privacy": "private",
+              "description": "Dispatches a `change` event when player state changes.\nAlso calls the onchange attribute handler if set."
+            },
+            {
+              "kind": "method",
+              "name": "render",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "hasPreviousTrack",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "description": "Whether there is a previous track (matching playPrev() logic)."
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-current-track-url"
+            },
+            {
+              "name": "data-is-playing"
+            },
+            {
+              "name": "data-album-url"
+            },
+            {
+              "name": "onchange"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "playbar-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PlaybarCustomElement",
+          "declaration": {
+            "name": "PlaybarCustomElement",
+            "module": "app/components/Layout/PlayBar/playbar-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "playbar-custom-element",
+          "declaration": {
+            "name": "PlaybarCustomElement",
+            "module": "app/components/Layout/PlayBar/playbar-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/Layout/PlayBar/player-controls-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for player controls.",
+          "name": "PlayerControlsCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "boundHandlePrevClick",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandleToggleClick",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandleNextClick",
+              "type": {
+                "text": "(event: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "setupEventListeners",
+              "privacy": "private",
+              "description": "Sets up event listeners for all control buttons.\n\nAttaches click event listeners to the previous, toggle, and next buttons\nin the shadow DOM. This is called during `connectedCallback()` to ensure\nlisteners are active when the element is added to the DOM."
+            },
+            {
+              "kind": "method",
+              "name": "removeEventListeners",
+              "privacy": "private",
+              "description": "Removes event listeners from all control buttons.\n\nDetaches click event listeners from the previous, toggle, and next buttons\nin the shadow DOM. This is called during `disconnectedCallback()` to prevent\nmemory leaks when the element is removed from the DOM."
+            },
+            {
+              "kind": "method",
+              "name": "handlePrevClick",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The click event from the previous button"
+                }
+              ],
+              "description": "Handles clicks on the previous track button.\n\nStops event propagation and dispatches a `play-prev` custom event if the\nbutton is enabled. The event only fires when `data-has-previous-track` is\nset to \"true\", which enables the button."
+            },
+            {
+              "kind": "method",
+              "name": "handleToggleClick",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The click event from the toggle button"
+                }
+              ],
+              "description": "Handles clicks on the play/pause toggle button.\n\nStops event propagation and dispatches a `play-toggle` custom event.\nThis event is always dispatched regardless of the current play state,\nallowing parent elements to handle the toggle logic."
+            },
+            {
+              "kind": "method",
+              "name": "handleNextClick",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The click event from the next button"
+                }
+              ],
+              "description": "Handles clicks on the next track button.\n\nStops event propagation and dispatches a `play-next` custom event if the\nbutton is enabled. The event only fires when `data-has-next-track` is\nset to \"true\", which enables the button."
+            },
+            {
+              "kind": "method",
+              "name": "render",
+              "privacy": "private"
+            }
+          ],
+          "events": [
+            {
+              "name": "play-prev",
+              "type": {
+                "text": "CustomEvent"
+              }
+            },
+            {
+              "name": "play-toggle",
+              "type": {
+                "text": "CustomEvent"
+              }
+            },
+            {
+              "name": "play-next",
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-play-state"
+            },
+            {
+              "name": "data-has-previous-track"
+            },
+            {
+              "name": "data-has-next-track"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "player-controls-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PlayerControlsCustomElement",
+          "declaration": {
+            "name": "PlayerControlsCustomElement",
+            "module": "app/components/Layout/PlayBar/player-controls-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "player-controls-custom-element",
+          "declaration": {
+            "name": "PlayerControlsCustomElement",
+            "module": "app/components/Layout/PlayBar/player-controls-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/Layout/PlayBar/playlist-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element that displays a playlist button with a popup showing remaining tracks.\n\nThis element manages the state and UI for displaying remaining tracks in an album.\nIt loads tracks asynchronously based on the album URL and current track ID attributes,\nand dispatches custom 'select' events when a track is chosen.",
+          "name": "PlaylistCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "albumUrl",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null",
+              "description": "The album URL from the `data-album-url` attribute.\nUsed to fetch remaining tracks via `getRemainingAlbumTracks`."
+            },
+            {
+              "kind": "field",
+              "name": "currentTrackId",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null",
+              "description": "The current track ID from the `data-current-track-id` attribute.\nUsed to filter out the current track from the remaining tracks list."
+            },
+            {
+              "kind": "field",
+              "name": "remainingTracks",
+              "type": {
+                "text": "Array<{\n    url: string;\n    title: string;\n    trackNum: number;\n  }>"
+              },
+              "privacy": "private",
+              "default": "[]",
+              "description": "Array of remaining tracks in the album (excluding the current track).\nEach track contains:\n- `url`: The URL/path to the track file\n- `title`: The display title of the track\n- `trackNum`: The track number in the album"
+            },
+            {
+              "kind": "field",
+              "name": "popoverOpen",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "private",
+              "default": "false",
+              "description": "Whether the popover is currently open/visible.\nControls the visibility of the track list popup."
+            },
+            {
+              "kind": "field",
+              "name": "loadPromise",
+              "type": {
+                "text": "Promise<void> | null"
+              },
+              "privacy": "private",
+              "default": "null",
+              "description": "Promise for the current track loading operation.\nUsed to debounce rapid attribute changes and prevent race conditions."
+            },
+            {
+              "kind": "method",
+              "name": "updateAttributes",
+              "privacy": "private",
+              "description": "Updates internal state from element attributes and reloads tracks.\n\nReads the `data-album-url` and `data-current-track-id` attributes,\nupdates the corresponding private properties, renders the popover,\nand asynchronously loads the remaining tracks."
+            },
+            {
+              "kind": "method",
+              "name": "loadTracks",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": ""
+                }
+              },
+              "description": "Loads the remaining tracks from the album asynchronously.\n\nFetches tracks using `getRemainingAlbumTracks` based on the current\n`albumUrl` and `currentTrackId`. Implements debouncing to prevent\nrace conditions when attributes change rapidly. On error, sets\n`remainingTracks` to an empty array.\n\nIf `albumUrl` or `currentTrackId` are missing, clears the tracks\nand returns early."
+            },
+            {
+              "kind": "method",
+              "name": "handleButtonClick",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "e",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The click event from the button"
+                }
+              ],
+              "description": "Handles clicks on the playlist button.\n\nToggles the popover open/closed state. When opening, adds a document-level\nclick listener (with a slight delay to avoid immediate closure) to detect\nclicks outside the element. When closing, removes the document listener."
+            },
+            {
+              "kind": "method",
+              "name": "handleDocumentClick",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The click event from the document"
+                }
+              ],
+              "description": "Handles document-level clicks to close the popover when clicking outside.\n\nChecks if the click occurred outside the element using the event's\ncomposed path. If the click was inside the element (including shadow DOM),\nthe popover remains open. Otherwise, closes the popover and removes\nthe document listener."
+            },
+            {
+              "kind": "method",
+              "name": "handleTrackClick",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The click event from a track button"
+                }
+              ],
+              "description": "Handles clicks on individual track items in the playlist.\n\nExtracts the track index from the button's `data-track-idx` attribute,\nretrieves the corresponding track from `remainingTracks`, and dispatches\na custom 'select' event with the track details. Closes the popover after\nselection.\n\nThe dispatched event has the following structure:\n```typescript\n{\n  type: 'select',\n  detail: {\n    url: string,\n    title: string,\n    trackNum: number\n  },\n  bubbles: true\n}\n```"
+            },
+            {
+              "kind": "method",
+              "name": "renderPopover",
+              "privacy": "private",
+              "description": "Renders the popover UI based on current state.\n\nUpdates the button disabled state, popover visibility, and track list.\nCleans up previous event listeners before rebuilding the track list to\nprevent memory leaks. Shows a \"No other tracks\" message when there are\nno remaining tracks.\n\nThe button is disabled when `albumUrl` is not set. The popover is only\nvisible when both `popoverOpen` is true and `albumUrl` is set.\n\nEach track button includes:\n- The track title (with ellipsis for overflow)\n- A chevron-right icon\n- A `data-track-idx` attribute for identifying the track"
+            }
+          ],
+          "events": [
+            {
+              "name": "select",
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-album-url"
+            },
+            {
+              "name": "data-current-track-id"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "playlist-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PlaylistCustomElement",
+          "declaration": {
+            "name": "PlaylistCustomElement",
+            "module": "app/components/Layout/PlayBar/playlist-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "playlist-custom-element",
+          "declaration": {
+            "name": "PlaylistCustomElement",
+            "module": "app/components/Layout/PlayBar/playlist-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/Layout/PlayBar/progress-indicator-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for track progress and seeking.\nRenders a thin scrub bar; click or drag to seek.",
+          "name": "ProgressIndicatorCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "boundHandlePointerDown",
+              "type": {
+                "text": "(e: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandlePointerMove",
+              "type": {
+                "text": "(e: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandlePointerUp",
+              "type": {
+                "text": "(e: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandleKeyDown",
+              "type": {
+                "text": "(e: Event) => void"
+              },
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "currentTime",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "private",
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "duration",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "private",
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "render",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "timeFromClientX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clientX",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "dispatchSeek",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "time",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "handlePointerDown",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "handlePointerMove",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "handlePointerUp",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "_event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "handleKeyDown",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ]
+            }
+          ],
+          "events": [
+            {
+              "name": "seek",
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-current-time"
+            },
+            {
+              "name": "data-duration"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "progress-indicator-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "ProgressIndicatorCustomElement",
+          "declaration": {
+            "name": "ProgressIndicatorCustomElement",
+            "module": "app/components/Layout/PlayBar/progress-indicator-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "progress-indicator-custom-element",
+          "declaration": {
+            "name": "ProgressIndicatorCustomElement",
+            "module": "app/components/Layout/PlayBar/progress-indicator-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/Layout/PlayBar/track-info-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "",
+          "name": "TrackInfoCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "trackUrl",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "updateAttributes",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "render",
+              "privacy": "private"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-track-url"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "track-info-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TrackInfoCustomElement",
+          "declaration": {
+            "name": "TrackInfoCustomElement",
+            "module": "app/components/Layout/PlayBar/track-info-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "track-info-custom-element",
+          "declaration": {
+            "name": "TrackInfoCustomElement",
+            "module": "app/components/Layout/PlayBar/track-info-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/NavLink/nav-link-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for client-side app navigation. Use href for the route;\nslot content is the link label.",
+          "name": "NavLinkCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "boundHandleClick",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "boundHandleKeydown",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "updateLinkAttrs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "tryNavigate",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "description": "Returns true if fragment navigation was performed (caller should preventDefault)."
+            },
+            {
+              "kind": "method",
+              "name": "handleClick",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "e",
+                  "type": {
+                    "text": "MouseEvent"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "handleKeydown",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "e",
+                  "type": {
+                    "text": "KeyboardEvent"
+                  }
+                }
+              ]
+            }
+          ],
+          "attributes": [
+            {
+              "name": "href"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "nav-link",
+          "customElement": true
+        },
+        {
+          "kind": "function",
+          "name": "_testResetPopstateState",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "description": "Resets popstate registration state for tests. Not for production use."
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "NavLinkCustomElement",
+          "declaration": {
+            "name": "NavLinkCustomElement",
+            "module": "app/components/NavLink/nav-link-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "nav-link",
+          "declaration": {
+            "name": "NavLinkCustomElement",
+            "module": "app/components/NavLink/nav-link-custom-element.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "_testResetPopstateState",
+          "declaration": {
+            "name": "_testResetPopstateState",
+            "module": "app/components/NavLink/nav-link-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/Tracklist/tracklist-item-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for a track list item. Handles loading the track duration\nand displays track information including name, artist, track number, and duration.",
+          "name": "TracklistItemCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "trackName",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "trackArtist",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "trackDuration",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "trackNumber",
+              "type": {
+                "text": "string | null"
+              },
+              "privacy": "private",
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "setTrackDuration",
+              "parameters": [
+                {
+                  "name": "_evt",
+                  "type": {
+                    "text": "Event"
+                  },
+                  "description": "The event that triggered this callback (unused)."
+                },
+                {
+                  "name": "audio",
+                  "type": {
+                    "text": "HTMLAudioElement"
+                  },
+                  "description": "The HTMLAudioElement containing the loaded audio metadata."
+                }
+              ],
+              "description": "Sets the track duration from audio metadata and updates the display.\n\nValidates the duration value and formats it as \"MM:SS\" before updating\nthe duration element in the DOM."
+            },
+            {
+              "kind": "method",
+              "name": "loadTrackDuration",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "trackUrl",
+                  "type": {
+                    "text": "string"
+                  },
+                  "description": "The URL of the audio file to load metadata from."
+                }
+              ],
+              "description": "Loads track duration metadata from the audio file URL.\n\nCreates an HTMLAudioElement with preload set to \"metadata\" to efficiently\nload only the metadata needed for duration. Handles both successful loads\nand errors (including HTTP 416 Range Not Satisfiable)."
+            },
+            {
+              "kind": "field",
+              "name": "clickHandler",
+              "privacy": "private",
+              "description": "Handles click events on the track item.\n\nDispatches a custom `track-click` event with the decoded track URL\nin the event detail. The event bubbles up the DOM tree."
+            },
+            {
+              "kind": "field",
+              "name": "innerHTML",
+              "default": "` <div class=\"track\"> <style> .track { display: flex; align-items: center; cursor: pointer; padding: 12px 16px; border-radius: 8px; margin-bottom: 4px; transition: background 0.2s; } .track:hover { background: rgba(255, 255, 255, 0.1); } .track-number { width: 32px; font-size: 14px; color: rgba(255, 255, 255, 0.5); } .track-info { flex: 1; min-width: 0; } .track-name { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .track-artist { font-size: 13px; color: rgba(255, 255, 255, 0.5); } .track-duration { font-size: 13px; color: rgba(255, 255, 255, 0.5); margin-left: 16px; } </style> <span class=\"track-number\">${this.trackNumber}</span> <div class=\"track-info\"> <div class=\"track-name\">${this.trackName}</div> <div class=\"track-artist\">${this.trackArtist}</div> </div> <span class=\"track-duration\">${this.trackDuration || \" \"}</span> </div> `"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "data-track-name"
+            },
+            {
+              "name": "data-track-artist"
+            },
+            {
+              "name": "data-track-number"
+            },
+            {
+              "name": "data-track-url"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "tracklist-item-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TracklistItemCustomElement",
+          "declaration": {
+            "name": "TracklistItemCustomElement",
+            "module": "app/components/Tracklist/tracklist-item-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "tracklist-item-custom-element",
+          "declaration": {
+            "name": "TracklistItemCustomElement",
+            "module": "app/components/Tracklist/tracklist-item-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/UploadDialog/upload-dialog-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for the upload dialog.\n\nProvides a trigger button that opens a modal for selecting and uploading files.\nThe modal is rendered into the element's shadow root (IDs stay scoped).\nBefore submit, selected files are listed with name and size; users can remove\nindividual files. ID3 metadata (artist, album, title, track number, cover art)\nis loaded per file and shown when available. Submit sends the current list.\nSupports optional trigger styling via the `class` and `buttonStyle` attributes.",
+          "name": "UploadDialogCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#showUploadUI",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#isSubmitting",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#selectedFiles",
+              "privacy": "private",
+              "type": {
+                "text": "File[]"
+              },
+              "default": "[]",
+              "description": "Selected files drive the list and submit; single source of truth."
+            },
+            {
+              "kind": "field",
+              "name": "#dialog",
+              "privacy": "private",
+              "type": {
+                "text": "HTMLDialogElement | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#onTriggerClick",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#close",
+              "privacy": "private",
+              "description": "Hide modal and cleanup. Called from dialog 'close' event (Escape, close button, backdrop)."
+            },
+            {
+              "kind": "method",
+              "name": "#renderDialog",
+              "privacy": "private"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "class"
+            },
+            {
+              "name": "buttonStyle"
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "upload-dialog-custom-element",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "UploadDialogCustomElement",
+          "declaration": {
+            "name": "UploadDialogCustomElement",
+            "module": "app/components/UploadDialog/upload-dialog-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "upload-dialog-custom-element",
+          "declaration": {
+            "name": "UploadDialogCustomElement",
+            "module": "app/components/UploadDialog/upload-dialog-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/components/UploadDialog/upload-dialog-file-item-custom-element.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Custom element for a single file row in the upload dialog file list.\n\nDisplays file name, size, and loads ID3 metadata. Dispatches `upload-dialog-remove`\nwhen the remove button is clicked. Used only by upload-dialog-custom-element.",
+          "name": "UploadDialogFileItemCustomElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#file",
+              "privacy": "private",
+              "type": {
+                "text": "File | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#fileKey",
+              "privacy": "private",
+              "type": {
+                "text": "string"
+              },
+              "default": "\"\""
+            },
+            {
+              "kind": "field",
+              "name": "#metadata",
+              "privacy": "private",
+              "type": {
+                "text": "ID3TagsEditable"
+              },
+              "default": "{ artist: \"\", album: \"\", title: \"\", trackNumber: 1, }"
+            },
+            {
+              "kind": "field",
+              "name": "#id3InputUnsubscribe",
+              "privacy": "private",
+              "type": {
+                "text": "(() => void)[]"
+              },
+              "default": "[]"
+            },
+            {
+              "kind": "field",
+              "name": "file",
+              "type": {
+                "text": "File | null"
+              },
+              "description": "The file to display. When set, updates the UI and starts ID3 loading."
+            },
+            {
+              "kind": "field",
+              "name": "fileKey",
+              "type": {
+                "text": "string"
+              },
+              "description": "Stable key for this file (name-size-lastModified).",
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "metadata",
+              "type": {
+                "text": "ID3TagsEditable"
+              },
+              "description": "Current editable metadata (for upload dialog to collect on submit).",
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "#onRemoveClick",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#syncMetadataFromInputs",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "artistInput",
+                  "type": {
+                    "text": "HTMLInputElement"
+                  }
+                },
+                {
+                  "name": "albumInput",
+                  "type": {
+                    "text": "HTMLInputElement"
+                  }
+                },
+                {
+                  "name": "titleInput",
+                  "type": {
+                    "text": "HTMLInputElement"
+                  }
+                },
+                {
+                  "name": "trackInput",
+                  "type": {
+                    "text": "HTMLInputElement"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#render",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "file",
+                  "type": {
+                    "text": "File"
+                  }
+                }
+              ]
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "upload-dialog-file-item",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "UploadDialogFileItemCustomElement",
+          "declaration": {
+            "name": "UploadDialogFileItemCustomElement",
+            "module": "app/components/UploadDialog/upload-dialog-file-item-custom-element.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "upload-dialog-file-item",
+          "declaration": {
+            "name": "UploadDialogFileItemCustomElement",
+            "module": "app/components/UploadDialog/upload-dialog-file-item-custom-element.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/next/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "NextIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "NextIconCustomElement",
+          "declaration": {
+            "name": "NextIconCustomElement",
+            "module": "app/icons/next/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "next-icon",
+          "declaration": {
+            "name": "NextIconCustomElement",
+            "module": "app/icons/next/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/pause/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "PauseIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PauseIconCustomElement",
+          "declaration": {
+            "name": "PauseIconCustomElement",
+            "module": "app/icons/pause/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "pause-icon",
+          "declaration": {
+            "name": "PauseIconCustomElement",
+            "module": "app/icons/pause/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/play/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "PlayIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PlayIconCustomElement",
+          "declaration": {
+            "name": "PlayIconCustomElement",
+            "module": "app/icons/play/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "play-icon",
+          "declaration": {
+            "name": "PlayIconCustomElement",
+            "module": "app/icons/play/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/playlist/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "PlaylistIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PlaylistIconCustomElement",
+          "declaration": {
+            "name": "PlaylistIconCustomElement",
+            "module": "app/icons/playlist/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "playlist-icon",
+          "declaration": {
+            "name": "PlaylistIconCustomElement",
+            "module": "app/icons/playlist/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/plus-circle/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "PlusCircleIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PlusCircleIconCustomElement",
+          "declaration": {
+            "name": "PlusCircleIconCustomElement",
+            "module": "app/icons/plus-circle/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "plus-circle-icon",
+          "declaration": {
+            "name": "PlusCircleIconCustomElement",
+            "module": "app/icons/plus-circle/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/prev/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "PrevIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "PrevIconCustomElement",
+          "declaration": {
+            "name": "PrevIconCustomElement",
+            "module": "app/icons/prev/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "prev-icon",
+          "declaration": {
+            "name": "PrevIconCustomElement",
+            "module": "app/icons/prev/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/trash/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "TrashIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "TrashIconCustomElement",
+          "declaration": {
+            "name": "TrashIconCustomElement",
+            "module": "app/icons/trash/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "trash-icon",
+          "declaration": {
+            "name": "TrashIconCustomElement",
+            "module": "app/icons/trash/index.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "app/icons/x-mark/index.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "XMarkIconCustomElement"
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "XMarkIconCustomElement",
+          "declaration": {
+            "name": "XMarkIconCustomElement",
+            "module": "app/icons/x-mark/index.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "x-mark-icon",
+          "declaration": {
+            "name": "XMarkIconCustomElement",
+            "module": "app/icons/x-mark/index.ts"
+          }
+        }
+      ]
+    }
+  ]
+}
