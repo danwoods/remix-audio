@@ -57,6 +57,65 @@ function parseLcov(
   return parseLcovContent(content);
 }
 
+/** Result of comparing current coverage to baseline. */
+export interface CheckResult {
+  ok: boolean;
+  errors: string[];
+}
+
+/** Compares current coverage metrics to baseline. All three metrics (line, branch,
+ * function) must be present in the baseline and current must be >= baseline.
+ */
+export function checkCoverageAgainstBaseline(
+  current: {
+    lineCoverage: number;
+    branchCoverage: number;
+    functionCoverage: number;
+  },
+  baseline: Partial<Baseline>,
+): CheckResult {
+  const errors: string[] = [];
+  const lineOk = baseline.lineCoverage != null &&
+    current.lineCoverage >= baseline.lineCoverage;
+  const branchOk = baseline.branchCoverage != null &&
+    current.branchCoverage >= baseline.branchCoverage;
+  const functionOk = baseline.functionCoverage != null &&
+    current.functionCoverage >= baseline.functionCoverage;
+
+  if (lineOk && branchOk && functionOk) {
+    return { ok: true, errors: [] };
+  }
+
+  if (!lineOk && baseline.lineCoverage != null) {
+    errors.push(
+      `Line coverage regressed: ${
+        current.lineCoverage.toFixed(1)
+      }% < ${baseline.lineCoverage}%`,
+    );
+  }
+  if (!branchOk && baseline.branchCoverage != null) {
+    errors.push(
+      `Branch coverage regressed: ${
+        current.branchCoverage.toFixed(1)
+      }% < ${baseline.branchCoverage}%`,
+    );
+  }
+  if (!functionOk) {
+    if (baseline.functionCoverage == null) {
+      errors.push(
+        "Baseline missing required functionCoverage. Run: deno task coverage:baseline",
+      );
+    } else {
+      errors.push(
+        `Function coverage regressed: ${
+          current.functionCoverage.toFixed(1)
+        }% < ${baseline.functionCoverage}%`,
+      );
+    }
+  }
+  return { ok: false, errors };
+}
+
 function main() {
   const writeBaseline = Deno.args.includes("--write-baseline") ||
     Deno.args.includes("-w");
@@ -135,49 +194,26 @@ function main() {
     Deno.exit(1);
   }
 
-  const lineOk = baseline.lineCoverage != null &&
-    lineCoverage >= baseline.lineCoverage;
-  const branchOk = baseline.branchCoverage != null &&
-    branchCoverage >= baseline.branchCoverage;
-  const functionOk = baseline.functionCoverage == null ||
-    functionCoverage >= baseline.functionCoverage;
+  const result = checkCoverageAgainstBaseline(
+    { lineCoverage, branchCoverage, functionCoverage },
+    baseline,
+  );
 
-  if (lineOk && branchOk && functionOk) {
-    const parts = [
-      `line ${lineCoverage.toFixed(1)}% (>= ${baseline.lineCoverage}%)`,
-      `branch ${branchCoverage.toFixed(1)}% (>= ${baseline.branchCoverage}%)`,
-    ];
-    if (baseline.functionCoverage != null) {
-      parts.push(
-        `function ${
-          functionCoverage.toFixed(1)
-        }% (>= ${baseline.functionCoverage}%)`,
-      );
-    }
-    console.log(`Coverage OK: ${parts.join(", ")}`);
+  if (result.ok) {
+    console.log(
+      `Coverage OK: line ${
+        lineCoverage.toFixed(1)
+      }% (>= ${baseline.lineCoverage}%), branch ${
+        branchCoverage.toFixed(1)
+      }% (>= ${baseline.branchCoverage}%), function ${
+        functionCoverage.toFixed(1)
+      }% (>= ${baseline.functionCoverage}%)`,
+    );
     Deno.exit(0);
   }
 
-  if (!lineOk && baseline.lineCoverage != null) {
-    console.error(
-      `Line coverage regressed: ${
-        lineCoverage.toFixed(1)
-      }% < ${baseline.lineCoverage}%`,
-    );
-  }
-  if (!branchOk && baseline.branchCoverage != null) {
-    console.error(
-      `Branch coverage regressed: ${
-        branchCoverage.toFixed(1)
-      }% < ${baseline.branchCoverage}%`,
-    );
-  }
-  if (!functionOk && baseline.functionCoverage != null) {
-    console.error(
-      `Function coverage regressed: ${
-        functionCoverage.toFixed(1)
-      }% < ${baseline.functionCoverage}%`,
-    );
+  for (const err of result.errors) {
+    console.error(err);
   }
   Deno.exit(1);
 }
