@@ -21,6 +21,8 @@ import { assertEquals, assertExists } from "@std/assert";
 import {
   createCustomElement,
   createLinkedomEnv,
+  createS3ListXml,
+  getFetchUrl,
   wireLinkedomToGlobal,
 } from "../test.utils.ts";
 
@@ -33,35 +35,18 @@ const { document: linkedomDocument, window: linkedomWindow } =
 
 const fetchCalls: { url: string }[] = [];
 
-/** S3 list-type=2 XML with one track key. */
-const S3_LIST_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Contents><Key>ArtistId/AlbumId/01__Track.mp3</Key></Contents>
-</ListBucketResult>`;
-
-// ============================================================================
-// FETCH HELPERS
-// ============================================================================
-
-function parseFetchUrl(input: RequestInfo | URL): string {
-  return typeof input === "string"
-    ? input
-    : input instanceof URL
-    ? input.href
-    : (input as Request).url;
-}
-
 /** Creates a fetch that records URLs to fetchCalls. Returns S3 list XML for
  * list-type=2+prefix requests, 404 for MP3/other URLs. */
 function createS3MockFetch(): (
   input: RequestInfo | URL,
 ) => Promise<Response> {
+  const s3ListXml = createS3ListXml(["ArtistId/AlbumId/01__Track.mp3"]);
   return (input) => {
-    const url = parseFetchUrl(input);
+    const url = getFetchUrl(input);
     fetchCalls.push({ url });
     if (url.includes("list-type=2") && url.includes("prefix=")) {
       return Promise.resolve(
-        new Response(S3_LIST_XML, {
+        new Response(s3ListXml, {
           headers: { "Content-Type": "application/xml" },
         }),
       );

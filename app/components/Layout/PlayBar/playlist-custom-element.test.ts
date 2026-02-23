@@ -32,6 +32,7 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
+import { createS3ListXml } from "../../test.utils.ts";
 
 // ============================================================================
 // MOCK STATE MANAGEMENT
@@ -270,15 +271,7 @@ function setupDOMEnvironment() {
     if (mockBucketContentsError) {
       return Promise.reject(mockBucketContentsError);
     }
-    // Return a mock XML response matching S3 ListObjectsV2 format
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-${
-      mockBucketContents.map((key) =>
-        `  <Contents><Key>${key}</Key></Contents>`
-      ).join("\n")
-    }
-</ListBucketResult>`;
+    const xml = createS3ListXml(mockBucketContents);
     return Promise.resolve(
       new Response(xml, {
         headers: { "Content-Type": "application/xml" },

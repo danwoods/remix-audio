@@ -4,6 +4,8 @@ import { assertEquals, assertExists } from "@std/assert";
 import {
   createCustomElement,
   createLinkedomEnv,
+  createS3ListXml,
+  getFetchUrl,
   parseHtmlFragment,
   wireLinkedomToGlobal,
 } from "./test.utils.ts";
@@ -43,4 +45,42 @@ Deno.test("createCustomElement appends element with attributes", () => {
   assertExists(document.body?.querySelector("#x"));
   assertEquals(el.getAttribute("id"), "x");
   assertEquals(el.getAttribute("data-foo"), "bar");
+});
+
+Deno.test("getFetchUrl extracts URL from string input", () => {
+  assertEquals(getFetchUrl("https://example.com/a"), "https://example.com/a");
+});
+
+Deno.test("getFetchUrl extracts URL from URL input", () => {
+  assertEquals(
+    getFetchUrl(new URL("https://example.com/b")),
+    "https://example.com/b",
+  );
+});
+
+Deno.test("getFetchUrl extracts URL from Request input", () => {
+  const req = new Request("https://example.com/c");
+  assertEquals(getFetchUrl(req), "https://example.com/c");
+});
+
+Deno.test("createS3ListXml returns ListBucketResult XML with keys", () => {
+  const xml = createS3ListXml(["Artist/Album/01.mp3", "Artist/Album/02.mp3"]);
+  assertEquals(
+    xml.includes("<Key>Artist/Album/01.mp3</Key>"),
+    true,
+  );
+  assertEquals(
+    xml.includes("<Key>Artist/Album/02.mp3</Key>"),
+    true,
+  );
+  assertEquals(
+    xml.includes("ListBucketResult"),
+    true,
+  );
+});
+
+Deno.test("createS3ListXml returns valid XML for empty keys", () => {
+  const xml = createS3ListXml([]);
+  assertEquals(xml.includes("ListBucketResult"), true);
+  assertEquals(xml.includes("<?xml"), true);
 });

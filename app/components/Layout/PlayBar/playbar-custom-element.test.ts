@@ -13,6 +13,8 @@ import { assert, assertEquals, assertExists } from "@std/assert";
 import {
   createCustomElement,
   createLinkedomEnv,
+  createS3ListXml,
+  getFetchUrl,
   wireLinkedomToGlobal,
 } from "../../test.utils.ts";
 
@@ -84,17 +86,10 @@ function createAudioElementPatch(): HTMLAudioElement {
 // ============================================================================
 
 function createS3MockFetch(contents: string[]): typeof fetch {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-${contents.map((key) => `  <Contents><Key>${key}</Key></Contents>`).join("\n")}
-</ListBucketResult>`;
+  const xml = createS3ListXml(contents);
 
   return (input: RequestInfo | URL) => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-      ? input.href
-      : (input as Request).url;
+    const url = getFetchUrl(input);
     if (url.includes("list-type=2") && url.includes("prefix=")) {
       return Promise.resolve(
         new Response(xml, {

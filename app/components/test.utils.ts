@@ -2,6 +2,7 @@
  *
  * HTML function tests use parseHtmlFragment. Custom element tests use
  * createLinkedomEnv, wireLinkedomToGlobal, and optionally createCustomElement.
+ * Fetch/S3 mocks use getFetchUrl and createS3ListXml.
  *
  * @see app/components/README.md for test patterns.
  */
@@ -140,4 +141,28 @@ export function createCustomElement(
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   body.appendChild(el);
   return el as HTMLElement;
+}
+
+// ============================================================================
+// FETCH HELPERS
+// ============================================================================
+
+/** Extracts the URL string from fetch input (RequestInfo | URL). */
+export function getFetchUrl(input: RequestInfo | URL): string {
+  return typeof input === "string"
+    ? input
+    : input instanceof URL
+    ? input.href
+    : (input as Request).url;
+}
+
+/** Builds S3 ListBucketResult XML from object keys (for mocking S3 list-type=2 responses). */
+export function createS3ListXml(keys: string[]): string {
+  const contents = keys.map(
+    (key) => `  <Contents><Key>${key}</Key></Contents>`,
+  ).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+${contents}
+</ListBucketResult>`;
 }

@@ -9,7 +9,7 @@
 
 import { assertEquals, assertExists } from "@std/assert";
 import { Event } from "linkedom";
-import { createLinkedomEnv } from "../test.utils.ts";
+import { createLinkedomEnv, getFetchUrl } from "../test.utils.ts";
 
 const NAVLINK_HTML = `<!DOCTYPE html>
 <html><head></head><body><nav></nav><main></main></body></html>`;
@@ -57,11 +57,7 @@ function parseFetchInput(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): { url: string; headers: Record<string, string> } {
-  const url = typeof input === "string"
-    ? input
-    : input instanceof URL
-    ? input.href
-    : (input as Request).url;
+  const url = getFetchUrl(input);
   const headers: Record<string, string> = {};
   if (init?.headers) {
     if (init.headers instanceof Headers) {
