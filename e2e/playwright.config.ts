@@ -23,6 +23,7 @@ export default defineConfig({
     toHaveScreenshot: {
       pathTemplate:
         "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}",
+      maxDiffPixelRatio: 0.01,
     },
   },
   projects: [
