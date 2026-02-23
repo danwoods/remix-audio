@@ -15,6 +15,14 @@ This codebase produces an application that allows playing music.
 
 This codebase does not cut corners. NEVER do things like commiting/pushing with --no-verfiy or disabling tests.
 
+## Coverage baseline
+
+Tests enforce coverage against `coverage-baseline.json`. When you add or improve
+tests, run `deno task coverage:baseline` and commit the updated
+`coverage-baseline.json` with your changes. Do not lower the baseline; fix
+regressions by adding tests or restoring code. See README [Coverage
+section](../README.md#updating-the-baseline-during-development).
+
 ## UI
 
 This codebase uses a custom HTML element approach to building UIs.

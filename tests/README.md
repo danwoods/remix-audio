@@ -125,13 +125,28 @@ check fails if coverage regresses.
 - **Pre-push**: `deno task test:coverage:ci` runs the check (invoked by
   `.husky/pre-push`)
 - **CI**: Test job runs `deno task test:coverage:ci`
-- **Baseline updates**: Only at release time (CircleCI release job runs
-  `deno task coverage:baseline` and commits the result)
+- **Baseline updates**: Automatically at release time (CircleCI release job);
+  see
+  [Updating the baseline during development](#updating-the-baseline-during-development)
+  for local workflow.
 
 Tasks:
 
 - `deno task test:coverage` — run all tests with coverage
-- `deno task coverage:baseline` — update baseline (used by release job)
+- `deno task coverage:baseline` — run tests and write new baseline percentages
+  to `coverage-baseline.json`
+
+### Updating the baseline during development
+
+The baseline is updated automatically only during release. When you add or
+improve tests during development, update it locally to raise the bar:
+
+1. Run `deno task test:coverage:ci` to ensure tests pass.
+2. Run `deno task coverage:baseline` to write the new percentages.
+3. Commit `coverage-baseline.json` with your test changes.
+
+See the main [README Coverage section](../README.md#coverage) for more detail
+and a decision table.
 
 ---
 

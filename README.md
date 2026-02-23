@@ -251,9 +251,37 @@ fails.
 | `coverage:baseline` | Run tests, then write new percentages to `coverage-baseline.json` |
 
 **Raising the bar**: Coverage baseline is raised automatically at release time.
-To update it locally (e.g. after adding tests), run
-`deno task coverage:baseline` and commit the result when merging to `main` for a
-release.
+See
+[Updating the baseline during development](#updating-the-baseline-during-development)
+for when and how to update it locally.
+
+#### Updating the baseline during development
+
+The baseline only updates automatically when a release happens. During
+development, update it locally when:
+
+- **You added or improved tests** — run `coverage:baseline` and commit the
+  updated `coverage-baseline.json` to raise the bar for future work.
+- **Pre-push fails** due to coverage check — if the baseline is missing or
+  corrupted, run `coverage:baseline` to create/refresh it. If coverage regressed
+  (dropped below baseline), fix it by adding tests or restoring code; do not
+  lower the baseline.
+
+**Workflow when adding tests:**
+
+1. Add or update tests; run `deno task test:coverage:ci` to confirm tests pass.
+2. Run `deno task coverage:baseline` to write the new percentages.
+3. Commit `coverage-baseline.json` with your test changes (or in a follow-up
+   commit).
+
+**When to run `coverage:baseline`:**
+
+| Situation                          | Action                                                             |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| You added tests, coverage went up  | Run `coverage:baseline`, commit the updated file to raise the bar. |
+| Pre-push fails (baseline missing)  | Run `coverage:baseline` to create it; commit.                      |
+| Coverage regressed (dropped below) | Add tests or restore code; do not lower the baseline.              |
+| Release merged to `main`           | Baseline is updated automatically by CI; no local action needed.   |
 
 ### E2E and visual regression
 
