@@ -1,3 +1,6 @@
+# Capture pre-push refs before any git operations (stdin is consumed once)
+PREPUSH_REFS=$(cat)
+
 # Run tests with coverage before push
 echo "🧪 Running tests with coverage before push..."
 deno task test:coverage:ci
@@ -16,22 +19,36 @@ fi
 
 # Only amend if baseline changed, we have a commit, and HEAD is not already on remote
 safe_to_amend=false
+remote_sha_for_branch=""
 current_ref=$(git symbolic-ref -q HEAD)
-if [ -n "$current_ref" ]; then
-  while read -r local_ref local_sha remote_ref remote_sha; do
-    [ -z "$local_ref" ] && break
-    if [ "$local_ref" = "$current_ref" ]; then
-      if [ "$remote_sha" = "0000000000000000000000000000000000000000" ] || [ "$local_sha" != "$remote_sha" ]; then
-        safe_to_amend=true
-      fi
-      break
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "$local_ref" ] && break
+  if [ -n "$current_ref" ] && [ "$local_ref" = "$current_ref" ]; then
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ] || [ "$local_sha" != "$remote_sha" ]; then
+      safe_to_amend=true
+      remote_sha_for_branch="$remote_sha"
     fi
-  done
-fi
+    break
+  fi
+done << EOF
+$PREPUSH_REFS
+EOF
+
+remote="${1:-origin}"
+branch=$(git symbolic-ref -q --short HEAD)
 
 if [ "$safe_to_amend" = true ] && [ -n "$(git status --porcelain coverage-baseline.json 2>/dev/null)" ] && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
   git add coverage-baseline.json && git commit --amend --no-edit
   echo "✅ Updated coverage baseline amended to the previous commit."
+  # Git chose refs before our amend; we must push the amended commit ourselves.
+  if [ -n "$branch" ]; then
+    if [ -n "$remote_sha_for_branch" ] && [ "$remote_sha_for_branch" != "0000000000000000000000000000000000000000" ]; then
+      git push --force-with-lease="$branch:$remote_sha_for_branch" "$remote" "$branch"
+    else
+      git push --force-with-lease "$remote" "$branch"
+    fi
+  fi
+  exit 1
 fi
 
 echo "✅ All tests passed!"
