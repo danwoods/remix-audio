@@ -29,7 +29,7 @@
     "build:docs": "deno doc --html --name='Remix Audio Components' --output=./docs doc.exports.ts",
     "build:custom-elements": "deno bundle --minify --platform=browser app/components/register-custom-elements.ts > build/main.js",
     "release:prepare": "deno run --allow-read --allow-write --allow-run scripts/release.ts",
-    "start:e2e": "E2E_MODE=1 AWS_ACCESS_KEY_ID=e2e AWS_SECRET_ACCESS_KEY=e2e STORAGE_REGION=test STORAGE_BUCKET=test deno run --import-map=app/util/import_map.s3_test.json --allow-net --allow-env --allow-read --allow-write --allow-sys server/main.ts",
+    "start:e2e": "E2E_MODE=1 ADMIN_USER=e2e-admin ADMIN_PASS=e2e-secret AWS_ACCESS_KEY_ID=e2e AWS_SECRET_ACCESS_KEY=e2e STORAGE_REGION=test STORAGE_BUCKET=test deno run --import-map=app/util/import_map.s3_test.json --allow-net --allow-env --allow-read --allow-write --allow-sys server/main.ts",
     "test:e2e": "sh scripts/run-e2e.sh",
     "test:browser": "deno task test:e2e",
     "test:doc": "deno test --doc --allow-net app/util/track.ts",
