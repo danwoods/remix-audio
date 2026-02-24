@@ -105,18 +105,19 @@ jobs:
             fi
 
             git add deno.json
+            git add CHANGELOG.md 2>/dev/null || true
 
             # Update coverage baseline at release time
             deno task coverage:baseline
             git add coverage-baseline.json 2>/dev/null || true
 
             if git diff --cached --quiet; then
-              echo "No deno.json or coverage-baseline.json changes to commit."
+              echo "No deno.json, CHANGELOG.md, or coverage-baseline.json changes to commit."
               exit 0
             fi
 
             git commit -m "chore(release): ${RELEASE_TAG} [skip ci]"
-            git tag "$RELEASE_TAG"
+            git tag -a "$RELEASE_TAG" -F release-notes.md
             git push origin HEAD:main
             git push origin "$RELEASE_TAG"
 

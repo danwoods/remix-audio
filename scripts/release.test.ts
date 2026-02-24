@@ -3,9 +3,11 @@
 import { assertEquals } from "@std/assert";
 import {
   determineVersionBump,
+  formatReleaseNotes,
   getCommitBump,
   incrementSemver,
   parseGitLogMessages,
+  prependChangelogSection,
 } from "./release.ts";
 
 Deno.test("determineVersionBump returns major for breaking commits", () => {
@@ -70,4 +72,191 @@ Deno.test("getCommitBump detects breaking change footer", () => {
   );
 
   assertEquals(bump, "major");
+});
+
+Deno.test("formatReleaseNotes groups commits by scope alphabetically", () => {
+  const notes = formatReleaseNotes([
+    "feat(playbar): show album artwork",
+    "feat(upload): add drag and drop support",
+    "fix(api): guard missing album id",
+  ]);
+
+  assertEquals(
+    notes,
+    `### api
+* guard missing album id
+
+### playbar
+* show album artwork
+
+### upload
+* add drag and drop support`,
+  );
+});
+
+Deno.test("formatReleaseNotes puts breaking changes in dedicated section first", () => {
+  const notes = formatReleaseNotes([
+    "feat(upload): add feature",
+    "feat(player)!: remove deprecated queue format",
+    "fix(api): guard missing id",
+  ]);
+
+  assertEquals(
+    notes,
+    `### Breaking changes
+* remove deprecated queue format
+
+### api
+* guard missing id
+
+### upload
+* add feature`,
+  );
+});
+
+Deno.test("formatReleaseNotes puts unscoped commits under General", () => {
+  const notes = formatReleaseNotes([
+    "docs: improve readme",
+    "chore: update dependencies",
+  ]);
+
+  assertEquals(
+    notes,
+    `### General
+* improve readme
+* update dependencies`,
+  );
+});
+
+Deno.test("formatReleaseNotes excludes release commits", () => {
+  const notes = formatReleaseNotes([
+    "feat(upload): add feature",
+    "chore(release): v1.2.3",
+    "fix(api): guard missing id",
+  ]);
+
+  assertEquals(
+    notes,
+    `### api
+* guard missing id
+
+### upload
+* add feature`,
+  );
+});
+
+Deno.test("formatReleaseNotes includes all conventional commit types", () => {
+  const notes = formatReleaseNotes([
+    "feat(a): new feature",
+    "fix(b): bug fix",
+    "docs(c): update docs",
+    "chore(d): chores",
+    "refactor(e): refactor",
+    "perf(f): optimize",
+    "revert(g): revert change",
+  ]);
+
+  assertEquals(
+    notes,
+    `### a
+* new feature
+
+### b
+* bug fix
+
+### c
+* update docs
+
+### d
+* chores
+
+### e
+* refactor
+
+### f
+* optimize
+
+### g
+* revert change`,
+  );
+});
+
+Deno.test("formatReleaseNotes extracts subject without type or scope prefix", () => {
+  const notes = formatReleaseNotes(["feat(upload): add drag and drop support"]);
+
+  assertEquals(notes, `### upload\n* add drag and drop support`);
+});
+
+Deno.test("prependChangelogSection creates CHANGELOG when missing", async () => {
+  const dir = await Deno.makeTempDir();
+  const changelogPath = `${dir}/CHANGELOG.md`;
+
+  await prependChangelogSection(
+    "1.0.0",
+    "* add feature",
+    changelogPath,
+    "2025-02-23",
+  );
+
+  const content = await Deno.readTextFile(changelogPath);
+  assertEquals(
+    content,
+    `# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+## [1.0.0] - 2025-02-23
+
+* add feature
+
+`,
+  );
+
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("prependChangelogSection prepends new section when CHANGELOG exists", async () => {
+  const dir = await Deno.makeTempDir();
+  const changelogPath = `${dir}/CHANGELOG.md`;
+  const existing = `# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+## [0.1.0] - 2025-01-01
+
+* initial release
+`;
+  await Deno.writeTextFile(changelogPath, existing);
+
+  await prependChangelogSection(
+    "0.2.0",
+    "* add feature",
+    changelogPath,
+    "2025-02-23",
+  );
+
+  const content = await Deno.readTextFile(changelogPath);
+  assertEquals(
+    content,
+    `# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+## [0.2.0] - 2025-02-23
+
+* add feature
+
+## [0.1.0] - 2025-01-01
+
+* initial release
+`,
+  );
+
+  await Deno.remove(dir, { recursive: true });
 });

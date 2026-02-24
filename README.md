@@ -306,12 +306,16 @@ Tasks: `start:e2e` (server with E2E_MODE + S3 mock), `test:e2e` (Playwright),
   - `BREAKING CHANGE` or `!` in the commit header: **major**
   - `feat`: **minor**
   - `fix` / `perf` / `revert`: **patch**
+- Release notes are generated from conventional commits (all types), grouped by
+  scope with breaking changes in a dedicated section. Notes are written to
+  `release-notes.md` for the tag message and used to update `CHANGELOG.md`.
 - CircleCI runs the release job only on `main` after tests pass. When a bump is
-  required, it updates `deno.json`, updates `coverage-baseline.json` with
-  current coverage, commits `chore(release): vX.Y.Z`, creates tag `vX.Y.Z`, and
-  pushes both commit and tag to `main`.
+  required, it updates `deno.json` and `CHANGELOG.md`, updates
+  `coverage-baseline.json` with current coverage, commits
+  `chore(release): vX.Y.Z`, creates an annotated tag `vX.Y.Z` with the release
+  notes, and pushes both commit and tag to `main`.
 
-Local dry run:
+Local dry run (prints next version and release notes preview):
 
 ```bash
 deno run --allow-read --allow-run scripts/release.ts --dry-run
