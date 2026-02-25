@@ -65,9 +65,8 @@ const getKnownStringValue = (value: unknown): string | null => {
   return str;
 };
 
-const stripFileExtension = (value: string): string => {
-  return value.replace(/\.[^./\\]+$/, "");
-};
+/** Returns the title string as-is, preserving any file extension present in the URL. */
+const titleFromFilename = (value: string): string => value;
 
 const parseTrackNumber = (value: unknown): number => {
   if (typeof value === "number") {
@@ -117,10 +116,10 @@ const parseTrackFilename = (
   const titleRaw = hasTrackSeparator
     ? pieces.slice(1).join("__").trim()
     : decodedFilename;
-  const titleWithoutExt = stripFileExtension(titleRaw).trim();
+  const title = titleFromFilename(titleRaw).trim() || UNKNOWN;
 
   return {
-    title: titleWithoutExt || UNKNOWN,
+    title,
     trackNumber,
     trackNumberText,
   };
@@ -129,8 +128,8 @@ const parseTrackFilename = (
 /**
  * Parse track metadata from URL/filename structure.
  *
- * Uses the existing filename convention `{trackNumber}__{trackTitle}` and strips
- * file extension from title (e.g. `01__Song.mp3` => `Song`).
+ * Uses the existing filename convention `{trackNumber}__{trackTitle}` and keeps
+ * the file extension in the title when present (e.g. `01__Song.mp3` => `Song.mp3`).
  */
 export const parseTrackMetadataFromUrlText = (
   trackUrl: string,

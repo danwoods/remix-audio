@@ -61,7 +61,7 @@ Deno.test("getParentDataFromTrackUrl extracts data correctly", () => {
   assertEquals(result.artistName, "Artist");
   assertEquals(result.albumName, "Album");
   assertEquals(result.trackNumber, "01");
-  assertEquals(result.trackName, "Track Title");
+  assertEquals(result.trackName, "Track Title.mp3");
 });
 
 Deno.test("getParentDataFromTrackUrl handles null", () => {

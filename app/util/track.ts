@@ -10,7 +10,7 @@ import { parseTrackMetadataFromUrlText } from "./track-metadata.ts";
  * @returns An object containing parsed track information
  * @returns `artistName` - The artist name extracted from the URL path
  * @returns `albumName` - The album name extracted from the URL path
- * @returns `trackName` - The track name extracted from the filename (after `__` separator, excluding extension)
+ * @returns `trackName` - The track name extracted from the filename (after `__` separator, including extension when present)
  * @returns `trackNumber` - The track number extracted from the filename (before `__` separator)
  * @returns `albumUrl` - The base URL for the album (S3 bucket URL)
  *
@@ -23,7 +23,7 @@ import { parseTrackMetadataFromUrlText } from "./track-metadata.ts";
  * const data = getParentDataFromTrackUrl(url);
  * assertEquals(data.artistName, "Artist");
  * assertEquals(data.albumName, "Album");
- * assertEquals(data.trackName, "Track Name");
+ * assertEquals(data.trackName, "Track Name.mp3");
  * assertEquals(data.trackNumber, "01");
  * assertEquals(data.albumUrl, "https://bucket.s3.amazonaws.com/Artist/Album");
  * ```
@@ -120,7 +120,7 @@ export type TrackInfo = {
  * //   "https://bucket.s3.amazonaws.com/Artist/Album",
  * //   "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3"
  * // );
- * // Returns: [{ url: "...", title: "Track Two", trackNum: 2 }, ...]
+ * // Returns: [{ url: "...", title: "Track Two.mp3", trackNum: 2 }, ...]
  * ```
  *
  * @remarks
@@ -256,7 +256,7 @@ export const getRemainingAlbumTracks = async (
  * //   "https://bucket.s3.amazonaws.com/Artist/Album",
  * //   "https://bucket.s3.amazonaws.com/Artist/Album/01__Track One.mp3"
  * // );
- * // Returns: [{ url: "...", title: "Track One", trackNum: 1 }, ...]
+ * // Returns: [{ url: "...", title: "Track One.mp3", trackNum: 1 }, ...]
  * ```
  *
  * @remarks

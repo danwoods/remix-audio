@@ -7,7 +7,7 @@ import {
 } from "./track-metadata.ts";
 
 Deno.test(
-  "parseTrackMetadataFromUrlText - parses __ format and strips extension",
+  "parseTrackMetadataFromUrlText - parses __ format and keeps extension",
   () => {
     const parsed = parseTrackMetadataFromUrlText(
       "https://bucket.s3.amazonaws.com/Artist/Album/01__Track Name.mp3",
@@ -15,13 +15,28 @@ Deno.test(
 
     assertEquals(parsed.artist, "Artist");
     assertEquals(parsed.album, "Album");
-    assertEquals(parsed.title, "Track Name");
+    assertEquals(parsed.title, "Track Name.mp3");
     assertEquals(parsed.trackNumber, 1);
     assertEquals(parsed.trackNumberText, "01");
     assertEquals(
       parsed.albumUrl,
       "https://bucket.s3.amazonaws.com/Artist/Album",
     );
+  },
+);
+
+Deno.test(
+  "parseTrackMetadataFromUrlText - keeps full filename when no extension present",
+  () => {
+    const parsed = parseTrackMetadataFromUrlText(
+      "https://bucket.s3.amazonaws.com/Artist/Album/01__Track Name",
+    );
+
+    assertEquals(parsed.artist, "Artist");
+    assertEquals(parsed.album, "Album");
+    assertEquals(parsed.title, "Track Name");
+    assertEquals(parsed.trackNumber, 1);
+    assertEquals(parsed.trackNumberText, "01");
   },
 );
 
@@ -50,7 +65,7 @@ Deno.test(
     assertEquals(id3Calls, 0);
     assertEquals(metadata.artist, "Artist");
     assertEquals(metadata.album, "Album");
-    assertEquals(metadata.title, "Fallback Title");
+    assertEquals(metadata.title, "Fallback Title.mp3");
     assertEquals(metadata.trackNumber, 2);
   },
 );
@@ -76,7 +91,7 @@ Deno.test(
 
     assertEquals(metadata.artist, "ID3 Artist");
     assertEquals(metadata.album, "Album");
-    assertEquals(metadata.title, "Fallback Title");
+    assertEquals(metadata.title, "Fallback Title.mp3");
     assertEquals(metadata.trackNumber, 7);
   },
 );
@@ -132,7 +147,7 @@ Deno.test(
     const second = await deriver.deriveTrackMetadata(url);
 
     assertEquals(id3Calls, 2);
-    assertEquals(first.title, "Fallback Title");
-    assertEquals(second.title, "Fallback Title");
+    assertEquals(first.title, "Fallback Title.mp3");
+    assertEquals(second.title, "Fallback Title.mp3");
   },
 );

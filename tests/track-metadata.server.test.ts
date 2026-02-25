@@ -61,7 +61,7 @@ Deno.test(
 
     assertEquals(metadata.artist, "Artist");
     assertEquals(metadata.album, "Album");
-    assertEquals(metadata.title, "Fallback Track");
+    assertEquals(metadata.title, "Fallback Track.mp3");
     assertEquals(metadata.trackNumber, 12);
   },
 );
@@ -72,7 +72,7 @@ Deno.test(
     const malformed = parseTrackMetadataFromUrlText(
       "https://bucket.s3.amazonaws.com/Artist/Album/%E0%A4%A.mp3",
     );
-    assertEquals(malformed.title, "%E0%A4%A");
+    assertEquals(malformed.title, "%E0%A4%A.mp3");
 
     const invalid = parseTrackMetadataFromUrlText("not-a-valid-url");
     assertEquals(invalid.artist, "Unknown");
@@ -89,9 +89,9 @@ Deno.test(
     let nullRawCalls = 0;
     const nullRawDeriver = createTrackMetadataDeriver(
       () =>
-        Promise.resolve(async (_url: string) => {
+        Promise.resolve((_url: string) => {
           nullRawCalls++;
-          return null;
+          return Promise.resolve(null);
         }),
     );
     const nullRawUrl =
@@ -99,20 +99,20 @@ Deno.test(
     const nullRawFirst = await nullRawDeriver.deriveTrackMetadata(nullRawUrl);
     const nullRawSecond = await nullRawDeriver.deriveTrackMetadata(nullRawUrl);
     assertEquals(nullRawCalls, 2);
-    assertEquals(nullRawFirst.title, "Fallback");
-    assertEquals(nullRawSecond.title, "Fallback");
+    assertEquals(nullRawFirst.title, "Fallback.mp3");
+    assertEquals(nullRawSecond.title, "Fallback.mp3");
 
     const partialDeriver = createTrackMetadataDeriver(
       () =>
-        Promise.resolve(async (_url: string) => {
-          return {
+        Promise.resolve((_url: string) =>
+          Promise.resolve({
             artist: "Unknown",
             album: "",
             title: "ID3 Title",
             trackNumber: 0,
             image: "data:image/png;base64,abc",
-          };
-        }),
+          })
+        ),
     );
     const merged = await partialDeriver.deriveTrackMetadata(
       "https://bucket.s3.amazonaws.com/Artist/Album/02__Fallback.mp3",
