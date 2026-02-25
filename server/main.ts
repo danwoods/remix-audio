@@ -11,6 +11,10 @@ import { Router } from "./router.ts";
 import { handleUpload } from "./handlers/upload.ts";
 import { handleIndexHtml } from "./handlers/index.html.ts";
 import { loadEnv } from "./utils/loadEnv.ts";
+import {
+  logStartupConfigIssuesAndExit,
+  validateStartupConfig,
+} from "./utils/validateStartupConfig.ts";
 import { handleAlbumCover } from "./handlers/album.cover.ts";
 import { handleAlbumHtml } from "./handlers/album.html.ts";
 import { createLogger } from "../app/util/logger.ts";
@@ -20,6 +24,15 @@ const logger = createLogger("Server");
 
 // --- Environment & router setup ---
 await loadEnv();
+const validation = validateStartupConfig();
+if (!validation.ok) {
+  logStartupConfigIssuesAndExit(validation);
+}
+if (validation.adminDisabled) {
+  logger.info(
+    "Admin panel disabled (ADMIN_USER and ADMIN_PASS not set). Protected routes will return 500.",
+  );
+}
 const router = new Router();
 
 // App routes (HTML)
