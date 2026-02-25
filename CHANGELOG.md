@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.6.0] - 2026-02-25
+
+### e2e
+* update visual baselines after header removal
+
+### server
+* add startup config validation for S3 and admin
+
+### ui
+* remove app bar header, move upload to FAB
+
+### General
+* re-trigger CI
+
 ## [0.5.0] - 2026-02-25
 
 ### e2e
