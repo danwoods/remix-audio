@@ -1,6 +1,51 @@
 /** @file Tests for SSR rendering utilities */
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { isFragmentRequest, renderPage } from "../../server/ssr.ts";
+import {
+  escapeAttr,
+  isFragmentRequest,
+  renderDocument,
+  renderHead,
+  renderLayout,
+  renderPage,
+} from "../../server/ssr.ts";
+
+Deno.test("renderHead includes title, description, and asset links", () => {
+  const html = renderHead({ title: "My Page" });
+  assertStringIncludes(html, "<title>My Page</title>");
+  assertStringIncludes(html, "Your audio where you want it.");
+  assertStringIncludes(html, 'rel="stylesheet"');
+  assertStringIncludes(html, "/app.css");
+  assertStringIncludes(html, "/build/main.js");
+});
+
+Deno.test("renderDocument wraps head and body in full HTML document", () => {
+  const html = renderDocument("<meta charset=utf-8>", "<div>body</div>");
+  assertStringIncludes(html, "<!DOCTYPE html>");
+  assertStringIncludes(html, "<html");
+  assertStringIncludes(html, "<head>");
+  assertStringIncludes(html, "<meta charset=utf-8>");
+  assertStringIncludes(html, "<body>");
+  assertStringIncludes(html, "<div>body</div>");
+});
+
+Deno.test("escapeAttr escapes HTML special characters", () => {
+  assertEquals(escapeAttr('foo "bar"'), "foo &quot;bar&quot;");
+  assertEquals(escapeAttr("<script>"), "&lt;script&gt;");
+  assertEquals(escapeAttr("a & b"), "a &amp; b");
+});
+
+Deno.test("renderLayout includes playbar with data-album-url when provided", () => {
+  const html = renderLayout({
+    isAdmin: false,
+    mainContentHtml: "<div>content</div>",
+    playbarAlbumUrl: "https://bucket.s3.region.amazonaws.com/Artist/Album",
+  });
+  assertStringIncludes(html, "data-album-url=");
+  assertStringIncludes(
+    html,
+    "https://bucket.s3.region.amazonaws.com/Artist/Album",
+  );
+});
 
 Deno.test("isFragmentRequest returns true when X-Requested-With is fetch", () => {
   const req = new Request("http://localhost:8000/", {
@@ -102,10 +147,10 @@ Deno.test("renderPage includes children in main", () => {
   assertStringIncludes(html, "<main", "Should contain main element");
 });
 
-Deno.test("renderPage includes AppBar in layout", () => {
+Deno.test("renderPage does not include app name header in layout", () => {
   /**
-   * Every page uses the shared layout from ssr.ts, which includes the AppBar.
-   * The AppBar renders the app name in a nav-link with class "text-xl font-bold".
+   * The header with the app name has been removed. The layout includes main
+   * content and PlayBar, but no navbar with app name.
    */
   const html = renderPage(
     {
@@ -117,18 +162,22 @@ Deno.test("renderPage includes AppBar in layout", () => {
     [],
   );
 
-  assertStringIncludes(
-    html,
-    "text-xl font-bold",
-    "Should include AppBar app name link",
+  assertEquals(
+    html.includes("text-xl font-bold"),
+    false,
+    "Should not include AppBar app name link",
   );
-  assertStringIncludes(html, "Test App", "Should include app name from AppBar");
+  assertEquals(
+    html.includes('nav-link href="/"'),
+    false,
+    "Should not include app name nav link in body",
+  );
 });
 
 Deno.test("renderPage includes upload dialog for admin requests", () => {
   /**
    * When isAdmin is true, the page must include the upload-dialog-custom-element
-   * element so the upload button is visible to admins.
+   * in the upload-fab container so the upload button is visible to admins.
    */
   const html = renderPage(
     {
@@ -140,7 +189,26 @@ Deno.test("renderPage includes upload dialog for admin requests", () => {
     ["<div>content</div>"],
   );
 
+  assertStringIncludes(html, "upload-fab");
   assertStringIncludes(html, "upload-dialog-custom-element");
+});
+
+Deno.test("renderPage does not include upload button when not admin", () => {
+  const html = renderPage(
+    {
+      appName: "Test App",
+      headLinks: [],
+      pathname: "/",
+      isAdmin: false,
+    },
+    ["<div>content</div>"],
+  );
+
+  assertEquals(
+    html.includes("upload-dialog-custom-element"),
+    false,
+    "Should not include upload dialog when isAdmin is false",
+  );
 });
 
 Deno.test("renderPage includes playbar-custom-element", () => {

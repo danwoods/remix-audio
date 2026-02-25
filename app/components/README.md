@@ -73,7 +73,7 @@ globals to `globalThis` so the component runs in Deno. Import the element module
 ### 2. HTML Function Tests (`*-html.test.ts`)
 
 Tests for pure functions that return HTML strings (e.g. `albumTileHtml`,
-`appBarHtml`, `horizontalRowWithTitleHtml`).
+`horizontalRowWithTitleHtml`).
 
 **Key pattern**: Call the function, parse the returned HTML with linkedom, and
 assert on DOM structure instead of raw strings.
@@ -94,8 +94,7 @@ assert on DOM structure instead of raw strings.
    assertEquals(navLink?.textContent?.trim(), "Remix Audio");
    ```
 
-**Reference tests**: `AppBar/app-bar-html.test.ts`,
-`AlbumTile/album-tile-html.test.ts`,
+**Reference tests**: `AlbumTile/album-tile-html.test.ts`,
 `HorizontalRowWithTitle/horizontal-row-with-title-html.test.ts`
 
 ## Conventions

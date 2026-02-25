@@ -85,13 +85,13 @@ to show or hide admin UI.
 
 ## Client-side navigation
 
-Inner-app links use the `<nav-link>` custom element (e.g. home in the AppBar,
-album tiles on the home page). When the user activates a nav-link to an app
-route (`/` or `/artists/:id/albums/:id`), the client fetches a **fragment**
-instead of loading a full page: the server returns a JSON envelope when the
-request includes a special header. The client updates the main content area,
-document title, head meta (e.g. OG tags), and optional critical CSS. It uses
-`history.pushState`, so back/forward works without a full reload.
+Inner-app links use the `<nav-link>` custom element (e.g. album tiles on the
+home page). When the user activates a nav-link to an app route (`/` or
+`/artists/:id/albums/:id`), the client fetches a **fragment** instead of loading
+a full page: the server returns a JSON envelope when the request includes a
+special header. The client updates the main content area, document title, head
+meta (e.g. OG tags), and optional critical CSS. It uses `history.pushState`, so
+back/forward works without a full reload.
 
 ### Fragment protocol (detail)
 

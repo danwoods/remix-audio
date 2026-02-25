@@ -72,3 +72,27 @@ Deno.test(
     );
   },
 );
+
+Deno.test("albumTileHtml escapes HTML special characters in artist and album names", () => {
+  const files = makeFiles('Artist "With" Quotes', "Album <script>");
+  const html = albumTileHtml({
+    albumId: 'Artist "With" Quotes/Album <script>',
+    files,
+  });
+
+  assertEquals(
+    html.includes("&lt;script&gt;"),
+    true,
+    "Should escape angle brackets in album name",
+  );
+  assertEquals(
+    html.includes("<script>"),
+    false,
+    "Raw script tag should not appear unescaped",
+  );
+  const document = parseHtmlFragment(html);
+  assertEquals(
+    document.querySelector("nav-link")?.getAttribute("href"),
+    "/artists/Artist%20%22With%22%20Quotes/albums/Album%20%3Cscript%3E",
+  );
+});
