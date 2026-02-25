@@ -130,14 +130,19 @@ Deno.test(
   async () => {
     let id3Calls = 0;
     let releaseRead: (() => void) | null = null;
+    let signalReadStarted: (() => void) | null = null;
     const readGate = new Promise<void>((resolve) => {
       releaseRead = resolve;
+    });
+    const readStarted = new Promise<void>((resolve) => {
+      signalReadStarted = resolve;
     });
 
     const deriver = createTrackMetadataDeriver(
       () =>
         Promise.resolve(async (_url: string) => {
           id3Calls++;
+          signalReadStarted?.();
           await readGate;
           return {
             artist: "Inflight Artist",
@@ -153,6 +158,7 @@ Deno.test(
     const firstPromise = deriver.deriveTrackMetadata(trackUrl);
     const secondPromise = deriver.deriveTrackMetadata(trackUrl);
 
+    await readStarted;
     assertEquals(id3Calls, 1);
     releaseRead?.();
 
