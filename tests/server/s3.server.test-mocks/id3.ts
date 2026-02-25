@@ -16,3 +16,7 @@ export function setGetID3TagsReturn(value: ID3Tags): void {
 export function getID3Tags(_file: Uint8Array): Promise<ID3Tags> {
   return Promise.resolve(returnValue);
 }
+
+export function getID3TagsFromURL(_url: string): Promise<ID3Tags> {
+  return Promise.resolve(returnValue);
+}

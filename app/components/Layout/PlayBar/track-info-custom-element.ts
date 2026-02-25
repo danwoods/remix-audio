@@ -1,6 +1,6 @@
 /** @file Custom element for track info seen at the bottom of the screen */
 
-import { getParentDataFromTrackUrl } from "../../../util/track.ts";
+import { parseTrackMetadataFromUrlText } from "../../../util/track-metadata.ts";
 import "../../../components/ScrollingText/index.ts";
 
 // TEMPLATE ///////////////////////////////////////////////////////////////////
@@ -86,31 +86,24 @@ export class TrackInfoCustomElement extends HTMLElement {
 
   private updateAttributes() {
     this.trackUrl = this.getAttribute("data-track-url") || null;
-    this.render();
   }
 
   private render() {
-    if (!this.trackUrl) {
+    const trackUrl = this.trackUrl;
+    if (!trackUrl) {
       return;
     }
 
-    const { artistName, albumName, trackName, albumUrl } =
-      getParentDataFromTrackUrl(
-        this.trackUrl,
-      );
-
-    const scrollingText = artistName && albumName
-      ? `${albumName}, ${artistName}`
-      : null;
+    const trackMetadata = parseTrackMetadataFromUrlText(trackUrl);
 
     this.shadowRoot!.querySelector("album-image-custom-element")!.setAttribute(
       "data-album-url",
-      albumUrl || "",
+      trackMetadata.albumUrl || "",
     );
     this.shadowRoot!.querySelector("scrolling-text-custom-element.primary")!
-      .textContent = trackName;
+      .textContent = trackMetadata.title;
     this.shadowRoot!.querySelector("scrolling-text-custom-element.secondary")!
-      .textContent = scrollingText ?? "";
+      .textContent = `${trackMetadata.album}, ${trackMetadata.artist}`;
   }
 }
 
