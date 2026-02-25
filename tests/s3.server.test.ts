@@ -32,6 +32,15 @@ function defaultSendBehavior(command: unknown): Promise<unknown> {
   return Promise.resolve({});
 }
 
+Deno.test("handleS3Upload returns undefined when name is not 'files'", async () => {
+  setupEnv();
+  const data = (async function* () {
+    yield new Uint8Array([1, 2, 3]);
+  })();
+  const result = await handleS3Upload("other", "audio/mpeg", data);
+  assertEquals(result, undefined);
+});
+
 Deno.test("getObjectBytes - fetches object and returns bytes", async () => {
   setupEnv();
   clearS3SendCalls();
@@ -78,6 +87,28 @@ Deno.test("getObjectBytes - throws when S3 returns empty body", async () => {
     () => getObjectBytes("Artist/Album/1__Track.mp3"),
     Error,
     "S3 object empty: Artist/Album/1__Track.mp3",
+  );
+});
+
+Deno.test("uploadStreamToS3 throws and logs when S3 rejects with non-Error", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "PutObjectCommand") {
+      return Promise.reject("network failure");
+    }
+    return Promise.resolve({});
+  });
+
+  const data = (async function* () {
+    yield new Uint8Array([1, 2, 3]);
+  })();
+
+  await assertRejects(
+    () => uploadStreamToS3(data, "Artist/Album/1__Track.mp3"),
+    (e) => e === "network failure",
   );
 });
 
@@ -143,6 +174,164 @@ Deno.test(
     }
   },
 );
+
+Deno.test("getUploadedFiles throws when S3 ListObjectsV2 rejects with non-Error", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.reject("S3 service unavailable");
+    }
+    return Promise.resolve({});
+  });
+
+  await assertRejects(
+    () => getUploadedFiles(true),
+    (e) => e === "S3 service unavailable",
+  );
+});
+
+Deno.test("getUploadedFiles returns empty Files when S3 returns no Contents", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({ Contents: null, IsTruncated: false });
+    }
+    return Promise.resolve({});
+  });
+
+  const files = await getUploadedFiles(true);
+  assertEquals(Object.keys(files).length, 0);
+});
+
+Deno.test("getUploadedFiles skips keys with invalid structure (not exactly 3 parts)", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  const now = new Date();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({
+        Contents: [
+          { Key: "Artist/Album/1__Track.mp3", LastModified: now },
+          { Key: "Artist/Album/extra/1__Track.mp3", LastModified: now },
+          { Key: "Artist/1__OnlyTwoParts.mp3", LastModified: now },
+        ],
+        IsTruncated: false,
+      });
+    }
+    return Promise.resolve({});
+  });
+
+  const files = await getUploadedFiles(true);
+  assertEquals(Object.keys(files), ["Artist"]);
+  assertEquals(Object.keys(files["Artist"]), ["Album"]);
+  assertEquals(files["Artist"]["Album"].tracks.length, 1);
+});
+
+Deno.test("getUploadedFiles uses key as-is when decodeURIComponent throws", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  const now = new Date();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({
+        Contents: [
+          { Key: "Artist%ZZ/Album/1__Track.mp3", LastModified: now },
+        ],
+        IsTruncated: false,
+      });
+    }
+    return Promise.resolve({});
+  });
+
+  const files = await getUploadedFiles(true);
+  assert("Artist%ZZ" in files);
+  assert("Album" in files["Artist%ZZ"]);
+  assertEquals(files["Artist%ZZ"]["Album"].tracks.length, 1);
+});
+
+Deno.test("getUploadedFiles skips keys with missing artist, album, or track", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  const now = new Date();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({
+        Contents: [
+          { Key: "Artist/Album/1__Valid.mp3", LastModified: now },
+          { Key: "/Album/1__MissingArtist.mp3", LastModified: now },
+          { Key: "Artist//1__MissingAlbum.mp3", LastModified: now },
+        ],
+        IsTruncated: false,
+      });
+    }
+    return Promise.resolve({});
+  });
+
+  const files = await getUploadedFiles(true);
+  assertEquals(Object.keys(files), ["Artist"]);
+  assertEquals(files["Artist"]["Album"].tracks.length, 1);
+});
+
+Deno.test("getUploadedFiles skips keys without __ in track filename", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  const now = new Date();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({
+        Contents: [
+          { Key: "Artist/Album/1__Valid.mp3", LastModified: now },
+          { Key: "Artist/Album/NoSeparator.mp3", LastModified: now },
+        ],
+        IsTruncated: false,
+      });
+    }
+    return Promise.resolve({});
+  });
+
+  const files = await getUploadedFiles(true);
+  assertEquals(files["Artist"]["Album"].tracks.length, 1);
+  assertEquals(files["Artist"]["Album"].tracks[0].title, "Valid.mp3");
+});
+
+Deno.test("getUploadedFiles skips keys with invalid track number", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  const now = new Date();
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({
+        Contents: [
+          { Key: "Artist/Album/1__Valid.mp3", LastModified: now },
+          { Key: "Artist/Album/0__ZeroTrack.mp3", LastModified: now },
+          { Key: "Artist/Album/x__NoNumber.mp3", LastModified: now },
+        ],
+        IsTruncated: false,
+      });
+    }
+    return Promise.resolve({});
+  });
+
+  const files = await getUploadedFiles(true);
+  assertEquals(files["Artist"]["Album"].tracks.length, 1);
+  assertEquals(files["Artist"]["Album"].tracks[0].title, "Valid.mp3");
+});
 
 Deno.test("getUploadedFiles - parses S3 keys into Files structure", async () => {
   setupEnv();
@@ -450,4 +639,101 @@ Deno.test("handleS3Upload - empty string metadata overrides do not replace serve
     !key.includes("//") && key.startsWith("Unknown/Unknown/"),
     `S3 key must use "Unknown" not empty strings; got: ${key}`,
   );
+});
+
+Deno.test("handleS3Upload applies metadataOverride when provided with non-empty values", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setSendBehavior(defaultSendBehavior);
+  setGetID3TagsReturn({
+    artist: "ID3 Artist",
+    album: "ID3 Album",
+    title: "ID3 Title",
+    trackNumber: 1,
+  });
+
+  const mockData = [new Uint8Array([1, 2, 3])];
+  await handleS3Upload(
+    "files",
+    "audio/mpeg",
+    (async function* () {
+      for (const chunk of mockData) {
+        yield chunk;
+      }
+    })(),
+    {
+      artist: "Override Artist",
+      album: "Override Album",
+      title: "Override Title",
+    },
+  );
+
+  const audioPutCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string }; input: { Key: string } })
+          .constructor?.name === "PutObjectCommand" &&
+      (c.command as { input: { Key: string } }).input.Key !==
+        "Override Artist/Override Album/cover.jpeg",
+  );
+  assertEquals(audioPutCalls.length, 1);
+  const key = (audioPutCalls[0].command as { input: { Key: string } }).input
+    .Key;
+  assert(
+    key.includes("Override Artist/Override Album/"),
+    `S3 key must use metadata override; got: ${key}`,
+  );
+  assert(
+    key.includes("Override Title"),
+    `S3 key must include override title; got: ${key}`,
+  );
+});
+
+Deno.test("handleS3Upload continues with upload when HeadObject throws non-NotFound error", async () => {
+  setupEnv();
+  clearS3SendCalls();
+  setGetID3TagsReturn({
+    artist: "Test Artist",
+    album: "Test Album",
+    title: "Test Song",
+    trackNumber: 1,
+    image: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+  });
+  setSendBehavior((command) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "HeadObjectCommand") {
+      const err = new Error("AccessDenied");
+      (err as { name: string }).name = "AccessDenied";
+      return Promise.reject(err);
+    }
+    if (name === "PutObjectCommand") return Promise.resolve({});
+    return Promise.resolve({});
+  });
+
+  const mockData = [new Uint8Array([1, 2, 3])];
+  const result = await handleS3Upload(
+    "files",
+    "audio/mpeg",
+    (async function* () {
+      for (const chunk of mockData) {
+        yield chunk;
+      }
+    })(),
+  );
+
+  assert(result != null);
+  assert(
+    result != null &&
+      result.includes("test-bucket.s3.test-region.amazonaws.com") &&
+      result.includes("1__Test Song"),
+    `Expected S3 URL in result, got: ${result}`,
+  );
+  const putCalls = sendCalls.filter(
+    (c) =>
+      (c.command as { constructor: { name: string } }).constructor?.name ===
+        "PutObjectCommand",
+  );
+  assertEquals(putCalls.length, 1);
+  const key = (putCalls[0].command as { input: { Key: string } }).input.Key;
+  assert(key.endsWith("1__Test Song"), `Expected audio key, got: ${key}`);
 });

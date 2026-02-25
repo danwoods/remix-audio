@@ -1,10 +1,9 @@
 /** @file Server-side rendering utilities.
  *  Renders full HTML page (document shell + layout) for custom elements / static HTML.
- *  Document shell (head, body, meta) is separate from layout (AppBar, main, PlayBar).
+ *  Document shell (head, body, meta) is separate from layout (main, PlayBar).
  *  CSS and JS paths are fixed (see CSS_PATH and JS_PATH below); all pages use the same assets.
  */
 
-import appBarHtml from "../app/components/AppBar/app-bar-html.ts";
 import {
   FRAGMENT_REQUEST_HEADER,
   FRAGMENT_REQUEST_VALUE,
@@ -115,10 +114,8 @@ export function renderDocument(headHtml: string, bodyHtml: string): string {
 </html>`;
 }
 
-/** Options for rendering the page layout (AppBar, main, PlayBar). */
+/** Options for rendering the page layout (main, PlayBar). */
 export interface RenderLayoutOptions {
-  appName: string;
-  pathname: string;
   isAdmin: boolean;
   /** HTML for the main content area. */
   mainContentHtml: string;
@@ -141,16 +138,14 @@ const TRACK_CLICK_SCRIPT = `
   `;
 
 /**
- * Render the body content: AppBar, main slot, PlayBar, and scripts.
+ * Render the body content: main slot, PlayBar, optional admin upload button, and scripts.
  * Layout only; no head or document wrapper.
  *
- * @param options - App bar props, main content HTML, optional PlayBar album URL.
+ * @param options - Main content HTML, optional PlayBar album URL, isAdmin for upload button.
  * @returns HTML string for body content.
  */
 export function renderLayout(options: RenderLayoutOptions): string {
   const {
-    appName,
-    pathname,
     isAdmin,
     mainContentHtml,
     playbarAlbumUrl,
@@ -160,15 +155,13 @@ export function renderLayout(options: RenderLayoutOptions): string {
     ? ` data-album-url="${escapeAttr(playbarAlbumUrl)}"`
     : "";
 
+  const adminUploadHtml = isAdmin
+    ? '<div class="upload-fab"><upload-dialog-custom-element buttonStyle="width: 24px; height: 24px;" /></div>'
+    : "";
+
   return `<div id="root">
       <div class="layout-root-inner">
-        ${
-    appBarHtml({
-      appName,
-      pathname,
-      isAdmin,
-    })
-  }
+        ${adminUploadHtml}
         <main class="layout-main">
           ${mainContentHtml}
         </main>
@@ -200,7 +193,7 @@ export interface RenderPageProps {
 
 /**
  * Render the full HTML page (shell + layout). Used by index and album handlers.
- * Every page gets AppBar, main content, PlayBar, and the track-click script.
+ * Every page gets main content, PlayBar, and the track-click script.
  *
  * @param props - Page options. Optional title, description, headExtra, playbarAlbumUrl.
  * @param children - HTML fragments for the main content (e.g. album rows, tracklist).
@@ -210,7 +203,6 @@ export function renderPage(
   props: RenderPageProps,
   children: Array<string>,
 ): string {
-  const pathname = props.pathname ?? "/";
   const isAdmin = props.isAdmin ?? false;
   const title = props.title ?? props.appName;
   const description = props.description ?? DEFAULT_DESCRIPTION;
@@ -223,8 +215,6 @@ export function renderPage(
   });
 
   const bodyHtml = renderLayout({
-    appName: props.appName,
-    pathname,
     isAdmin,
     mainContentHtml: children.join(""),
     playbarAlbumUrl: props.playbarAlbumUrl,

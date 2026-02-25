@@ -47,6 +47,12 @@ body {
   flex: 1;
   min-height: 0;
 }
+.upload-fab {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+}
 @media only screen and (min-width: 50rem) {
   :root, :host {
     --font-size-primary: 1rem;

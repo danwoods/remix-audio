@@ -1,9 +1,6 @@
 /** @file Tests for shared data-url util */
 import { assertEquals } from "@std/assert";
-import {
-  createDataUrlFromBytes,
-  decodeDataUrl,
-} from "./data-url.ts";
+import { createDataUrlFromBytes, decodeDataUrl } from "./data-url.ts";
 
 Deno.test("createDataUrlFromBytes produces valid data URL", () => {
   const bytes = new Uint8Array([0xff, 0xd8, 0xff]);
@@ -18,6 +15,16 @@ Deno.test("createDataUrlFromBytes produces valid data URL", () => {
     assertEquals(decoded.body[1], 0xd8);
     assertEquals(decoded.body[2], 0xff);
   }
+});
+
+Deno.test("decodeDataUrl returns null for invalid format", () => {
+  assertEquals(decodeDataUrl("not-a-data-url"), null);
+  assertEquals(decodeDataUrl(""), null);
+  assertEquals(decodeDataUrl("data:image/jpeg"), null);
+});
+
+Deno.test("decodeDataUrl returns null for invalid base64", () => {
+  assertEquals(decodeDataUrl("data:image/jpeg;base64,!!!"), null);
 });
 
 Deno.test("createDataUrlFromBytes accepts ArrayBuffer", () => {

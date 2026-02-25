@@ -109,3 +109,32 @@ Deno.test("Index handler returns JSON fragment when X-Requested-With fetch", asy
   assertEquals(body.html.includes("<!DOCTYPE html"), false);
   assertStringIncludes(body.html, "Latest");
 });
+
+Deno.test("Index handler returns full HTML without app name header when no fragment", async () => {
+  setupStorageEnv();
+  setSendBehavior((command: unknown) => {
+    const name = (command as { constructor: { name: string } }).constructor
+      ?.name;
+    if (name === "ListObjectsV2Command") {
+      return Promise.resolve({ Contents: [], IsTruncated: false });
+    }
+    return Promise.resolve({});
+  });
+
+  const req = new Request("http://localhost:8000/");
+  const response = await handleIndexHtml(req, {});
+
+  assertEquals(response.status, 200);
+  assertEquals(
+    response.headers.get("Content-Type"),
+    "text/html",
+  );
+  const html = await response.text();
+  assertStringIncludes(html, "<!DOCTYPE html");
+  assertStringIncludes(html, "Latest");
+  assertEquals(
+    html.includes('nav-link href="/"'),
+    false,
+    "Should not include app name header",
+  );
+});

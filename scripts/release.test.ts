@@ -1,6 +1,6 @@
 /** @file Tests for conventional commit release helpers. */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import {
   determineVersionBump,
   formatReleaseNotes,
@@ -53,6 +53,14 @@ Deno.test("incrementSemver applies patch, minor, and major bumps", () => {
   assertEquals(incrementSemver("1.2.3", "patch"), "1.2.4");
   assertEquals(incrementSemver("1.2.3", "minor"), "1.3.0");
   assertEquals(incrementSemver("1.2.3", "major"), "2.0.0");
+});
+
+Deno.test("incrementSemver throws for invalid version format", async () => {
+  await assertRejects(
+    () => Promise.resolve().then(() => incrementSemver("invalid", "patch")),
+    Error,
+    "Invalid semantic version",
+  );
 });
 
 Deno.test("parseGitLogMessages splits NUL-separated git messages", () => {
