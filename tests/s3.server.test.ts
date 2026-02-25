@@ -129,11 +129,11 @@ Deno.test(
       assertEquals(files["Test Artist"]["Test Album"].tracks.length, 2);
       assertEquals(
         files["Test Artist"]["Test Album"].tracks[0].title,
-        "Test Track.mp3",
+        "Test Track",
       );
       assertEquals(
         files["Test Artist"]["Test Album"].tracks[1].title,
-        "Another Song.mp3",
+        "Another Song",
       );
     } finally {
       prev != null
@@ -184,14 +184,14 @@ Deno.test("getUploadedFiles - parses S3 keys into Files structure", async () => 
   assertEquals(files["Artist One"]["Album A"].tracks.length, 2);
   assertEquals(
     files["Artist One"]["Album A"].tracks[0].title,
-    "First Track.mp3",
+    "First Track",
   );
   assertEquals(files["Artist One"]["Album A"].tracks[0].trackNum, 1);
   assertEquals(
     files["Artist One"]["Album A"].tracks[0].url,
     "https://test-bucket.s3.test-region.amazonaws.com/Artist One/Album A/1__First Track.mp3",
   );
-  assertEquals(files["Artist Two"]["Album B"].tracks[0].title, "Solo.mp3");
+  assertEquals(files["Artist Two"]["Album B"].tracks[0].title, "Solo");
 });
 
 Deno.test("getObjectBytes - throws when required env vars are missing", async () => {

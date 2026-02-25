@@ -1,6 +1,7 @@
 /** @file Utility methods for working with the Files object */
 
 import { fromUrl } from "id3js";
+import { parseTrackMetadataFromUrlText } from "./track-metadata.ts";
 
 export type Track = {
   url: string;
@@ -44,16 +45,20 @@ export const sortTracksByTrackNumber = (a: Track, b: Track) => {
 
 /** Given a track's URL, pull data from it to determine the track's artist, album, and number */
 export const getParentDataFromTrackUrl = (trackUrl: string | null) => {
-  const currentTrackPieces = trackUrl ? trackUrl.split("/") : null;
-  const artistName =
-    currentTrackPieces && currentTrackPieces[currentTrackPieces.length - 3];
-  const albumName =
-    currentTrackPieces && currentTrackPieces[currentTrackPieces.length - 2];
-  const trackPieces =
-    currentTrackPieces &&
-    currentTrackPieces[currentTrackPieces.length - 1].split("__");
-  const trackName = trackPieces && trackPieces[1];
-  const trackNumber = trackPieces && trackPieces[0];
+  if (!trackUrl) {
+    return {
+      artistName: null,
+      albumName: null,
+      trackName: null,
+      trackNumber: null,
+    };
+  }
+
+  const parsedMetadata = parseTrackMetadataFromUrlText(trackUrl);
+  const artistName = parsedMetadata.artist;
+  const albumName = parsedMetadata.album;
+  const trackName = parsedMetadata.title;
+  const trackNumber = parsedMetadata.trackNumberText;
 
   return {
     artistName,
@@ -190,7 +195,7 @@ export const getRemainingAlbumTracks = (files: Files, trackUrl: string) => {
 /** Get all Album IDs */
 const getAlbumIds = (files: Files) =>
   Object.values(files).flatMap((albums) =>
-    Object.values(albums).map((album) => album.id),
+    Object.values(albums).map((album) => album.id)
   );
 
 /** Get most recently uploaded albums */
@@ -266,7 +271,9 @@ export const search = (files: Files, searchStr: string): SearchResults => {
         results.albums.push({
           id: albumObj.id,
           title: album,
-          localUrl: `/artists/${encodeURIComponent(artist)}/albums/${encodeURIComponent(album)}`,
+          localUrl: `/artists/${encodeURIComponent(artist)}/albums/${
+            encodeURIComponent(album)
+          }`,
         });
       }
 
@@ -275,7 +282,9 @@ export const search = (files: Files, searchStr: string): SearchResults => {
           results.tracks.push({
             id: t.url,
             title: t.title,
-            localUrl: `/artists/${encodeURIComponent(artist)}/albums/${encodeURIComponent(album)}`,
+            localUrl: `/artists/${encodeURIComponent(artist)}/albums/${
+              encodeURIComponent(album)
+            }`,
             url: t.url,
           });
         }

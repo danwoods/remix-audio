@@ -1,6 +1,7 @@
 /** @file Track-related utility functions for parsing URLs and fetching tracks from S3 */
 
 import { getBucketContents } from "../../lib/s3.ts";
+import { parseTrackMetadataFromUrlText } from "./track-metadata.ts";
 
 /**
  * Parses track metadata from a track URL.
@@ -9,7 +10,7 @@ import { getBucketContents } from "../../lib/s3.ts";
  * @returns An object containing parsed track information
  * @returns `artistName` - The artist name extracted from the URL path
  * @returns `albumName` - The album name extracted from the URL path
- * @returns `trackName` - The track name extracted from the filename (after `__` separator, including extension)
+ * @returns `trackName` - The track name extracted from the filename (after `__` separator, excluding extension)
  * @returns `trackNumber` - The track number extracted from the filename (before `__` separator)
  * @returns `albumUrl` - The base URL for the album (S3 bucket URL)
  *
@@ -22,7 +23,7 @@ import { getBucketContents } from "../../lib/s3.ts";
  * const data = getParentDataFromTrackUrl(url);
  * assertEquals(data.artistName, "Artist");
  * assertEquals(data.albumName, "Album");
- * assertEquals(data.trackName, "Track Name.mp3");
+ * assertEquals(data.trackName, "Track Name");
  * assertEquals(data.trackNumber, "01");
  * assertEquals(data.albumUrl, "https://bucket.s3.amazonaws.com/Artist/Album");
  * ```
@@ -54,11 +55,9 @@ export const getParentDataFromTrackUrl = (trackUrl: string | null) => {
     .join("/");
   const artistName = currentTrackPieces[currentTrackPieces.length - 3];
   const albumName = currentTrackPieces[currentTrackPieces.length - 2];
-  const trackPieces = currentTrackPieces[currentTrackPieces.length - 1].split(
-    "__",
-  );
-  const trackName = trackPieces && trackPieces[1];
-  const trackNumber = trackPieces && trackPieces[0];
+  const parsedMetadata = parseTrackMetadataFromUrlText(trackUrl);
+  const trackName = parsedMetadata.title;
+  const trackNumber = parsedMetadata.trackNumberText;
 
   return {
     artistName,
@@ -212,12 +211,13 @@ export const getRemainingAlbumTracks = async (
   // Use track-number order for "remaining", not S3 listing order (e.g. "10__" can come before "9__" alphabetically).
   const allTracks: Array<TrackInfo> = contents
     .map((key) => {
-      const filename = key.split("/").pop() || key;
-      const trackPieces = filename.split("__");
-      const trackNum = parseInt(trackPieces[0], 10) || 0;
-      const title = trackPieces[1] || filename;
       const fullUrl = `${bucketUrl}/${key}`;
-      return { url: fullUrl, title, trackNum };
+      const parsedTrackMetadata = parseTrackMetadataFromUrlText(fullUrl);
+      return {
+        url: fullUrl,
+        title: parsedTrackMetadata.title,
+        trackNum: parsedTrackMetadata.trackNumber,
+      };
     })
     .filter(filterOutCoverJpeg)
     .sort((a, b) => a.trackNum - b.trackNum);
@@ -295,16 +295,13 @@ export const getAllAlbumTracks = async (
 
     const tracks = contents
       .map((key) => {
-        const filename = key.split("/").pop() || key;
-        const trackPieces = filename.split("__");
-        const trackNum = parseInt(trackPieces[0], 10) || 0;
-        const title = trackPieces[1] || filename;
         const fullUrl = `${bucketUrl}/${key}`;
+        const parsedTrackMetadata = parseTrackMetadataFromUrlText(fullUrl);
 
         return {
           url: fullUrl,
-          title,
-          trackNum,
+          title: parsedTrackMetadata.title,
+          trackNum: parsedTrackMetadata.trackNumber,
         };
       })
       .sort((a, b) => a.trackNum - b.trackNum)
@@ -324,5 +321,11 @@ export const getAllAlbumTracks = async (
  * @returns True if the track is not a cover.jpeg, false otherwise
  */
 const filterOutCoverJpeg = (track: TrackInfo): boolean => {
-  return track.title !== "cover.jpeg";
+  let filename = track.url.split("/").pop() || "";
+  try {
+    filename = decodeURIComponent(filename);
+  } catch {
+    // Ignore decode failures and use the raw filename.
+  }
+  return filename.toLowerCase() !== "cover.jpeg";
 };

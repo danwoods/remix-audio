@@ -110,7 +110,7 @@ Deno.test(
     assertExists(primary);
     assertEquals(
       primary.textContent,
-      "Track Name.mp3",
+      "Track Name",
       "primary scrolling text should show track name",
     );
 
@@ -181,7 +181,7 @@ Deno.test(
     );
 
     assertExists(primary);
-    assertEquals(primary.textContent, "TrackB.mp3");
+    assertEquals(primary.textContent, "TrackB");
 
     assertExists(secondary);
     assertEquals(secondary.textContent, "AlbumB, ArtistB");

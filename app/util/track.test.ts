@@ -76,7 +76,7 @@ Deno.test("getParentDataFromTrackUrl - should parse valid track URL correctly", 
 
   assertEquals(result.artistName, "Artist");
   assertEquals(result.albumName, "Album");
-  assertEquals(result.trackName, "Track Name.mp3");
+  assertEquals(result.trackName, "Track Name");
   assertEquals(result.trackNumber, "01");
 });
 
@@ -96,7 +96,7 @@ Deno.test("getParentDataFromTrackUrl - should handle URLs with different formats
 
   assertEquals(result.artistName, "Artist Name");
   assertEquals(result.albumName, "Album Name");
-  assertEquals(result.trackName, "Song Title.flac");
+  assertEquals(result.trackName, "Song Title");
   assertEquals(result.trackNumber, "05");
 });
 
@@ -157,9 +157,9 @@ Deno.test("getRemainingAlbumTracks - should return remaining tracks after curren
   );
 
   assertEquals(tracks.length, 2);
-  assertEquals(tracks[0].title, "Track Two.mp3");
+  assertEquals(tracks[0].title, "Track Two");
   assertEquals(tracks[0].trackNum, 2);
-  assertEquals(tracks[1].title, "Track Three.mp3");
+  assertEquals(tracks[1].title, "Track Three");
   assertEquals(tracks[1].trackNum, 3);
 });
 
@@ -377,8 +377,8 @@ Deno.test("getRemainingAlbumTracks - should filter out cover.jpeg from results",
 
   // Should filter out cover.jpeg, only return tracks after current track
   assertEquals(tracks.length, 2);
-  assertEquals(tracks[0].title, "Track Two.mp3");
-  assertEquals(tracks[1].title, "Track Three.mp3");
+  assertEquals(tracks[0].title, "Track Two");
+  assertEquals(tracks[1].title, "Track Three");
   const coverTrack = tracks.find((t) => t.title === "cover.jpeg");
   assertEquals(coverTrack, undefined);
 });
@@ -401,5 +401,5 @@ Deno.test("getRemainingAlbumTracks - should use track-number order not S3 listin
   // Should return track 10 as remaining (by track number), not empty due to S3 order
   assertEquals(tracks.length, 1);
   assertEquals(tracks[0].trackNum, 10);
-  assertEquals(tracks[0].title, "Track Ten.mp3");
+  assertEquals(tracks[0].title, "Track Ten");
 });

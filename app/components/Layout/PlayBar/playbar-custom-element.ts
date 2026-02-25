@@ -5,7 +5,7 @@ import {
   getParentDataFromTrackUrl,
   getRemainingAlbumTracks,
 } from "../../../util/track.ts";
-import { getID3TagsFromURL } from "../../../util/id3.browser.ts";
+import { deriveTrackMetadata } from "../../../util/track-metadata.ts";
 import {
   type MediaSessionCallbacks,
   MediaSessionController,
@@ -423,12 +423,12 @@ export class PlaybarCustomElement extends HTMLElement {
   }
 
   /**
-   * Fetches ID3 tags from the track URL and updates Media Session metadata.
+   * Derives metadata from track URL and updates Media Session metadata.
    * Used for lock screen / notification controls (title, artist, album, artwork).
    * Guards against race where the user switches tracks before the fetch completes.
    */
   private async updateMediaSessionFromTrack(trackUrl: string): Promise<void> {
-    const tags = await getID3TagsFromURL(trackUrl);
+    const derivedMetadata = await deriveTrackMetadata(trackUrl);
     if (this.currentTrackUrl !== trackUrl) return;
 
     let albumUrl: string | null = null;
@@ -440,10 +440,10 @@ export class PlaybarCustomElement extends HTMLElement {
     }
 
     const metadata: MediaSessionMetadata = {
-      title: tags?.title ?? "Unknown",
-      artist: tags?.artist ?? "Unknown",
-      album: tags?.album ?? "Unknown",
-      artworkUrl: tags?.image ??
+      title: derivedMetadata.title,
+      artist: derivedMetadata.artist,
+      album: derivedMetadata.album,
+      artworkUrl: derivedMetadata.image ??
         (albumUrl ? `${albumUrl}/cover.jpeg` : undefined),
     };
     this.mediaSession?.updateMetadata(metadata);

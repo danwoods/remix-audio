@@ -7,6 +7,7 @@ import type { Files } from "./files.ts";
 
 import type { ID3Tags } from "./id3.ts";
 import { getID3Tags } from "./id3.ts";
+import { deriveTrackMetadata } from "./track-metadata.ts";
 import { fromEnv } from "@aws-sdk/credential-providers";
 import {
   GetObjectCommand,
@@ -518,7 +519,7 @@ const fileFetch = async (): Promise<Files> => {
 
   try {
     let isTruncated = true;
-    let files: Files = {};
+    const files: Files = {};
     let pageCount = 0;
     let totalObjects = 0;
 
@@ -539,80 +540,79 @@ const fileFetch = async (): Promise<Files> => {
       logger.debug(`Page ${pageCount} returned ${Contents.length} objects`);
       totalObjects += Contents.length;
 
-      files = Contents?.reduce((acc, cur) => {
-        if (cur.Key) {
-          const keyParts = cur.Key.split("/");
+      for (const cur of Contents) {
+        if (!cur.Key) continue;
+        const keyParts = cur.Key.split("/");
 
-          // Validate: must have exactly 3 parts (artist/album/track)
-          if (keyParts.length !== 3) {
-            logger.warn(
-              `Skipping invalid file structure: ${cur.Key} (expected artist/album/track)`,
-            );
-            return acc;
-          }
-
-          let [artist, album] = keyParts;
-          const trackWNum = keyParts[2];
-
-          // Decode URL-encoded artist and album names from S3 keys
-          // S3 keys may be URL-encoded (e.g., "Childish%20Gambino" -> "Childish Gambino")
-          try {
-            artist = decodeURIComponent(artist);
-            album = decodeURIComponent(album);
-          } catch {
-            // If decoding fails, use as-is (already decoded or invalid)
-          }
-
-          // Validate: artist and album must exist
-          if (!artist || !album || !trackWNum) {
-            logger.warn(`Skipping file with missing parts: ${cur.Key}`);
-            return acc;
-          }
-
-          // Validate: track filename must have __ separator
-          const trackParts = trackWNum.split("__");
-          if (trackParts.length !== 2) {
-            logger.warn(
-              `Skipping invalid track filename format: ${cur.Key} (expected number__title)`,
-            );
-            return acc;
-          }
-
-          const [trackNumStr, title] = trackParts;
-          const trackNum = Number(trackNumStr);
-
-          // Validate: track number must be a valid number
-          if (Number.isNaN(trackNum) || trackNum <= 0) {
-            logger.warn(`Skipping file with invalid track number: ${cur.Key}`);
-            return acc;
-          }
-
-          logger.debug(`Processing valid track: ${cur.Key}`, {
-            artist,
-            album,
-            trackNum,
-            title,
-          });
-
-          // All validations passed, proceed with adding to files
-          acc[artist] = acc[artist] || {};
-          acc[artist][album] = acc[artist][album] || {
-            id: `${artist}/${album}`,
-            title: album,
-            coverArt: null,
-            tracks: [],
-          };
-          acc[artist][album].tracks.push({
-            title: title || "Unknown",
-            trackNum,
-            lastModified: cur.LastModified?.valueOf() || null,
-            url:
-              `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/` +
-              cur.Key,
-          });
+        // Validate: must have exactly 3 parts (artist/album/track)
+        if (keyParts.length !== 3) {
+          logger.warn(
+            `Skipping invalid file structure: ${cur.Key} (expected artist/album/track)`,
+          );
+          continue;
         }
-        return acc;
-      }, files);
+
+        let [artist, album] = keyParts;
+        const trackWNum = keyParts[2];
+
+        // Decode URL-encoded artist and album names from S3 keys
+        // S3 keys may be URL-encoded (e.g., "Childish%20Gambino" -> "Childish Gambino")
+        try {
+          artist = decodeURIComponent(artist);
+          album = decodeURIComponent(album);
+        } catch {
+          // If decoding fails, use as-is (already decoded or invalid)
+        }
+
+        // Validate: artist and album must exist
+        if (!artist || !album || !trackWNum) {
+          logger.warn(`Skipping file with missing parts: ${cur.Key}`);
+          continue;
+        }
+
+        // Validate: track filename must have __ separator
+        if (!trackWNum.includes("__")) {
+          logger.warn(
+            `Skipping invalid track filename format: ${cur.Key} (expected number__title)`,
+          );
+          continue;
+        }
+
+        const trackUrl =
+          `https://${config.STORAGE_BUCKET}.s3.${config.STORAGE_REGION}.amazonaws.com/${cur.Key}`;
+        const trackMetadata = await deriveTrackMetadata(trackUrl, {
+          skipId3: true,
+        });
+        const trackNum = trackMetadata.trackNumber;
+
+        // Validate: track number must be a valid number
+        if (!Number.isFinite(trackNum) || trackNum <= 0) {
+          logger.warn(`Skipping file with invalid track number: ${cur.Key}`);
+          continue;
+        }
+
+        logger.debug(`Processing valid track: ${cur.Key}`, {
+          artist,
+          album,
+          trackNum,
+          title: trackMetadata.title,
+        });
+
+        // All validations passed, proceed with adding to files
+        files[artist] = files[artist] || {};
+        files[artist][album] = files[artist][album] || {
+          id: `${artist}/${album}`,
+          title: album,
+          coverArt: null,
+          tracks: [],
+        };
+        files[artist][album].tracks.push({
+          title: trackMetadata.title || "Unknown",
+          trackNum,
+          lastModified: cur.LastModified?.valueOf() || null,
+          url: trackUrl,
+        });
+      }
 
       isTruncated = Boolean(IsTruncated);
       command.input.ContinuationToken = NextContinuationToken;
